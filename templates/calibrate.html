@@ -8,7 +8,7 @@
   <select name="request_id">
     <option value="">{{ tr("No linked request") }}</option>
     {% for r in requests %}
-    <option value="{{ r.request_id }}">{{ r.request_no }} — {{ r.client_name }} — {{ r.instrument_description }}</option>
+    <option value="{{ r.request_id }}" {{ 'selected' if request.args.get('request_id') == (r.request_id|string) }}>{{ r.request_no }} — {{ r.client_name }} — {{ r.instrument_description }}</option>
     {% endfor %}
   </select>
   <small class="hint">{{ tr("Link this calibration to a laboratory request when applicable.") }}</small>
