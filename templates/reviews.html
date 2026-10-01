@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Calibration review") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>{{ tr("Calibration review & approval") }}</h1><p class="sub">{{ tr("Review technician-submitted measurements before completing a request.") }}</p></div></div>
+<div class="stats">
+<a class="stat amber" href="#pending"><span class="n">{{ pending|length }}</span><span>{{ tr("Pending review") }}</span></a>
+<a class="stat grey" href="#recent"><span class="n">{{ recent|length }}</span><span>{{ tr("Recent decisions") }}</span></a>
+</div>
+<div class="card" id="pending"><h2>{{ tr("Pending calibration reviews") }}</h2>
+{% if pending %}<div class="scroll"><table class="js-table"><thead><tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Calibration date") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Submitted") }}</th><th></th></tr></thead><tbody>
+{% for r in pending %}<tr><td><a href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ r.work_order_no }}</a></td><td>{{ r.request_no }}</td><td>{{ r.client_name }}</td><td>{{ r.instrument_description }}</td><td>{{ r.technician_name }}</td><td><a href="{{ url_for('certificate', cert=r.certificate_no) }}">{{ r.certificate_no }}</a></td><td>{{ date_pair(r.cal_date) }}</td><td><span class="badge {{ 'green' if r.result == 'PASS' else 'red' }}">{{ r.result }}</span></td><td>{{ r.submitted_at }}</td><td><a class="btn" href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ tr("Review") }}</a></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">{{ tr("There are no calibrations waiting for review.") }}</div>{% endif %}
+</div>
+<div class="card" id="recent"><h2>{{ tr("Recent review decisions") }}</h2>
+{% if recent %}<div class="scroll"><table class="js-table"><thead><tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Decision") }}</th><th>{{ tr("Reviewer") }}</th><th>{{ tr("Reviewed at") }}</th><th>{{ tr("Comments") }}</th></tr></thead><tbody>
+{% for r in recent %}<tr><td><a href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ r.work_order_no }}</a></td><td>{{ r.request_no }}</td><td>{{ r.client_name }}</td><td>{{ r.certificate_no }}</td><td><span class="badge {{ 'green' if r.decision == 'APPROVED' else 'red' }}">{{ r.decision }}</span></td><td>{{ r.reviewer_name or '—' }}</td><td>{{ r.reviewed_at or '—' }}</td><td style="white-space:normal;min-width:180px">{{ r.comments or '—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty">{{ tr("No completed review decisions yet.") }}</div>{% endif %}
+</div>
+{% endblock %}
