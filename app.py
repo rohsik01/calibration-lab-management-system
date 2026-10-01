@@ -242,7 +242,7 @@ def next_certificate(db, cal_date):
 
 
 # ------------------------------- authentication -------------------------------
-OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor"}
+OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor", "calendar_view"}
 FAILS = {}   # (username, ip) -> (failed count, locked-until timestamp)
 
 
