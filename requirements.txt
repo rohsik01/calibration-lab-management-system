@@ -1,3 +1,6 @@
 Flask
 openpyxl
 waitress
+pyotp
+qrcode[pil]
+nepali-datetime
