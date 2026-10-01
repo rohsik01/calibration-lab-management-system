@@ -20,7 +20,15 @@
   .item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#c8d3ea; text-decoration:none; }
   .item:hover { background:#1c2b4b; color:#fff; }
   .item.active { background:var(--brand); color:#fff; }
-  .ic { width:22px; text-align:center; }
+  .menu-group { margin:6px 0; }
+  .menu-group summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#c8d3ea; font-weight:600; }
+  .menu-group summary::-webkit-details-marker { display:none; }
+  .menu-group summary::after { content:"▸"; margin-left:auto; color:#7f8fb0; font-size:12px; }
+  .menu-group[open] summary::after { content:"▾"; }
+  .menu-group summary:hover { background:#1c2b4b; color:#fff; }
+  .menu-group summary.active { background:#1c2b4b; color:#fff; }
+  .submenu { padding-left:10px; margin:2px 0 6px; border-left:1px solid #2a3a5d; margin-left:17px; }
+  .submenu .item { padding:7px 10px; font-size:14px; }  .ic { width:22px; text-align:center; }
   .pill { margin-left:auto; background:var(--red); color:#fff; border-radius:999px; font-size:11px; padding:1px 8px; }
   .me { border-top:1px solid #22304f; padding:12px 14px; font-size:13px; }
   .me b { color:#fff; display:block; } .me span { color:#7f8fb0; }
@@ -100,27 +108,56 @@
       {% if g.user.role != 'general_user' %}
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
       {% endif %}
-      <div class="grp">{{ tr("Records") }}</div>
-      <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Calibration requests") }}{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
+
+      <div class="grp">{{ tr("Operations") }}</div>
+      <details class="menu-group" {% if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status','work_orders','work_order_detail','update_work_order_status','calibration_reviews','decide_calibration_review') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status','work_orders','work_order_detail','update_work_order_status','calibration_reviews','decide_calibration_review') }}">{{ tr("Calibration workflow") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Requests") }}{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
+          {% if g.user.role != 'general_user' %}
+          <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
+          {% endif %}
+          {% if g.user.role == 'admin' %}
+          <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
+          {% endif %}
+        </div>
+      </details>
+
       {% if g.user.role != 'general_user' %}
-      <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
-      <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
-      <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Notifications") }}
-        {% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
-      <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}
-        {% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
-      <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}
-        {% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
-      <a class="item {{ 'active' if ep == 'calendar_view' }}" href="{{ url_for('calendar_view') }}"><span class="ic">📅</span>{{ tr("Nepali calendar") }}</a>
-      <div class="grp">{{ tr("Manage") }}</div>
-      <a class="item {{ 'active' if ep == 'new_sensor' }}" href="{{ url_for('new_sensor') }}"><span class="ic">➕</span>{{ tr("Add sensor") }}</a>
-      <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
-      <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
+      <details class="menu-group" {% if ep in ('alerts','due') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('alerts','due') }}">{{ tr("Attention") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Notifications") }}{% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}{% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
+        </div>
+      </details>
+
+      <details class="menu-group" {% if ep in ('register','sensor','calibrate','certificate','new_sensor','stations','standards','standard','new_standard','edit_standard') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('register','sensor','calibrate','certificate','new_sensor','stations','standards','standard','new_standard','edit_standard') }}">{{ tr("Laboratory") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
+          <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}{% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
+        </div>
+      </details>
+
+      <details class="menu-group" {% if ep in ('calendar_view','export_csv','export_download') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('calendar_view','export_csv','export_download') }}">{{ tr("Tools & reports") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep == 'calendar_view' }}" href="{{ url_for('calendar_view') }}"><span class="ic">📅</span>{{ tr("Nepali calendar") }}</a>
+          <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
+        </div>
+      </details>
       {% endif %}
+
       {% if g.user.role == 'admin' %}
-      <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
       <div class="grp">{{ tr("Administration") }}</div>
-      <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users") }}</a>
+      <details class="menu-group" {% if ep == 'users' %}open{% endif %}>
+        <summary class="{{ 'active' if ep == 'users' }}">{{ tr("Administration") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users") }}</a>
+        </div>
+      </details>
       {% endif %}
     </nav>
     <div class="me"><b>{{ g.user.full_name }}</b><span>{{ tr(g.user.role|capitalize) }}</span>
