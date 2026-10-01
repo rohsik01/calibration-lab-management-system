@@ -1356,13 +1356,13 @@ def decide_calibration_review(review_id):
                            (sensor_id,review["cal_id"]))
             db.execute("UPDATE calibration_work_orders SET status='COMPLETED', updated_at=? WHERE work_order_id=?",
                        (now, review["work_order_id"]))
-            db.execute("UPDATE calibration_requests SET status='COMPLETED', updated_at=? WHERE request_id=?",
-                       (now, review["request_id"]))
+            transition_request_status(db, review["request_id"], "COMPLETED", g.user["user_id"],
+                                      comments or "Calibration approved")
         else:
             db.execute("UPDATE calibration_work_orders SET status='IN PROGRESS', updated_at=? WHERE work_order_id=?",
                        (now, review["work_order_id"]))
-            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION', updated_at=? WHERE request_id=?",
-                       (now, review["request_id"]))
+            transition_request_status(db, review["request_id"], "IN CALIBRATION", g.user["user_id"],
+                                      comments or "Calibration returned for correction")
     flash("Calibration approved and request completed." if decision == "APPROVED"
           else "Calibration returned to the technician for correction.")
     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
