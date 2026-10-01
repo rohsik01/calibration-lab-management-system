@@ -1,9 +1,26 @@
 {% extends "base.html" %}{% block title %}{{ tr("Stations") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
-<div class="card"><h1>{{ tr("Stations") }}</h1>
-{% if g.user.role == 'admin' %}<form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
-<div><label>{{ tr("Name") }}</label><input name="name" required></div>
+<div class="card"><h1>{{ tr("Station details") }}</h1>
+<p class="sub">{{ tr("Station ID, Station Name, Location and Type are maintained here.") }}</p>
+{% if g.user.role == 'admin' %}
+<form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
+<div><label>{{ tr("Station Name") }}</label><input name="name" required></div>
 <div><label>{{ tr("Location") }}</label><input name="location"></div>
-<div style="align-self:end"><button class="btn">{{ tr("Add station") }}</button></div></form>{% endif %}
-<table><tr><th>#</th><th>{{ tr("Name") }}</th><th>{{ tr("Location") }}</th><th></th></tr>
-{% for r in rows %}<tr><td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a></td></tr>
-{% else %}<tr><td colspan="4">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div>{% endblock %}
+<div><label>{{ tr("Type") }}</label><input name="type" value="Meteorological" required></div>
+<div style="align-self:end"><button class="btn">{{ tr("Add station") }}</button></div>
+</form>
+
+<div class="card" style="background:#f8fafd;margin-top:10px">
+<h2>{{ tr("Bulk upload stations") }}</h2>
+<p class="sub">{{ tr("Prepare your station data in Excel using the sample template, then upload the completed .xlsx file.") }}</p>
+<div class="actions">
+<a class="btn alt" href="{{ url_for('station_bulk_sample') }}">{{ tr("Download station Excel sample") }}</a>
+</div>
+<form method="post" action="{{ url_for('station_bulk_upload') }}" enctype="multipart/form-data" class="actions">
+{{ csrf_input() }}<input type="file" name="file" accept=".xlsx,.xlsm" required>
+<button class="btn">{{ tr("Upload station Excel") }}</button>
+</form>
+</div>
+{% endif %}
+<div class="scroll"><table class="js-table"><tr><th>{{ tr("Station ID") }}</th><th>{{ tr("Station Name") }}</th><th>{{ tr("Location") }}</th><th>{{ tr("Type") }}</th><th></th></tr>
+{% for r in rows %}<tr><td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td>{{ r.type or 'Meteorological' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a></td></tr>
+{% else %}<tr><td colspan="5">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
