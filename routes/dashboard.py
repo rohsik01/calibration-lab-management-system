@@ -1,6 +1,42 @@
 """Route module: dashboard."""
 from app import *
 
+def bs_date_label(ad_date, nepali=False):
+    """Return a readable Bikram Sambat date for a Gregorian date."""
+    from nepali_datetime import date as bs_date
+    b = bs_date.from_datetime_date(ad_date)
+    fmt = "%K %N %D" if nepali else "%Y %B %d"
+    return b.strftime(fmt)
+
+
+def bs_month_grid(year, month):
+    """Return a Sunday-first BS month grid using the library's BS calendar data."""
+    from nepali_datetime import date as bs_date
+    first = bs_date(year, month, 1)
+    days = 0
+    cur = first
+    while cur.month == month:
+        days += 1
+        cur = cur + timedelta(days=1)
+    first_weekday = first.to_datetime_date().weekday()  # Mon=0 ... Sun=6
+    sunday_index = (first_weekday + 1) % 7
+    weeks = []
+    week = [None] * sunday_index
+    for day in range(1, days + 1):
+        cell = bs_date(year, month, day)
+        week.append({
+            "day": day,
+            "bs": cell,
+            "ad": cell.to_datetime_date(),
+        })
+        if len(week) == 7:
+            weeks.append(week)
+            week = []
+    if week:
+        weeks.append(week + [None] * (7 - len(week)))
+    return weeks
+
+
 @app.route("/api/bs-date")
 def api_bs_date():
     value = request.args.get("ad", "")
