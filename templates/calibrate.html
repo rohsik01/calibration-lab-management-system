@@ -4,7 +4,7 @@
 {{ tr("The sensor passes only if all points pass. Error, Pass/Fail, certificate number and next due date are worked out for you.") }}</p>
 <form method="post">{{ csrf_input() }}
 <div class="grid">
-<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} {{ date_pair(today) }}</small></div>
+<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="cal-bs">{{ date_pair(today) }}</span></small></div>
 <div><label>{{ tr("Reference standard") }}</label>
   <select name="standard_id" id="std">
     <option value="">{{ tr("Other — not in the register") }}</option>
@@ -34,6 +34,17 @@ const T = {{ {"fill": tr("Fill in every point to preview the overall result."),
   "pass": tr("PASS"), "fail": tr("FAIL"), "f1": tr("FAIL (1 point out of tolerance)"), "fN": tr("FAIL ({k} points out of tolerance)"),
   "rm": tr("Remove point"), "tol": tr("Tolerance (±)"), "gen": tr("Enter a start value, an end value, 2–30 points and a tolerance.")}|tojson }};
 const defTol = {{ s.tolerance }}, unit = {{ s.unit|tojson }};
+const calDate = document.querySelector('input[name="cal_date"]');
+const calBs = document.getElementById('cal-bs');
+async function refreshBsDate() {
+  if (!calDate.value) return;
+  try {
+    const r = await fetch('{{ url_for("api_bs_date") }}?ad=' + encodeURIComponent(calDate.value));
+    const d = await r.json();
+    if (d.bs) calBs.textContent = d.bs + ' BS';
+  } catch (e) {}
+}
+calDate.addEventListener('change', refreshBsDate);
 const body = document.querySelector('#pts tbody'), overall = document.getElementById('overall');
 function addRow(ref = '', tol = defTol) {
   const tr = document.createElement('tr');
