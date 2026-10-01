@@ -2005,6 +2005,54 @@ def calibrate(sensor_id):
                            standards=standards_, requests=requests_)
 
 
+@app.route("/calibrate-request/<int:request_id>", methods=["GET", "POST"])
+def calibrate_pending_request(request_id):
+    db=get_db()
+    req=db.execute("SELECT * FROM calibration_requests WHERE request_id=?",(request_id,)).fetchone()
+    if not req or req["sensor_id"]: abort(404)
+    wo=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(request_id,)).fetchone()
+    if not wo or wo["assigned_technician_id"]!=g.user["user_id"]: abort(403)
+    if wo["status"] in ("AWAITING REVIEW","COMPLETED","CANCELLED"):
+        flash("This work order is already submitted or closed.","error")
+        return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
+    if request.method=="POST":
+        try:
+            cal_date=date.fromisoformat(request.form.get("cal_date","").strip()).isoformat()
+            refs=[float(x) for x in request.form.getlist("reference_value")]
+            meass=[float(x) for x in request.form.getlist("measured_value")]
+            tols=[float(x) for x in request.form.getlist("tolerance")]
+            if not refs or len(refs)!=len(meass) or len(refs)!=len(tols): raise ValueError("Enter complete measurement points.")
+            pts=[(r,m,round(m-r,6),"PASS" if abs(m-r)<=t else "FAIL",t) for r,m,t in zip(refs,meass,tols)]
+            worst=max(pts,key=lambda p:abs(p[2])); result="FAIL" if any(p[3]=="FAIL" for p in pts) else "PASS"
+            std_sel=request.form.get("standard_id","").strip(); std_text=request.form.get("reference_standard","").strip(); std_id=None; std_details=None
+            if std_sel:
+                std=db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",(int(std_sel),)).fetchone()
+                if not std: raise ValueError("Select a valid reference standard.")
+                std_id=std["standard_id"]; std_text=f"{std['code']} – {std['name']}"
+                std_details=json.dumps({"serial":std["serial_number"],"traceability":std["traceability"],"certificate":std["certificate_no"],"valid_until":std["valid_until"],"uncertainty":std["uncertainty"]},ensure_ascii=False)
+            elif not std_text: raise ValueError("Choose a reference standard or type its name.")
+            if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
+                raise ValueError("A calibration record already exists for this request.")
+            cert=next_certificate(db,cal_date)
+            due=(date.fromisoformat(cal_date)+timedelta(days=int(req["pending_interval_days"] or 365))).isoformat()
+            cur=db.execute("""INSERT INTO calibrations
+                (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
+                 next_due,performed_by,n_points,standard_id,standard_details,request_id)
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,request_id))
+            db.executemany("""INSERT INTO calibration_points
+                (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
+                VALUES (?,?,?,?,?,?,?)""",[(cur.lastrowid,i,*p) for i,p in enumerate(pts,1)])
+            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION',updated_at=? WHERE request_id=?",
+                       (datetime.now().isoformat(timespec="seconds"),request_id))
+            db.commit()
+            flash("Calibration measurements saved. Submit the work order for administrator review.")
+            return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
+        except (ValueError,sqlite3.IntegrityError) as e:
+            flash(str(e),"error")
+    standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_)
+
 @app.route("/certificate/<cert>")
 def certificate(cert):
     db = get_db()
