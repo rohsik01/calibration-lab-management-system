@@ -1437,6 +1437,10 @@ def new_calibration_request():
                  f.get("condition_received","").strip(), f.get("remarks","").strip(),
                  "RECEIVED", g.user["full_name"], now, now)
             )
+            db.execute("""INSERT INTO calibration_request_status_history
+                (request_id, old_status, new_status, changed_by, changed_at, comments)
+                VALUES (?,?,?,?,?,?)""",
+                (cur.lastrowid, None, "RECEIVED", g.user["user_id"], now, "Request created"))
             db.commit()
             flash(f"Calibration request {request_no} was created.")
             return redirect(url_for("calibration_request", request_id=cur.lastrowid))
