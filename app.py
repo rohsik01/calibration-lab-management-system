@@ -1425,6 +1425,13 @@ def calibrate(sensor_id):
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
             [(cur.lastrowid, i, *p) for i, p in enumerate(points, 1)])
         db.commit()
+        if request_id:
+            db.execute(
+                "UPDATE calibration_requests SET status=?, updated_at=? "
+                "WHERE request_id=? AND status NOT IN ('COMPLETED','CANCELLED')",
+                ("IN CALIBRATION", datetime.now().isoformat(timespec="seconds"), request_id)
+            )
+            db.commit()
         msg = tr("{n} point, max error {err} {unit} → {result}. Certificate {cert} issued."
                  if len(points) == 1 else
                  "{n} points, max error {err} {unit} → {result}. Certificate {cert} issued.")
