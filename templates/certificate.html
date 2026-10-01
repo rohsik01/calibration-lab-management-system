@@ -1,13 +1,38 @@
 {% extends "base.html" %}{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no }}{% endblock %}
 {% block banner %}{% endblock %}
 {% block content %}
+{% block content %}
+<style>
+  .certificate-page{width:100%;max-width:190mm;margin:0 auto;background:#fff;padding:10mm 11mm;overflow:hidden}
+  .certificate-page table{table-layout:fixed;width:100%;font-size:11px}
+  .certificate-page th,.certificate-page td{padding:5px 6px;white-space:normal;overflow-wrap:anywhere;vertical-align:top}
+  .certificate-page .details th{width:30%}
+  .certificate-page .measurement{font-size:9.5px}
+  .certificate-page .measurement th,.certificate-page .measurement td{text-align:center;padding:4px 3px}
+  .certificate-page .signature{display:grid;grid-template-columns:1fr 1fr;gap:35mm;margin-top:20mm}
+  .certificate-page .signature>div{border-top:1px solid #333;padding-top:6px;min-width:0}
+  @page{size:A4 portrait;margin:10mm}
+  @media print{
+    main{max-width:none!important;padding:0!important}
+    .certificate-page{max-width:none;width:100%;padding:0;box-shadow:none}
+    .certificate-page h1{font-size:20px}
+    .certificate-page h2{font-size:14px;margin-top:10px}
+    .certificate-page table{font-size:9.5px}
+    .certificate-page th,.certificate-page td{padding:3px 4px}
+    .certificate-page .measurement{font-size:8.5px}
+    .certificate-page .measurement th,.certificate-page .measurement td{padding:3px 2px}
+    .certificate-page .signature{margin-top:12mm}
+    .certificate-page .noprint{display:none!important}
+    .certificate-page .print-banner{display:block!important}
+  }
+</style>
 {% if preview %}<div class="card" style="max-width:780px;margin:0 auto 16px;border:2px solid #b91c1c;color:#b91c1c;text-align:center"><h2 style="margin:0">UNVERIFIED — PREVIEW ONLY</h2><p style="margin:4px 0">This calibration record has not been verified by an administrator. Not an official certificate.</p></div>{% endif %}
-<div class="card" style="max-width:780px;margin:auto;position:relative;overflow:hidden">
+<div class="certificate-page"><div class="card" style="max-width:none;margin:0;position:relative;overflow:hidden;padding:0;border:0;border-radius:0">
 {% if preview %}<div aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;overflow:hidden"><div style="transform:rotate(-32deg);font-size:clamp(36px,8vw,76px);font-weight:900;color:rgba(185,28,28,.16);white-space:nowrap">UNVERIFIED</div></div>{% endif %}
 {% include "_banner.html" %}
 <h1 style="text-align:center;margin-top:14px">{{ tr("Calibration Certificate") }}</h1>
 <p style="text-align:center;color:var(--mute)">{{ r.certificate_no }}{% if preview %} · PREVIEW — UNVERIFIED{% endif %}</p>
-<table>
+<table class="details">
 <tr><th>{{ tr("Sensor ID") }}</th><td>{{ r.sensor_id }}</td></tr>
 <tr><th>{{ tr("Station") }}</th><td>{{ r.station }}</td></tr>
 <tr><th>{{ tr("Type") }}</th><td>{{ r.sensor_type }}</td></tr>
@@ -28,7 +53,7 @@
 <tr><th>{{ tr("Calibrated by") }}</th><td>{{ r.performed_by or '—' }}</td></tr>
 <tr><th>{{ tr("Next due") }}</th><td>{{ date_pair(r.next_due) }}</td></tr></table>
 <h2 style="margin-top:24px">{{ tr("Measurement points") }}</h2>
-<table><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
+<table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
 {% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
 <td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:56px">
@@ -40,4 +65,4 @@
   </div>
 </div>
 {% if not preview %}<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
-<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p>{% else %}<p style="color:#b91c1c;font-weight:700;text-align:center">UNVERIFIED PREVIEW — NOT VALID AS A CERTIFICATE</p><p class="noprint"><a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Back to requests") }}</a></p>{% endif %}</div>{% endblock %}
+<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p>{% else %}<p style="color:#b91c1c;font-weight:700;text-align:center">UNVERIFIED PREVIEW — NOT VALID AS A CERTIFICATE</p><p class="noprint"><a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Back to requests") }}</a></p>{% endif %}</div></div>{% endblock %}
