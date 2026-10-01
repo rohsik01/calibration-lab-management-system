@@ -1,11 +1,11 @@
 {% extends "base.html" %}{% block title %}{{ tr("Users") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ tr("Users") }}</h1>
-<p>{{ tr("Administrators manage users, stations and reference standards. Technicians can register sensors and record calibrations.") }}</p>
+<p>{{ tr("Administrators assign requests and approve calibrations. Technicians record measurements. General users submit requests and print verified certificates.") }}</p>
 <form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
 <div><label>{{ tr("Full name") }}</label><input name="full_name"></div>
 <div><label>{{ tr("Username") }}</label><input name="username" required></div>
 <div><label>{{ tr("Password (min. 8 characters)") }}</label><input name="password" type="password" required></div>
-<div><label>{{ tr("Role") }}</label><select name="role"><option value="technician">{{ tr("Technician") }}</option><option value="admin">{{ tr("Administrator") }}</option></select></div>
+<div><label>{{ tr("Role") }}</label><select name="role"><option value="technician">{{ tr("Technician") }}</option><option value="general_user">{{ tr("General user") }}</option><option value="admin">{{ tr("Administrator") }}</option></select></div>
 <div style="align-self:end"><button class="btn">{{ tr("Add user") }}</button></div></form>
 <div class="scroll"><table><tr><th>{{ tr("Username") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Role") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Reset password") }}</th><th></th></tr>
 {% for u in rows %}<tr><td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ tr(u.role|capitalize) }}</td>
