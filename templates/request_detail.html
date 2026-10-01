@@ -47,6 +47,45 @@
 </div>
 
 <div class="card">
+<h2>{{ tr("Technician assignment & work order") }}</h2>
+{% if work_order %}
+<div class="grid">
+<div><label>{{ tr("Work order") }}</label><div><a href="{{ url_for('work_order_detail', work_order_id=work_order.work_order_id) }}"><b>{{ work_order.work_order_no }}</b></a></div></div>
+<div><label>{{ tr("Assigned technician") }}</label><div>{{ work_order.technician_name }}</div></div>
+<div><label>{{ tr("Assigned at") }}</label><div>{{ work_order.assigned_at }}</div></div>
+<div><label>{{ tr("Work order status") }}</label><div><span class="badge {{ 'green' if work_order.status == 'COMPLETED' else 'amber' if work_order.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ work_order.status }}</span></div></div>
+</div>
+{% else %}
+<p class="sub">{{ tr("No technician has been assigned to this request yet.") }}</p>
+{% endif %}
+{% if g.user.role == 'admin' and r.status not in ('COMPLETED','CANCELLED') %}
+<h3 style="margin-top:18px">{{ tr("Assign or reassign technician") }}</h3>
+<form method="post" action="{{ url_for('assign_calibration_request', request_id=r.request_id) }}">
+{{ csrf_input() }}
+<div class="grid">
+<div><label>{{ tr("Technician") }}</label>
+<select name="technician_id" required>
+<option value="">{{ tr("Select technician") }}</option>
+{% for t in technicians %}
+<option value="{{ t.user_id }}" {{ 'selected' if work_order and work_order.assigned_technician_id == t.user_id }}>{{ t.full_name }} ({{ t.username }})</option>
+{% endfor %}
+</select>
+{% if not technicians %}<small class="hint">{{ tr("Create an active technician account in User Management first.") }}</small>{% endif %}
+</div>
+<div><label>{{ tr("Target completion date") }}</label><input type="date" name="target_date" value="{{ work_order.target_date if work_order and work_order.target_date else r.requested_due_date or '' }}"></div>
+<div><label>{{ tr("Calibration method / procedure") }}</label><input name="calibration_method" value="{{ work_order.calibration_method if work_order else '' }}" placeholder="{{ tr('Procedure number or method reference') }}"></div>
+<div><label>{{ tr("Reference standard") }}</label>
+<select name="standard_id"><option value="">{{ tr("Select later / not specified") }}</option>
+{% for st in standards %}<option value="{{ st.standard_id }}" {{ 'selected' if work_order and work_order.standard_id == st.standard_id }}>{{ st.code }} — {{ st.name }} ({{ tr("valid until") }} {{ st.valid_until }})</option>{% endfor %}
+</select></div>
+</div>
+<div style="margin-top:12px"><label>{{ tr("Technician instructions") }}</label><textarea name="instructions" rows="3">{{ work_order.instructions if work_order else '' }}</textarea></div>
+<div class="actions" style="margin-top:14px"><button class="btn" {{ 'disabled' if not technicians }}>{{ tr("Create / update work order") }}</button></div>
+</form>
+{% endif %}
+</div>
+
+<div class="card">
 <h2>{{ tr("Linked calibration records") }}</h2>
 {% if r.sensor_id and r.status not in ('COMPLETED','CANCELLED') %}
 <a class="btn" href="{{ url_for('calibrate', sensor_id=r.sensor_id, request_id=r.request_id) }}">{{ tr("Start / record calibration") }}</a>
