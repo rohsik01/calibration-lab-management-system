@@ -1167,6 +1167,51 @@ def calibration_reviews():
     return render_template("reviews.html", pending=pending, recent=recent)
 
 
+@app.route("/reviews/<int:review_id>/calibration")
+@admin_required
+def review_calibration_details(review_id):
+    db = get_db()
+    row = db.execute(
+        """SELECT h.review_id, h.cal_id, h.submitted_at,
+                  c.certificate_no, c.cal_date, c.reference_standard,
+                  c.reference_value, c.measured_value, c.error, c.result,
+                  c.performed_by, c.n_points,
+                  COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
+                  COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.unit, rq.pending_unit) AS unit,
+                  COALESCE(st.name, rq.pending_station_name) AS station
+           FROM calibration_review_history h
+           JOIN calibrations c ON c.cal_id=h.cal_id
+           LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
+           LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           WHERE h.review_id=? AND h.decision='PENDING'""",
+        (review_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    points = db.execute(
+        """SELECT point_no, reference_value, measured_value, error, tolerance, result
+           FROM calibration_points WHERE cal_id=? ORDER BY point_no""",
+        (row["cal_id"],)
+    ).fetchall()
+    return {
+        "certificate_no": row["certificate_no"],
+        "cal_date": row["cal_date"],
+        "reference_standard": row["reference_standard"],
+        "sensor_type": row["sensor_type"],
+        "manufacturer": row["manufacturer"],
+        "serial_number": row["serial_number"],
+        "station": row["station"],
+        "unit": row["unit"],
+        "performed_by": row["performed_by"],
+        "overall_result": row["result"],
+        "max_error": row["error"],
+        "points": [dict(p) for p in points],
+    }
+
+
 @app.route("/reviews/<int:review_id>/decision", methods=["POST"])
 @admin_required
 def decide_calibration_review(review_id):
@@ -2094,7 +2139,11 @@ def certificate(cert):
                   COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
                   COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
                   COALESCE(s.unit, rq.pending_unit) AS unit,
-                  COALESCE(st.name, rq.pending_station_name) AS station
+                  COALESCE(st.name, rq.pending_station_name) AS station,
+                  (SELECT u.full_name FROM calibration_review_history rh
+                   JOIN users u ON u.user_id=rh.reviewed_by
+                   WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by
            FROM calibrations c
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
