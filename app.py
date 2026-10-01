@@ -104,6 +104,22 @@ CREATE TABLE IF NOT EXISTS calibration_requests (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS calibration_work_orders (
+    work_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_order_no TEXT UNIQUE NOT NULL,
+    request_id INTEGER NOT NULL UNIQUE REFERENCES calibration_requests(request_id),
+    assigned_technician_id INTEGER NOT NULL REFERENCES users(user_id),
+    assigned_by INTEGER NOT NULL REFERENCES users(user_id),
+    assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    target_date TEXT,
+    calibration_method TEXT,
+    standard_id INTEGER REFERENCES reference_standards(standard_id),
+    instructions TEXT,
+    status TEXT NOT NULL DEFAULT 'ASSIGNED'
+        CHECK (status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW','COMPLETED','CANCELLED')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 LATEST = """
@@ -307,6 +323,28 @@ REQUEST_STATUSES = (
     "RECEIVED", "REVIEWED", "ASSIGNED", "IN CALIBRATION",
     "UNDER REVIEW", "COMPLETED", "CANCELLED"
 )
+
+
+def next_work_order_number(db, assigned_date=None):
+    """Generate a sequential work order number for the assignment year."""
+    year = (assigned_date or date.today().isoformat())[:4]
+    row = db.execute(
+        "SELECT work_order_no FROM calibration_work_orders WHERE work_order_no LIKE ? "
+        "ORDER BY work_order_id DESC LIMIT 1", (f"WO-{year}-%",)
+    ).fetchone()
+    try:
+        n = int(row["work_order_no"].rsplit("-", 1)[1]) + 1 if row else 1
+    except (ValueError, IndexError):
+        n = db.execute("SELECT COUNT(*) FROM calibration_work_orders WHERE work_order_no LIKE ?",
+                       (f"WO-{year}-%",)).fetchone()[0] + 1
+    candidate = f"WO-{year}-{n:04d}"
+    while db.execute("SELECT 1 FROM calibration_work_orders WHERE work_order_no=?", (candidate,)).fetchone():
+        n += 1
+        candidate = f"WO-{year}-{n:04d}"
+    return candidate
+
+
+WORK_ORDER_STATUSES = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW", "COMPLETED", "CANCELLED")
 
 
 # ------------------------------- authentication -------------------------------
@@ -747,6 +785,180 @@ def index():
                            attention_total=len(attention), recent=recent, stations=stations_,
                            sensors=[r["sensor_id"] for r in rows], greeting=greeting,
                            today=today, bs_today=bs_today, std_issues=std_issues)
+
+
+# ----------------------- calibration work orders ----------------------------
+
+@app.route("/work-orders")
+def work_orders():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    sql = """
+        SELECT w.*, r.request_no, r.client_name, r.instrument_description,
+               r.requested_service, r.priority, r.sensor_id,
+               u.full_name AS technician_name, a.full_name AS assigned_by_name
+        FROM calibration_work_orders w
+        JOIN calibration_requests r ON r.request_id=w.request_id
+        JOIN users u ON u.user_id=w.assigned_technician_id
+        JOIN users a ON a.user_id=w.assigned_by
+    """
+    where, params = [], []
+    if g.user["role"] != "admin":
+        where.append("w.assigned_technician_id=?")
+        params.append(g.user["user_id"])
+    if q:
+        like = f"%{q}%"
+        where.append("(w.work_order_no LIKE ? OR r.request_no LIKE ? OR r.client_name LIKE ? OR "
+                     "r.instrument_description LIKE ? OR u.full_name LIKE ?)")
+        params.extend([like, like, like, like, like])
+    if status_filter in WORK_ORDER_STATUSES:
+        where.append("w.status=?")
+        params.append(status_filter)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY CASE w.status WHEN 'ASSIGNED' THEN 1 WHEN 'IN PROGRESS' THEN 2 "
+    sql += "WHEN 'AWAITING REVIEW' THEN 3 WHEN 'COMPLETED' THEN 4 ELSE 5 END, w.work_order_id DESC"
+    rows = db.execute(sql, params).fetchall()
+    counts = {}
+    for st in WORK_ORDER_STATUSES:
+        count_sql = "SELECT COUNT(*) FROM calibration_work_orders WHERE status=?"
+        count_params = [st]
+        if g.user["role"] != "admin":
+            count_sql += " AND assigned_technician_id=?"
+            count_params.append(g.user["user_id"])
+        counts[st] = db.execute(count_sql, count_params).fetchone()[0]
+    return render_template("work_orders.html", rows=rows, statuses=WORK_ORDER_STATUSES,
+                           counts=counts, q=q, status_filter=status_filter)
+
+
+@app.route("/work-orders/<int:work_order_id>")
+def work_order_detail(work_order_id):
+    db = get_db()
+    row = db.execute(
+        """SELECT w.*, r.request_no, r.client_name, r.contact_person, r.contact_phone,
+                  r.contact_email, r.instrument_description, r.requested_service,
+                  r.requested_range, r.received_date, r.requested_due_date, r.priority,
+                  r.condition_received, r.remarks, r.sensor_id,
+                  s.sensor_type, s.manufacturer, s.serial_number, st.name AS station,
+                  u.full_name AS technician_name, u.username AS technician_username,
+                  a.full_name AS assigned_by_name, rs.code AS standard_code, rs.name AS standard_name
+           FROM calibration_work_orders w
+           JOIN calibration_requests r ON r.request_id=w.request_id
+           JOIN users u ON u.user_id=w.assigned_technician_id
+           JOIN users a ON a.user_id=w.assigned_by
+           LEFT JOIN sensors s ON s.sensor_id=r.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           LEFT JOIN reference_standards rs ON rs.standard_id=w.standard_id
+           WHERE w.work_order_id=?""", (work_order_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
+        abort(403)
+    return render_template("work_order_detail.html", w=row, statuses=WORK_ORDER_STATUSES)
+
+
+@app.route("/requests/<int:request_id>/assign", methods=["POST"])
+@admin_required
+def assign_calibration_request(request_id):
+    db = get_db()
+    req = db.execute("SELECT * FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
+    if not req:
+        abort(404)
+    if req["status"] in ("COMPLETED", "CANCELLED"):
+        flash("Completed or cancelled requests cannot be assigned.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    technician_text = request.form.get("technician_id", "").strip()
+    technician = db.execute(
+        "SELECT user_id, full_name FROM users WHERE user_id=? AND role='technician' AND active=1",
+        (technician_text,)
+    ).fetchone() if technician_text.isdigit() else None
+    if not technician:
+        flash("Select an active technician account.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    target_text = request.form.get("target_date", "").strip()
+    try:
+        target = date.fromisoformat(target_text).isoformat() if target_text else req["requested_due_date"]
+    except ValueError:
+        flash("Enter a valid target date.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    method = request.form.get("calibration_method", "").strip()
+    standard_text = request.form.get("standard_id", "").strip()
+    standard_id = None
+    if standard_text:
+        if not standard_text.isdigit():
+            flash("Select a valid reference standard.", "error")
+            return redirect(url_for("calibration_request", request_id=request_id))
+        standard = db.execute("SELECT standard_id FROM reference_standards WHERE standard_id=? AND active=1",
+                              (int(standard_text),)).fetchone()
+        if not standard:
+            flash("Select an active reference standard.", "error")
+            return redirect(url_for("calibration_request", request_id=request_id))
+        standard_id = standard["standard_id"]
+    now = datetime.now().isoformat(timespec="seconds")
+    existing = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (request_id,)).fetchone()
+    with db:
+        if existing:
+            db.execute(
+                """UPDATE calibration_work_orders
+                   SET assigned_technician_id=?, assigned_by=?, assigned_at=?, target_date=?,
+                       calibration_method=?, standard_id=?, instructions=?,
+                       status=CASE WHEN status IN ('ASSIGNED','CANCELLED') THEN 'ASSIGNED' ELSE status END,
+                       updated_at=? WHERE request_id=?""",
+                (technician["user_id"], g.user["user_id"], now, target, method, standard_id,
+                 request.form.get("instructions", "").strip(), now, request_id)
+            )
+            work_order_no = existing["work_order_no"]
+        else:
+            work_order_no = next_work_order_number(db, now[:10])
+            db.execute(
+                """INSERT INTO calibration_work_orders
+                   (work_order_no, request_id, assigned_technician_id, assigned_by, assigned_at,
+                    target_date, calibration_method, standard_id, instructions, status, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,'ASSIGNED',?,?)""",
+                (work_order_no, request_id, technician["user_id"], g.user["user_id"], now,
+                 target, method, standard_id, request.form.get("instructions", "").strip(), now, now)
+            )
+        db.execute("UPDATE calibration_requests SET status='ASSIGNED', updated_at=? WHERE request_id=?",
+                   (now, request_id))
+    flash(f"Work order {work_order_no} assigned to {technician['full_name']}.")
+    work_order = db.execute("SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
+                            (request_id,)).fetchone()
+    return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
+
+
+@app.route("/work-orders/<int:work_order_id>/status", methods=["POST"])
+def update_work_order_status(work_order_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM calibration_work_orders WHERE work_order_id=?", (work_order_id,)).fetchone()
+    if not row:
+        abort(404)
+    if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
+        abort(403)
+    new_status = request.form.get("status", "").strip()
+    allowed = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW") if g.user["role"] != "admin" else WORK_ORDER_STATUSES
+    if new_status not in allowed:
+        flash("You are not permitted to set that work order status.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+    now = datetime.now().isoformat(timespec="seconds")
+    with db:
+        db.execute("UPDATE calibration_work_orders SET status=?, updated_at=? WHERE work_order_id=?",
+                   (new_status, now, work_order_id))
+        if new_status in ("ASSIGNED", "IN PROGRESS"):
+            db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
+                       (new_status if new_status == "ASSIGNED" else "IN CALIBRATION", now, row["request_id"]))
+        elif new_status == "AWAITING REVIEW":
+            db.execute("UPDATE calibration_requests SET status='UNDER REVIEW', updated_at=? WHERE request_id=?",
+                       (now, row["request_id"]))
+        elif new_status == "COMPLETED":
+            db.execute("UPDATE calibration_requests SET status='COMPLETED', updated_at=? WHERE request_id=?",
+                       (now, row["request_id"]))
+        elif new_status == "CANCELLED":
+            db.execute("UPDATE calibration_requests SET status='CANCELLED', updated_at=? WHERE request_id=?",
+                       (now, row["request_id"]))
+    flash(f"Work order status updated to {new_status}.")
+    return redirect(url_for("work_order_detail", work_order_id=work_order_id))
 
 
 # -------------------------- calibration requests ---------------------------
