@@ -4,6 +4,15 @@
 {{ tr("The sensor passes only if all points pass. Error, Pass/Fail, certificate number and next due date are worked out for you.") }}</p>
 <form method="post">{{ csrf_input() }}
 <div class="grid">
+<div><label>{{ tr("Calibration request") }}</label>
+  <select name="request_id">
+    <option value="">{{ tr("No linked request") }}</option>
+    {% for r in requests %}
+    <option value="{{ r.request_id }}">{{ r.request_no }} — {{ r.client_name }} — {{ r.instrument_description }}</option>
+    {% endfor %}
+  </select>
+  <small class="hint">{{ tr("Link this calibration to a laboratory request when applicable.") }}</small>
+</div>
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="cal-bs">{{ date_pair(today) }}</span></small></div>
 <div><label>{{ tr("Reference standard") }}</label>
   <select name="standard_id" id="std">
@@ -14,7 +23,10 @@
   <input name="reference_standard" id="stdtext" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px">
   <small class="hint">{{ tr("Standards come from the") }} <a href="{{ url_for('standards') }}">{{ tr("Reference standards") }}</a> {{ tr("register.") }}</small></div>
 </div>
-<h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
+<div class="card" style="margin-top:18px;background:#f8fafd">
+<h2>{{ tr("Request workflow") }}</h2>
+<p class="sub">{{ tr("Select the request above to keep the calibration record connected to its originating laboratory request.") }}</p>
+</div><h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
 <div class="toolbar" style="margin-bottom:10px">
   <span class="hint">{{ tr("Quick setup:") }}</span>
   <input id="gmin" type="number" step="any" placeholder="{{ tr('From') }}" style="min-width:0;width:100px" aria-label="{{ tr('From') }}">
