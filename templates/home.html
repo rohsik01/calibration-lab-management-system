@@ -22,6 +22,95 @@
 </div>
 {% endif %}
 
+<!-- KPI dashboard -->
+<div class="card" style="margin-top:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+      <h2 style="margin:0">{{ tr("Laboratory dashboard") }}</h2>
+      <div class="hint">{{ tr("Workflow, workload, turnaround and calibration performance") }}</div>
+    </div>
+    {% if g.user.role == 'admin' %}
+    <a class="btn alt" href="{{ url_for('calibration_reviews') }}">🔎 {{ tr("Open pending reviews") }}{% if dashboard.pending_reviews %} ({{ dashboard.pending_reviews }}){% endif %}</a>
+    {% endif %}
+  </div>
+
+  <div class="stats" style="margin-top:16px">
+    <a class="stat brand" href="{{ url_for('calibration_requests') }}"><span class="n">{{ dashboard.request_counts["RECEIVED"] }}</span><span class="sub">{{ tr("Received") }}</span></a>
+    <a class="stat amber" href="{{ url_for('calibration_requests') }}"><span class="n">{{ dashboard.request_counts["ASSIGNED"] }}</span><span class="sub">{{ tr("Assigned") }}</span></a>
+    <a class="stat brand" href="{{ url_for('work_orders') }}"><span class="n">{{ dashboard.request_counts["IN CALIBRATION"] }}</span><span class="sub">{{ tr("In calibration") }}</span></a>
+    <a class="stat amber" href="{{ url_for('work_orders') }}"><span class="n">{{ dashboard.request_counts["UNDER REVIEW"] }}</span><span class="sub">{{ tr("Under review") }}</span></a>
+    <a class="stat green" href="{{ url_for('calibration_requests') }}"><span class="n">{{ dashboard.completed_requests }}</span><span class="sub">{{ tr("Completed requests") }}</span></a>
+    <a class="stat red" href="{{ url_for('due') }}"><span class="n">{{ dashboard.overdue_sensors }}</span><span class="sub">{{ tr("Overdue sensors") }}</span></a>
+    <a class="stat red" href="{{ url_for('register', status='failed') }}"><span class="n">{{ dashboard.failed_calibrations }}</span><span class="sub">{{ tr("Failed calibrations") }}</span></a>
+    <div class="stat grey"><span class="n">{{ dashboard.avg_turnaround }}</span><span class="sub">{{ tr("Avg. turnaround days") }}</span></div>
+  </div>
+
+  <div class="two">
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>{{ tr("Request pipeline") }}</h2>
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Stage") }}</th><th>{{ tr("Requests") }}</th><th>{{ tr("Share") }}</th></tr>
+        {% for st in ["RECEIVED","REVIEWED","ASSIGNED","IN CALIBRATION","UNDER REVIEW","COMPLETED","CANCELLED"] %}
+        {% set n = dashboard.request_counts[st] %}
+        {% set share = ((n * 100 / dashboard.request_counts.values()|sum) if dashboard.request_counts.values()|sum else 0) %}
+        <tr>
+          <td><span class="badge {{ 'green' if st == 'COMPLETED' else 'red' if st == 'CANCELLED' else 'amber' if st in ['UNDER REVIEW','IN CALIBRATION'] else 'grey' }}">{{ tr(st) }}</span></td>
+          <td><strong>{{ n }}</strong></td>
+          <td style="min-width:170px"><div style="height:8px;background:#e9edf3;border-radius:99px;overflow:hidden"><div style="height:100%;width:{{ share|round(0) }}%;background:var(--brand)"></div></div><small class="hint">{{ share|round(1) }}%</small></td>
+        </tr>
+        {% endfor %}
+      </table></div>
+    </div>
+
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>{{ tr("Technician workload") }}</h2>
+      {% if dashboard.technician_workload %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Technician") }}</th><th>{{ tr("Active") }}</th><th>{{ tr("Completed") }}</th></tr>
+        {% for t in dashboard.technician_workload %}
+        <tr><td>{{ t.full_name }}</td><td><span class="badge {{ 'red' if t.active >= 5 else 'amber' if t.active >= 3 else 'green' }}">{{ t.active }}</span></td><td>{{ t.completed }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No active technicians.") }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:20px">
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>{{ tr("Monthly calibration volume") }}</h2>
+      {% if dashboard.monthly %}
+      {% for m in dashboard.monthly %}
+      <div style="display:grid;grid-template-columns:70px 1fr 70px;gap:10px;align-items:center;margin:10px 0">
+        <span>{{ m.month }}</span>
+        <div style="height:14px;background:#e9edf3;border-radius:99px;overflow:hidden">
+          <div style="height:100%;width:{{ (m.total * 100 / dashboard.max_monthly)|round(0) }}%;background:var(--brand)"></div>
+        </div>
+        <strong style="text-align:right">{{ m.total }}</strong>
+      </div>
+      <div class="hint" style="margin:-6px 0 8px 80px">{{ tr("Pass") }}: {{ m.passed or 0 }} · {{ tr("Fail") }}: {{ m.failed or 0 }}</div>
+      {% endfor %}
+      {% else %}<div class="empty">{{ tr("No calibration trend data yet.") }}</div>{% endif %}
+    </div>
+
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>{{ tr("Recent activity") }}</h2>
+      {% if dashboard.recent_activity %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Time") }}</th><th>{{ tr("Action") }}</th><th>{{ tr("User") }}</th></tr>
+        {% for a in dashboard.recent_activity %}
+        <tr>
+          <td><small>{{ a.created_at }}</small></td>
+          <td><strong>{{ a.action }}</strong>{% if a.entity_id %}<br><span class="hint">{{ a.entity_type }} #{{ a.entity_id }}</span>{% endif %}</td>
+          <td>{{ a.full_name or "System" }}</td>
+        </tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No activity recorded yet.") }}</div>{% endif %}
+      {% if g.user.role == 'admin' %}<p style="margin:12px 0 0"><a href="{{ url_for('audit_log') }}">{{ tr("Open full audit log →") }}</a></p>{% endif %}
+    </div>
+  </div>
+</div>
+
 <div class="card"><h2>{{ tr("Quick actions") }}</h2>
   <div class="actions" style="margin-bottom:0">
     {% if sensors %}<select id="quick" style="width:auto;min-width:230px" aria-label="{{ tr('Record calibration') }}"
