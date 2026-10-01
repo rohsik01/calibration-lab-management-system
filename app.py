@@ -2532,7 +2532,7 @@ def alerts():
                               JOIN calibration_requests r ON r.request_id=w.request_id
                               JOIN users u ON u.user_id=w.assigned_technician_id
                               WHERE w.status IN ('ASSIGNED','IN PROGRESS')
-                              ORDER BY w.assigned_date ASC, w.work_order_id ASC""").fetchall()
+                              ORDER BY w.assigned_at ASC, w.work_order_id ASC""").fetchall()
     for r in work_rows:
         if g.user["role"] == "admin":
             if r["status"] == "ASSIGNED":
