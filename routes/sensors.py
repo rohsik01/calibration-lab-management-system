@@ -1,5 +1,6 @@
 """Route module: sensors."""
 from app import *
+from routes.stations import _excel_workbook
 
 def _sensor_id_prefix(sensor_type):
     """Return the standard two-letter Sensor ID prefix for a sensor type."""
