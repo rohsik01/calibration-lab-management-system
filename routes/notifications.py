@@ -10,7 +10,6 @@ def due():
     return render_template("due.html", rows=rows, days=days)
 
 
-@app.route("/alerts")
 def build_operational_alerts(db):
     """Build current role-specific operational alerts."""
     today = date.today()
