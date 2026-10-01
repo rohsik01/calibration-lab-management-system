@@ -242,7 +242,7 @@ def next_certificate(db, cal_date):
 
 
 # ------------------------------- authentication -------------------------------
-OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor", "calendar_view"}
+OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor", "calendar_view", "api_bs_date"}
 FAILS = {}   # (username, ip) -> (failed count, locked-until timestamp)
 
 
@@ -589,6 +589,18 @@ def bs_month_grid(year, month):
     if week:
         weeks.append(week + [None] * (7 - len(week)))
     return weeks
+
+
+@app.route("/api/bs-date")
+def api_bs_date():
+    value = request.args.get("ad", "")
+    try:
+        ad = date.fromisoformat(value)
+        from nepali_datetime import date as bs_date
+        b = bs_date.from_datetime_date(ad)
+        return {"ad": ad.isoformat(), "bs": f"{b.year:04d}-{b.month:02d}-{b.day:02d}"}
+    except ValueError:
+        return {"error": "Invalid Gregorian date"}, 400
 
 
 @app.route("/calendar")
