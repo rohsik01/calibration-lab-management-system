@@ -18,10 +18,18 @@
 <div><label>{{ tr("Last updated") }}</label><div>{{ r.updated_at }}</div></div>
 </div>
 {% if g.user.role == 'admin' %}
-<form method="post" action="{{ url_for('update_calibration_request_status', request_id=r.request_id) }}" class="actions" style="margin-top:16px">
-{{ csrf_input() }}<select name="status" style="max-width:260px">{% for st in statuses %}<option {{ 'selected' if r.status == st }}>{{ st }}</option>{% endfor %}</select>
-<button class="btn">{{ tr("Update status") }}</button>
+<div class="actions" style="margin-top:16px">
+{% if r.status == 'RECEIVED' %}
+<form method="post" action="{{ url_for('update_calibration_request_status', request_id=r.request_id) }}">
+{{ csrf_input() }}<input type="hidden" name="status" value="REVIEWED"><button class="btn">{{ tr("Mark as reviewed") }}</button>
 </form>
+{% endif %}
+{% if r.status in ('RECEIVED','REVIEWED','ASSIGNED','IN CALIBRATION') %}
+<form method="post" action="{{ url_for('update_calibration_request_status', request_id=r.request_id) }}" onsubmit="return confirm('{{ tr("Cancel this request?") }}')">
+{{ csrf_input() }}<input type="hidden" name="status" value="CANCELLED"><button class="btn alt">{{ tr("Cancel request") }}</button>
+</form>
+{% endif %}
+</div>
 {% endif %}
 </div>
 
@@ -86,6 +94,26 @@
 {% endif %}
 </div>
 {% endif %}
+
+<div class="card">
+<h2>{{ tr("Workflow history") }}</h2>
+<div class="scroll"><table>
+<tr><th>{{ tr("Date / time") }}</th><th>{{ tr("Transition") }}</th><th>{{ tr("Changed by") }}</th><th>{{ tr("Comments") }}</th></tr>
+{% for h in status_history %}
+<tr>
+<td>{{ h.changed_at }}</td>
+<td>
+{% if h.old_status %}<span class="badge grey">{{ h.old_status }}</span> → {% endif %}
+<span class="badge {{ 'green' if h.new_status == 'COMPLETED' else 'red' if h.new_status == 'CANCELLED' else 'amber' if h.new_status in ('IN CALIBRATION','UNDER REVIEW') else 'grey' }}">{{ h.new_status }}</span>
+</td>
+<td>{{ h.changed_by_name or '—' }}</td>
+<td>{{ h.comments or '—' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="empty">{{ tr("No workflow history available.") }}</td></tr>
+{% endfor %}
+</table></div>
+</div>
 
 <div class="card">
 <h2>{{ tr("Linked calibration records") }}</h2>
