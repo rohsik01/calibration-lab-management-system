@@ -99,6 +99,19 @@ NE = {
     "Due within (days)": "म्याद (दिनभित्र)",
     "Update": "अद्यावधिक",
 
+    "Station details": "स्टेसन विवरण",
+    "Station ID": "स्टेसन आईडी",
+    "Station Name": "स्टेसनको नाम",
+    "Station ID, Station Name, Location and Type are maintained here.": "यहाँ स्टेसन आईडी, स्टेसनको नाम, स्थान र प्रकार व्यवस्थापन गरिन्छ।",
+    "Bulk upload stations": "स्टेसनहरू सामूहिक अपलोड",
+    "Prepare your station data in Excel using the sample template, then upload the completed .xlsx file.": "नमुना Excel प्रयोग गरी स्टेसनको डाटा तयार गर्नुहोस् र पूरा गरिएको .xlsx फाइल अपलोड गर्नुहोस्।",
+    "Download station Excel sample": "स्टेसन Excel नमुना डाउनलोड",
+    "Upload station Excel": "स्टेसन Excel अपलोड",
+    "Bulk upload sensors": "सेन्सरहरू सामूहिक अपलोड",
+    "Use the Excel sample to prepare sensor records, then upload the completed .xlsx file. Station IDs must already exist.": "Excel नमुना प्रयोग गरी सेन्सर अभिलेख तयार गर्नुहोस् र पूरा गरिएको .xlsx फाइल अपलोड गर्नुहोस्। स्टेसन आईडी पहिले नै दर्ता भएको हुनुपर्छ।",
+    "Download sensor Excel sample": "सेन्सर Excel नमुना डाउनलोड",
+    "Upload sensor Excel": "सेन्सर Excel अपलोड",
+
     # ---- stations / sensors ----
     "Name": "नाम",
     "Location": "स्थान",
