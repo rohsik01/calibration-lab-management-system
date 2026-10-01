@@ -2,7 +2,7 @@
 {% block banner %}<div class="card">{% include "_banner.html" %}</div>{% endblock %}
 {% block content %}
 <div class="card hero">
-  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ today }}</div></div>
+  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ today }} · {{ bs_today }}</div></div>
   <form class="search" action="{{ url_for('register') }}" method="get">
     <input name="q" placeholder="{{ tr('Find a sensor by ID, type, station or serial…') }}" aria-label="{{ tr('Search sensors') }}"><button class="btn">{{ tr("Search") }}</button></form>
 </div>
