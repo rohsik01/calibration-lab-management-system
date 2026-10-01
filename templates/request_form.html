@@ -24,19 +24,7 @@ sensorSelect.addEventListener('change',toggleNewSensor); toggleNewSensor();
 <option value="">{{ tr("Not registered yet") }}</option>
 {% for s in sensors %}<option value="{{ s.sensor_id }}" {{ 'selected' if request.form.get('sensor_id') == s.sensor_id }}>{{ s.sensor_id }} — {{ s.sensor_type }} — S/N {{ s.serial_number }} — {{ s.station }}</option>{% endfor %}
 </select>
-<small class="hint">{{ tr("If the item is not listed, choose Not registered yet. The details below will be stored with this request and the sensor will be added only after administrator approval.") }}</small></div>
-<div id="new-sensor-box" class="card" style="grid-column:1/-1;background:#f8fafd">
-<h3>{{ tr("New sensor / instrument details") }}</h3>
-<div class="grid">
-<div><label>{{ tr("Sensor type") }}</label><input name="pending_sensor_type" value="{{ request.form.get('pending_sensor_type','') }}" placeholder="{{ tr('e.g. Temperature') }}"></div>
-<div><label>{{ tr("Manufacturer") }}</label><input name="pending_manufacturer" value="{{ request.form.get('pending_manufacturer','') }}"></div>
-<div><label>{{ tr("Serial number") }}</label><input name="pending_serial_number" value="{{ request.form.get('pending_serial_number','') }}"></div>
-<div><label>{{ tr("Station name") }}</label><input name="pending_station_name" value="{{ request.form.get('pending_station_name','') }}"></div>
-<div><label>{{ tr("Station location") }}</label><input name="pending_station_location" value="{{ request.form.get('pending_station_location','') }}"></div>
-<div><label>{{ tr("Calibration interval (days)") }}</label><input type="number" min="1" name="pending_interval_days" value="{{ request.form.get('pending_interval_days','365') }}"></div>
-<div><label>{{ tr("Tolerance (±)") }}</label><input type="number" min="0" step="any" name="pending_tolerance" value="{{ request.form.get('pending_tolerance','0.5') }}"></div>
-<div><label>{{ tr("Unit") }}</label><input name="pending_unit" value="{{ request.form.get('pending_unit','') }}" placeholder="{{ tr('e.g. °C, hPa') }}"></div>
-</div></div>
+<small class="hint">{{ tr("If the item is not registered, choose Not registered yet. The technician will complete the sensor details before calibration.") }}</small></div>
 <div><label>{{ tr("Instrument description") }}</label><input name="instrument_description" value="{{ request.form.get('instrument_description','') }}" placeholder="{{ tr('e.g. Digital barometer / temperature sensor') }}" required></div>
 <div><label>{{ tr("Requested calibration/service") }}</label><input name="requested_service" value="{{ request.form.get('requested_service','') }}" placeholder="{{ tr('e.g. Pressure calibration') }}" required></div>
 <div><label>{{ tr("Requested range / points") }}</label><input name="requested_range" value="{{ request.form.get('requested_range','') }}" placeholder="{{ tr('e.g. 800–1100 hPa') }}"></div>
