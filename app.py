@@ -1501,9 +1501,18 @@ def calibration_request(request_id):
         "JOIN users u ON u.user_id=w.assigned_technician_id WHERE w.request_id=?",
         (request_id,)
     ).fetchone()
+    status_history = db.execute(
+        """SELECT h.*, u.full_name AS changed_by_name
+           FROM calibration_request_status_history h
+           LEFT JOIN users u ON u.user_id=h.changed_by
+           WHERE h.request_id=?
+           ORDER BY h.changed_at DESC, h.history_id DESC""",
+        (request_id,)
+    ).fetchall()
     return render_template("request_detail.html", r=row, calibrations=calibrations,
                            statuses=REQUEST_STATUSES, technicians=technicians,
-                           standards=standards, work_order=work_order)
+                           standards=standards, work_order=work_order,
+                           status_history=status_history)
 
 
 @app.route("/requests/<int:request_id>/status", methods=["POST"])
