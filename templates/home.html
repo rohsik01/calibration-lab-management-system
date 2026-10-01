@@ -2,7 +2,7 @@
 {% block banner %}<div class="card">{% include "_banner.html" %}</div>{% endblock %}
 {% block content %}
 <div class="card hero">
-  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ today }} · {{ bs_today }}</div></div>
+  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
   <form class="search" action="{{ url_for('register') }}" method="get">
     <input name="q" placeholder="{{ tr('Find a sensor by ID, type, station or serial…') }}" aria-label="{{ tr('Search sensors') }}"><button class="btn">{{ tr("Search") }}</button></form>
 </div>
@@ -36,7 +36,7 @@
 {% if std_issues %}
 <div class="card"><h2>📏 {{ tr("Reference standards needing attention") }}</h2>
   <div class="scroll"><table><tr><th>{{ tr("Code") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Valid until") }}</th><th>{{ tr("Status") }}</th></tr>
-  {% for x in std_issues %}{% set st = std_status(x) %}<tr><td><a href="{{ url_for('standard', sid=x.standard_id) }}">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ x.valid_until }}</td>
+  {% for x in std_issues %}{% set st = std_status(x) %}<tr><td><a href="{{ url_for('standard', sid=x.standard_id) }}">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ date_pair(x.valid_until) }}</td>
     <td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td></tr>{% endfor %}</table></div>
   <p style="margin:12px 0 0"><a href="{{ url_for('standards') }}">{{ tr("Open the reference standards register →") }}</a></p></div>
 {% endif %}
@@ -47,14 +47,14 @@
     {% if attention %}<div class="scroll"><table><tr><th>{{ tr("Sensor") }}</th><th>{{ tr("Station") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Due") }}</th><th></th></tr>
     {% for r in attention %}{% set st = status(r) %}
     <tr><td><a href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ r.sensor_id }}</a></td><td>{{ r.station }}</td>
-      <td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td><td>{{ r.next_due or '—' }}</td>
+      <td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td><td>{{ date_pair(r.next_due) }}</td>
       <td><a class="btn alt" style="padding:3px 10px" href="{{ url_for('calibrate', sensor_id=r.sensor_id) }}">{{ tr("Calibrate") }}</a></td></tr>{% endfor %}
     </table></div>{% else %}<div class="empty">✅ {{ tr("Everything is up to date.") }}</div>{% endif %}
     {% if attention_total %}<p style="margin:12px 0 0"><a href="{{ url_for('due') }}">{{ tr("See the full due & overdue list →") }}</a></p>{% endif %}</div>
 
   <div class="card"><h2>{{ tr("Recent calibrations") }}</h2>
     {% if recent %}<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
-    {% for c in recent %}<tr><td>{{ c.cal_date }}</td><td><a href="{{ url_for('sensor', sensor_id=c.sensor_id) }}">{{ c.sensor_id }}</a></td>
+    {% for c in recent %}<tr><td>{{ date_pair(c.cal_date) }}</td><td><a href="{{ url_for('sensor', sensor_id=c.sensor_id) }}">{{ c.sensor_id }}</a></td>
       <td><span class="badge {{ 'green' if c.result=='PASS' else 'red' }}">{{ tr(c.result) }}</span></td>
       <td><a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a></td></tr>{% endfor %}
     </table></div>{% else %}<div class="empty">{{ tr("No calibrations recorded yet.") }}</div>{% endif %}</div>
