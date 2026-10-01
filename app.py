@@ -236,7 +236,7 @@ with sqlite3.connect(DB) as _c:
         pending_unit=(SELECT unit FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
         pending_station_name=(SELECT st.name FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id),
         pending_station_location=(SELECT st.location FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id)
-        WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL)
+        WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL""")
     # upgrade older databases: record who performed each calibration
     if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
