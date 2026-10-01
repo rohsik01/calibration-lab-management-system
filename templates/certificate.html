@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no }}{% endblock %}
+{% block banner %}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:780px;margin:auto">
+{% include "_banner.html" %}
+<h1 style="text-align:center;margin-top:14px">{{ tr("Calibration Certificate") }}</h1>
+<p style="text-align:center;color:var(--mute)">{{ r.certificate_no }}</p>
+<table>
+<tr><th>{{ tr("Sensor ID") }}</th><td>{{ r.sensor_id }}</td></tr>
+<tr><th>{{ tr("Station") }}</th><td>{{ r.station }}</td></tr>
+<tr><th>{{ tr("Type") }}</th><td>{{ r.sensor_type }}</td></tr>
+<tr><th>{{ tr("Manufacturer") }}</th><td>{{ r.manufacturer }}</td></tr>
+<tr><th>{{ tr("Serial number") }}</th><td>{{ r.serial_number }}</td></tr>
+<tr><th>{{ tr("Calibration date") }}</th><td>{{ r.cal_date }}</td></tr>
+<tr><th>{{ tr("Reference standard") }}</th><td>{{ r.reference_standard }}</td></tr>
+{% if det %}
+{% if det.serial %}<tr><th>{{ tr("Standard serial number") }}</th><td>{{ det.serial }}</td></tr>{% endif %}
+{% if det.traceability %}<tr><th>{{ tr("Traceability") }}</th><td style="white-space:normal">{{ det.traceability }}</td></tr>{% endif %}
+{% if det.certificate %}<tr><th>{{ tr("Standard's certificate") }}</th><td>{{ det.certificate }}</td></tr>{% endif %}
+<tr><th>{{ tr("Standard valid until") }}</th><td>{{ det.valid_until }}</td></tr>
+{% if det.uncertainty %}<tr><th>{{ tr("Standard uncertainty") }}</th><td>{{ det.uncertainty }}</td></tr>{% endif %}
+{% endif %}
+<tr><th>{{ tr("Points measured") }}</th><td>{{ pts|length }}</td></tr>
+<tr><th>{{ tr("Max error") }}</th><td>{{ '%+g'|format(r.error) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Overall result") }}</th><td><span class="badge {{ 'green' if r.result=='PASS' else 'red' }}">{{ tr(r.result) }}</span></td></tr>
+<tr><th>{{ tr("Calibrated by") }}</th><td>{{ r.performed_by or '—' }}</td></tr>
+<tr><th>{{ tr("Next due") }}</th><td>{{ r.next_due }}</td></tr></table>
+<h2 style="margin-top:24px">{{ tr("Measurement points") }}</h2>
+<table><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
+{% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
+<td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
+<p style="margin-top:40px">{{ tr("Signed") }}: ______________________ &nbsp; {{ tr("Date") }}: ____________</p>
+<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
+<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p></div>{% endblock %}

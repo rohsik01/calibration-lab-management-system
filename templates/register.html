@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block title %}{{ tr("Sensor register") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Sensor register") }}</h1>
+<p class="sub">{{ tr("Latest calibration for every sensor. Click a column heading to sort.") }}</p>
+<div class="toolbar">
+  <input id="q" type="search" placeholder="{{ tr('Search sensors, stations, serials…') }}" aria-label="{{ tr('Search') }}">
+  <select id="sf" aria-label="{{ tr('Status') }}"><option value="">{{ tr("All statuses") }}</option><option value="ok">{{ tr("OK") }}</option>
+    <option value="soon">{{ tr("Due within 30 days") }}</option><option value="overdue">{{ tr("Overdue") }}</option>
+    <option value="failed">{{ tr("Failed") }}</option><option value="never">{{ tr("Never calibrated") }}</option></select>
+  <span id="count" class="hint"></span>
+  <span style="margin-left:auto;display:flex;gap:10px"><a class="btn" href="{{ url_for('new_sensor') }}">+ {{ tr("Add sensor") }}</a>
+  <a class="btn alt" href="{{ url_for('export_csv') }}">{{ tr("Export") }}</a></span>
+</div>
+{% include "_table.html" %}</div>
+<script>
+const q = document.getElementById('q'), sf = document.getElementById('sf'), count = document.getElementById('count');
+const SHOW = {{ tr("Showing {n} of {m}")|tojson }};
+const rows = [...document.querySelectorAll('table.js-table tr')].slice(1).filter(r => r.cells.length > 2);
+const p = new URLSearchParams(location.search); q.value = p.get('q') || '';
+sf.value = ({due_soon:'soon'})[p.get('status')] || p.get('status') || '';
+function apply() { const v = q.value.toLowerCase().trim(); let n = 0;
+  rows.forEach(r => { const b = r.cells[r.cells.length - 1].querySelector('.badge');
+    const show = r.innerText.toLowerCase().includes(v) && (!sf.value || (b && b.dataset.s === sf.value));
+    r.style.display = show ? '' : 'none'; if (show) n++; });
+  count.textContent = rows.length ? SHOW.replace('{n}', n).replace('{m}', rows.length) : ''; }
+q.oninput = sf.onchange = apply; apply();
+</script>{% endblock %}

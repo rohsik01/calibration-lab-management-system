@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}{{ tr("Reference standard") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Edit reference standard") if editing else tr("Add reference standard") }}</h1>
+{% if editing %}<p class="sub">{{ tr("When the standard is recalibrated, update its calibration date, certificate and expiry date here.") }}</p>{% endif %}
+<form method="post">{{ csrf_input() }}<div class="grid">
+<div><label>{{ tr("Code") }}</label><input name="code" value="{{ x.code }}" placeholder="RS-001" required><small class="hint">{{ tr("A unique label, e.g. RS-001.") }}</small></div>
+<div><label>{{ tr("Name") }}</label><input name="name" value="{{ x.name }}" required></div>
+<div><label>{{ tr("Type") }}</label><input name="standard_type" value="{{ x.standard_type }}" placeholder="{{ tr('Temperature') }}"></div>
+<div><label>{{ tr("Manufacturer") }}</label><input name="manufacturer" value="{{ x.manufacturer }}"></div>
+<div><label>{{ tr("Serial number") }}</label><input name="serial_number" value="{{ x.serial_number }}"></div>
+<div><label>{{ tr("Uncertainty") }}</label><input name="uncertainty" value="{{ x.uncertainty }}" placeholder="±0.05 °C (k=2)"></div>
+<div><label>{{ tr("Traceability") }}</label><input name="traceability" value="{{ x.traceability }}"><small class="hint">{{ tr("Body or chain the standard is traceable to.") }}</small></div>
+<div><label>{{ tr("Certificate") }}</label><input name="certificate_no" value="{{ x.certificate_no }}"></div>
+<div><label>{{ tr("Calibrated on") }}</label><input type="date" name="calibrated_on" value="{{ x.calibrated_on }}" required></div>
+<div><label>{{ tr("Valid until") }}</label><input type="date" name="valid_until" value="{{ x.valid_until }}" required></div>
+{% if editing %}<div><label>{{ tr("Active") }}</label><label style="color:inherit"><input type="checkbox" name="active" value="1" {{ 'checked' if x.active }} style="width:auto"> {{ tr("Available for new calibrations") }}</label></div>{% endif %}
+</div><p><button class="btn">{{ tr("Save") }}</button>
+<a class="btn alt" href="{{ url_for('standard', sid=sid) if editing else url_for('standards') }}">{{ tr("Cancel") }}</a></p></form></div>{% endblock %}

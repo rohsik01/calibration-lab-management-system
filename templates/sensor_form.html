@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}{{ tr("Add sensor") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Register sensor") }}</h1>
+{% if not stations %}<p><a href="{{ url_for('stations') }}">{{ tr("Add a station first.") }}</a></p>{% else %}
+<form method="post">{{ csrf_input() }}<div class="grid">
+<div><label>{{ tr("Sensor ID") }}</label><input name="sensor_id" placeholder="TS-001" required><small class="hint">{{ tr("A unique label, e.g. TS-001.") }}</small></div>
+<div><label>{{ tr("Station") }}</label><select name="station_id">{% for s in stations %}<option value="{{ s.station_id }}">{{ s.name }}</option>{% endfor %}</select></div>
+<div><label>{{ tr("Sensor type") }}</label><input name="sensor_type" placeholder="{{ tr('Temperature') }}" required></div>
+<div><label>{{ tr("Manufacturer") }}</label><input name="manufacturer"></div>
+<div><label>{{ tr("Serial number") }}</label><input name="serial_number" required></div>
+<div><label>{{ tr("Unit") }}</label><input name="unit" placeholder="°C"></div>
+<div><label>{{ tr("Default tolerance (±)") }}</label><input name="tolerance" type="number" step="any" value="0.5" required><small class="hint">{{ tr("Allowed error for a PASS. You can change it for each point when calibrating.") }}</small></div>
+<div><label>{{ tr("Calibration interval (days)") }}</label><input name="interval_days" type="number" value="365" required><small class="hint">{{ tr("How often it must be recalibrated (365 = yearly).") }}</small></div>
+</div><p><button class="btn">{{ tr("Save sensor") }}</button></p></form>{% endif %}</div>{% endblock %}

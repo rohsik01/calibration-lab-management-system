@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}{{ tr("Change password") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card" style="max-width:440px"><h1>{{ tr("Change password") }}</h1>
+<form method="post">{{ csrf_input() }}
+<p><label>{{ tr("Current password") }}</label><input name="current" type="password" required></p>
+<p><label>{{ tr("New password (min. 8 characters)") }}</label><input name="password" type="password" required></p>
+<p><label>{{ tr("Repeat new password") }}</label><input name="password2" type="password" required></p>
+<p><button class="btn">{{ tr("Change password") }}</button></p></form></div>{% endblock %}

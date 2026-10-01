@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}{{ tr("Due & overdue") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Due, overdue and failed") }}</h1>
+<form class="actions" method="get"><label style="align-self:center;margin:0">{{ tr("Due within (days)") }}</label>
+<input type="number" name="days" value="{{ days }}" style="width:90px"><button class="btn">{{ tr("Update") }}</button></form>
+{% include "_table.html" %}</div>{% endblock %}

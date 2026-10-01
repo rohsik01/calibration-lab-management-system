@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="{{ 'ne' if g.lang == 'ne' else 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ tr("Calibration Lab") }}{% endblock %}</title>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --ink:#1b2333; --mute:#667085; --line:#e1e5ec; --brand:#1f5fbf;
+          --side:#111c33; --green:#1e8e4e; --amber:#b7791f; --red:#c53030; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", "Nirmala UI", "Noto Sans Devanagari", Mangal, sans-serif; background:var(--bg); color:var(--ink); }
+  a { color:var(--brand); }
+  .app { display:flex; min-height:100vh; }
+  .side { width:250px; background:var(--side); color:#c8d3ea; display:flex; flex-direction:column;
+          position:sticky; top:0; height:100vh; flex-shrink:0; z-index:20; }
+  .brand { padding:18px 20px; color:#fff; font-weight:700; font-size:16px; border-bottom:1px solid #22304f; }
+  .brand small { display:block; font-weight:400; font-size:12px; color:#7f8fb0; }
+  .side nav { padding:8px 10px; flex:1; overflow-y:auto; }
+  .grp { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#7f8fb0; margin:16px 12px 6px; }
+  .item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#c8d3ea; text-decoration:none; }
+  .item:hover { background:#1c2b4b; color:#fff; }
+  .item.active { background:var(--brand); color:#fff; }
+  .ic { width:22px; text-align:center; }
+  .pill { margin-left:auto; background:var(--red); color:#fff; border-radius:999px; font-size:11px; padding:1px 8px; }
+  .me { border-top:1px solid #22304f; padding:12px 14px; font-size:13px; }
+  .me b { color:#fff; display:block; } .me span { color:#7f8fb0; }
+  .me .row { display:flex; gap:8px; margin-top:10px; align-items:center; }
+  .me a { color:#c8d3ea; }
+  .lang { margin-top:10px; color:#7f8fb0; } .lang a { text-decoration:none; } .lang a.on { color:#fff; font-weight:700; text-decoration:underline; }
+  .langbar { text-align:right; margin-bottom:10px; font-size:13px; } .langbar a { color:var(--mute); margin-left:10px; text-decoration:none; }
+  .langbar a.on { color:var(--brand); font-weight:700; text-decoration:underline; }
+  .content { flex:1; min-width:0; }
+  .topbar { display:none; background:var(--side); color:#fff; padding:10px 14px; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
+  .topbar button { background:none; border:0; color:#fff; font-size:22px; cursor:pointer; }
+  main { max-width:1200px; margin:0 auto; padding:24px 24px 60px; }
+  .plain main { max-width:520px; margin-top:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  .banner { text-align:center; line-height:1.4; padding:4px 0 12px; border-bottom:3px double #b6202f; margin-bottom:14px; }
+  .card .banner { border-bottom:0; margin:0; padding:2px 0; }
+  .banner .b1 { font-size:15px; font-weight:700; color:#b6202f; } .banner .b2 { font-size:15px; font-weight:600; }
+  .banner .b3 { font-size:20px; font-weight:800; color:#14203a; } .banner .b4 { font-size:13px; color:var(--mute); }
+  .only-print { display:none; }
+  h1 { font-size:22px; margin:0 0 6px; } h2 { font-size:16px; margin:0 0 12px; }
+  .sub, .hint { color:var(--mute); font-size:13px; } small.hint { display:block; margin-top:3px; }
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { font-size:12px; text-transform:uppercase; color:var(--mute); letter-spacing:.04em; user-select:none; }
+  th[data-dir=asc]::after { content:" ▲"; } th[data-dir=desc]::after { content:" ▼"; }
+  tbody tr:hover td { background:#f8fafd; }
+  .scroll { overflow-x:auto; }
+  label { display:block; font-size:13px; color:var(--mute); margin-bottom:4px; }
+  input, select, textarea { width:100%; padding:9px 10px; border:1px solid #cfd5df; border-radius:8px; font:inherit; background:#fff; }
+  input:focus, select:focus { outline:2px solid #b9d0f5; border-color:var(--brand); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+  .btn { display:inline-block; background:var(--brand); color:#fff; border:1px solid var(--brand); padding:9px 16px; border-radius:8px;
+         font:inherit; cursor:pointer; text-decoration:none; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.alt { background:#fff; color:var(--brand); }
+  .badge { padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; color:#fff; display:inline-block; }
+  .green { background:var(--green); } .amber { background:var(--amber); } .red { background:var(--red); } .grey { background:#8a93a3; }
+  .flash { display:flex; justify-content:space-between; gap:10px; padding:10px 14px; border-radius:8px; margin-bottom:16px;
+           background:#e7f6ec; border:1px solid #b7e1c6; }
+  .flash.error { background:#fdeceb; border-color:#f3bcb8; }
+  .flash button { background:none; border:0; font-size:18px; cursor:pointer; color:inherit; }
+  .actions, .toolbar { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .toolbar input, .toolbar select { width:auto; min-width:220px; }
+  .hero { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:center; }
+  .search { display:flex; gap:8px; flex:1; max-width:460px; min-width:260px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:20px; }
+  .stat { background:#fff; border:1px solid var(--line); border-left:5px solid #8a93a3; border-radius:12px; padding:14px 16px;
+          text-decoration:none; color:var(--ink); display:flex; flex-direction:column; }
+  .stat:hover { box-shadow:0 2px 10px rgba(20,32,58,.1); }
+  .stat .n { font-size:28px; font-weight:700; line-height:1.1; }
+  .stat.brand { border-left-color:var(--brand); } .stat.green { border-left-color:var(--green); background:#fff; color:var(--ink); }
+  .stat.amber { border-left-color:var(--amber); background:#fff; color:var(--ink); } .stat.red { border-left-color:var(--red); background:#fff; color:var(--ink); }
+  .stat.grey { background:#fff; color:var(--ink); }
+  .two { display:grid; grid-template-columns:3fr 2fr; gap:20px; } .two .card { margin-bottom:0; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:1px solid var(--line); background:#f8fafd; border-radius:999px; padding:5px 14px; text-decoration:none; color:var(--ink); font-size:14px; }
+  .chip:hover { border-color:var(--brand); }
+  .steps { padding-left:20px; margin:8px 0 0; } .steps li { margin-bottom:6px; }
+  .preview { margin:14px 0; padding:10px 14px; border-radius:8px; background:#f4f6fa; border:1px dashed #cfd5df; }
+  .empty { text-align:center; color:var(--mute); padding:20px; }
+  @media (max-width:900px) { .two { grid-template-columns:1fr; } }
+  @media (max-width:800px) {
+    .side { position:fixed; left:-260px; transition:left .2s; } .side.open { left:0; box-shadow:0 0 30px rgba(0,0,0,.4); }
+    .topbar { display:flex; } main { padding:16px 14px 50px; }
+  }
+  @media print { .side, .topbar, .noprint, .actions, .toolbar, .langbar { display:none !important; } .only-print { display:block; }
+                 body { background:#fff; } .card { border:0; } }
+</style>
+</head>
+<body>
+{% set ep = request.endpoint %}{% set here = request.full_path.rstrip('?') %}
+{% if g.user %}
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">🧪 {{ tr("Calibration Lab") }}<small>{{ tr("Management System") }}</small></div>
+    <nav>
+      <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
+      <div class="grp">{{ tr("Records") }}</div>
+      <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
+      <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}
+        {% if nav_alerts %}<span class="pill">{{ nav_alerts }}</span>{% endif %}</a>
+      <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}
+        {% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
+      <div class="grp">{{ tr("Manage") }}</div>
+      <a class="item {{ 'active' if ep == 'new_sensor' }}" href="{{ url_for('new_sensor') }}"><span class="ic">➕</span>{{ tr("Add sensor") }}</a>
+      <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
+      <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
+      {% if g.user.role == 'admin' %}
+      <div class="grp">{{ tr("Administration") }}</div>
+      <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users") }}</a>
+      {% endif %}
+    </nav>
+    <div class="me"><b>{{ g.user.full_name }}</b><span>{{ tr(g.user.role|capitalize) }}</span>
+      <div class="lang">🌐 <a class="{{ 'on' if g.lang != 'ne' }}" href="{{ url_for('set_lang', code='en', next=here) }}">English</a> ·
+        <a class="{{ 'on' if g.lang == 'ne' }}" href="{{ url_for('set_lang', code='ne', next=here) }}">नेपाली</a></div>
+      <div class="row"><a href="{{ url_for('account') }}">{{ tr("Change password") }}</a>
+        <form method="post" action="{{ url_for('logout') }}" style="margin-left:auto">{{ csrf_input() }}
+          <button class="btn alt" style="padding:4px 12px">{{ tr("Sign out") }}</button></form></div></div>
+  </aside>
+  <div class="content">
+    <div class="topbar"><button onclick="document.getElementById('side').classList.toggle('open')" aria-label="Menu">☰</button><b>{{ tr("Calibration Lab") }}</b></div>
+{% else %}
+<div class="plain"><div class="content">
+{% endif %}
+    <main>
+      {% if not g.user %}<div class="langbar">🌐 <a class="{{ 'on' if g.lang != 'ne' }}" href="{{ url_for('set_lang', code='en', next=here) }}">English</a>
+        <a class="{{ 'on' if g.lang == 'ne' }}" href="{{ url_for('set_lang', code='ne', next=here) }}">नेपाली</a></div>{% endif %}
+      {% block banner %}<div class="only-print">{% include "_banner.html" %}</div>{% endblock %}
+      {% for cat, m in get_flashed_messages(with_categories=true) %}<div class="flash {{ 'error' if cat == 'error' }}"><span>{{ m }}</span><button onclick="this.parentElement.remove()" aria-label="Dismiss">×</button></div>{% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+{% if g.user %}</div>{% else %}</div>{% endif %}
+<script>
+document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
+// click any column heading of a table to sort it
+document.querySelectorAll('table.js-table').forEach(t => {
+  const ths = [...t.rows[0].cells];
+  ths.forEach((th, i) => { th.style.cursor = 'pointer'; th.title = {{ tr("Click to sort")|tojson }};
+    th.addEventListener('click', () => {
+      const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+      ths.forEach(x => delete x.dataset.dir); th.dataset.dir = dir;
+      const rows = [...t.rows].slice(1).filter(r => r.cells.length === ths.length);
+      rows.sort((a, b) => { const c = a.cells[i].innerText.trim().localeCompare(b.cells[i].innerText.trim(), undefined, {numeric:true});
+                            return dir === 'asc' ? c : -c; });
+      rows.forEach(r => t.tBodies[0].appendChild(r));
+    }); });
+});
+</script>
+</body>
+</html>

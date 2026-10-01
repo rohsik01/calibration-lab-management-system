@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ tr("Reference standards") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Reference standards") }}</h1>
+<p class="sub">{{ tr("The instruments used as references when calibrating sensors. A standard that has expired cannot be used for new calibrations.") }}</p>
+<div class="actions">{% if g.user.role == 'admin' %}<a class="btn" href="{{ url_for('new_standard') }}">+ {{ tr("Add standard") }}</a>{% endif %}</div>
+<div class="scroll"><table class="js-table"><tr><th>{{ tr("Code") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Serial") }}</th><th>{{ tr("Uncertainty") }}</th><th>{{ tr("Traceability") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Valid until") }}</th><th>{{ tr("Status") }}</th></tr>
+{% for x in rows %}{% set st = std_status(x) %}<tr><td><a href="{{ url_for('standard', sid=x.standard_id) }}">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ x.standard_type or '—' }}</td>
+<td>{{ x.serial_number or '—' }}</td><td>{{ x.uncertainty or '—' }}</td><td>{{ x.traceability or '—' }}</td><td>{{ x.certificate_no or '—' }}</td><td>{{ x.valid_until }}</td>
+<td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td></tr>
+{% else %}<tr><td colspan="9">{{ tr("No reference standards yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}

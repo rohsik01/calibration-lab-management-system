@@ -1,0 +1,68 @@
+{% extends "base.html" %}{% block title %}{{ tr("Home") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block banner %}<div class="card">{% include "_banner.html" %}</div>{% endblock %}
+{% block content %}
+<div class="card hero">
+  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ today }}</div></div>
+  <form class="search" action="{{ url_for('register') }}" method="get">
+    <input name="q" placeholder="{{ tr('Find a sensor by ID, type, station or serial…') }}" aria-label="{{ tr('Search sensors') }}"><button class="btn">{{ tr("Search") }}</button></form>
+</div>
+
+{% if counts.total == 0 %}
+<div class="card"><h2>👋 {{ tr("Welcome — let's get started") }}</h2>
+  <ol class="steps">
+    <li><a href="{{ url_for('stations') }}">{{ tr("Add a station") }}</a> — {{ tr("a place where sensors are installed") }}{% if stations %} ✔{% endif %}</li>
+    <li><a href="{{ url_for('new_sensor') }}">{{ tr("Register your first sensor") }}</a></li>
+    <li>{{ tr("Open a sensor and choose “Record calibration” — the certificate is issued automatically.") }}</li>
+  </ol></div>
+{% else %}
+<div class="stats">
+  {% for label, key, cls, q in [("All sensors","total","brand",""),("OK","ok","green","ok"),("Due within 30 days","soon","amber","due_soon"),("Overdue","overdue","red","overdue"),("Failed","failed","red","failed"),("Never calibrated","never","grey","never")] %}
+  <a class="stat {{ cls }}" href="{{ url_for('register', status=q) if q else url_for('register') }}"><span class="n">{{ counts[key] }}</span><span class="sub">{{ tr(label) }}</span></a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card"><h2>{{ tr("Quick actions") }}</h2>
+  <div class="actions" style="margin-bottom:0">
+    {% if sensors %}<select id="quick" style="width:auto;min-width:230px" aria-label="{{ tr('Record calibration') }}"
+      data-url="{{ url_for('calibrate', sensor_id='__ID__') }}" onchange="if(this.value)location=this.dataset.url.replace('__ID__',this.value)">
+      <option value="">🧪 {{ tr("Record calibration for…") }}</option>{% for s in sensors %}<option>{{ s }}</option>{% endfor %}</select>{% endif %}
+    <a class="btn alt" href="{{ url_for('new_sensor') }}">➕ {{ tr("Add sensor") }}</a>
+    {% if g.user.role == 'admin' %}<a class="btn alt" href="{{ url_for('stations') }}">🏭 {{ tr("Add station") }}</a>{% endif %}
+    <a class="btn alt" href="{{ url_for('export_csv') }}">⬇️ {{ tr("Export data") }}</a>
+    <a class="btn alt" href="{{ url_for('register') }}">📋 {{ tr("Full register") }}</a>
+  </div></div>
+
+{% if std_issues %}
+<div class="card"><h2>📏 {{ tr("Reference standards needing attention") }}</h2>
+  <div class="scroll"><table><tr><th>{{ tr("Code") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Valid until") }}</th><th>{{ tr("Status") }}</th></tr>
+  {% for x in std_issues %}{% set st = std_status(x) %}<tr><td><a href="{{ url_for('standard', sid=x.standard_id) }}">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ x.valid_until }}</td>
+    <td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td></tr>{% endfor %}</table></div>
+  <p style="margin:12px 0 0"><a href="{{ url_for('standards') }}">{{ tr("Open the reference standards register →") }}</a></p></div>
+{% endif %}
+
+{% if counts.total %}
+<div class="two">
+  <div class="card"><h2>{{ tr("Needs attention") }} {% if attention_total > attention|length %}<span class="hint">({{ tr("showing {n} of {m}").format(n=attention|length, m=attention_total) }})</span>{% endif %}</h2>
+    {% if attention %}<div class="scroll"><table><tr><th>{{ tr("Sensor") }}</th><th>{{ tr("Station") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Due") }}</th><th></th></tr>
+    {% for r in attention %}{% set st = status(r) %}
+    <tr><td><a href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ r.sensor_id }}</a></td><td>{{ r.station }}</td>
+      <td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td><td>{{ r.next_due or '—' }}</td>
+      <td><a class="btn alt" style="padding:3px 10px" href="{{ url_for('calibrate', sensor_id=r.sensor_id) }}">{{ tr("Calibrate") }}</a></td></tr>{% endfor %}
+    </table></div>{% else %}<div class="empty">✅ {{ tr("Everything is up to date.") }}</div>{% endif %}
+    {% if attention_total %}<p style="margin:12px 0 0"><a href="{{ url_for('due') }}">{{ tr("See the full due & overdue list →") }}</a></p>{% endif %}</div>
+
+  <div class="card"><h2>{{ tr("Recent calibrations") }}</h2>
+    {% if recent %}<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
+    {% for c in recent %}<tr><td>{{ c.cal_date }}</td><td><a href="{{ url_for('sensor', sensor_id=c.sensor_id) }}">{{ c.sensor_id }}</a></td>
+      <td><span class="badge {{ 'green' if c.result=='PASS' else 'red' }}">{{ tr(c.result) }}</span></td>
+      <td><a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a></td></tr>{% endfor %}
+    </table></div>{% else %}<div class="empty">{{ tr("No calibrations recorded yet.") }}</div>{% endif %}</div>
+</div>
+{% endif %}
+
+{% if stations %}
+<div class="card" style="margin-top:20px"><h2>{{ tr("Stations") }}</h2>
+  <div class="chips">{% for s in stations %}<a class="chip" href="{{ url_for('register', q=s.name) }}">{{ s.name }} · {{ tr("{n} sensor" if s.n == 1 else "{n} sensors").format(n=s.n) }}</a>{% endfor %}</div></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,977 @@
+"""Calibration Laboratory Management System - Flask web app (local server).
+Run:  python app.py   then open http://127.0.0.1:5000
+"""
+import csv
+import hmac
+import io
+import json
+import math
+import os
+import re
+import secrets
+import sqlite3
+import time
+from datetime import date, datetime, timedelta
+from functools import wraps
+from waitress import serve
+
+from flask import (Flask, Response, abort, flash, g, redirect, render_template,
+                   request, session, url_for)
+from markupsafe import Markup
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from translations import NE
+
+app = Flask(__name__)
+
+
+def _load_key():
+    """Random secret key, created once and kept in secret.key (do not share this file)."""
+    if not os.path.exists("secret.key"):
+        with open("secret.key", "w") as f:
+            f.write(secrets.token_hex(32))
+    with open("secret.key") as f:
+        return f.read().strip()
+
+
+app.secret_key = _load_key()
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
+DB = "calibration.db"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS stations (
+    station_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, location TEXT);
+CREATE TABLE IF NOT EXISTS sensors (
+    sensor_id TEXT PRIMARY KEY,
+    station_id INTEGER NOT NULL REFERENCES stations(station_id),
+    sensor_type TEXT NOT NULL, manufacturer TEXT, serial_number TEXT UNIQUE NOT NULL,
+    interval_days INTEGER NOT NULL DEFAULT 365, tolerance REAL NOT NULL DEFAULT 0.5,
+    unit TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS calibrations (
+    cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sensor_id TEXT NOT NULL REFERENCES sensors(sensor_id),
+    cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
+    reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+    result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+    certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    full_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin','technician')),
+    active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS reference_standards (
+    standard_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL COLLATE NOCASE, name TEXT NOT NULL,
+    standard_type TEXT, manufacturer TEXT, serial_number TEXT, uncertainty TEXT,
+    traceability TEXT, certificate_no TEXT,
+    calibrated_on TEXT NOT NULL, valid_until TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS calibration_points (
+    point_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
+    point_no INTEGER NOT NULL,
+    reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+    result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')));
+"""
+
+LATEST = """
+SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
+       c.measured_value, c.error, c.result, c.certificate_no, c.next_due, c.performed_by, c.n_points
+FROM sensors s JOIN stations st USING(station_id)
+LEFT JOIN calibrations c ON c.cal_id = (
+    SELECT MAX(cal_id) FROM calibrations WHERE sensor_id = s.sensor_id)
+"""
+
+
+def get_db():
+    if "db" not in g:
+        g.db = sqlite3.connect(DB)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA foreign_keys = ON")
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(_):
+    db = g.pop("db", None)
+    if db:
+        db.close()
+
+
+with sqlite3.connect(DB) as _c:
+    _c.executescript(SCHEMA)
+    # upgrade older databases: record who performed each calibration
+    if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
+    # upgrade older databases: multi-point calibration
+    if "n_points" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN n_points INTEGER NOT NULL DEFAULT 1")
+    # older single-point calibrations become calibrations with one point
+    _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, measured_value, error, result)
+                   SELECT cal_id, 1, reference_value, measured_value, error, result FROM calibrations c
+                   WHERE NOT EXISTS (SELECT 1 FROM calibration_points p WHERE p.cal_id = c.cal_id)""")
+    # upgrade older databases: tolerance per measurement point
+    if "tolerance" not in [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]:
+        _c.execute("ALTER TABLE calibration_points ADD COLUMN tolerance REAL")
+    _c.execute("""UPDATE calibration_points SET tolerance = (
+                   SELECT s.tolerance FROM calibrations c JOIN sensors s USING(sensor_id)
+                   WHERE c.cal_id = calibration_points.cal_id) WHERE tolerance IS NULL""")
+    # upgrade older databases: link calibrations to the reference-standards register
+    for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT")):
+        if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
+            _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+
+
+def status(row):
+    """Return (label, css_class) for a sensor row from LATEST."""
+    if not row["next_due"]:
+        return "Never calibrated", "grey"
+    if row["result"] == "FAIL":
+        return "Failed", "red"
+    days = (date.fromisoformat(row["next_due"]) - date.today()).days
+    if days < 0:
+        return "Overdue", "red"
+    if days <= 30:
+        return f"Due in {days}d", "amber"
+    return "OK", "green"
+
+
+app.jinja_env.globals["status"] = status
+
+
+def flash_kind(msg):
+    """CSS class for a flash message: red for problems, green otherwise."""
+    bad = r"could not|invalid|incorrect|do not match|at least|required|already|cannot|too many|no records|check the"
+    return "error" if re.search(bad, msg, re.I) else "ok"
+
+
+app.jinja_env.globals["flash_kind"] = flash_kind
+
+# ------------------------- language (English / Nepali) -------------------------
+LANGS = {"en": "English", "ne": "नेपाली"}
+
+# Letterhead shown at the top of the home page and on every report. Edit the wording here.
+BANNER = {
+    "ne": ["नेपाल सरकार", "उर्जा, जलश्रोत तथा सिँचाइ मन्त्रालय", "नेपाल मौसम विज्ञान विभाग",
+           "बबरमहल, काठमाडौ"],
+    "en": ["Government of Nepal", "Ministry of Energy, Water Resource and Irrigation",
+           "Nepal Meteorological Department", "Babarmahal, Kathmandu"],
+}
+
+
+def tr(text):
+    """Translate an English interface string when Nepali is selected (see translations.py)."""
+    return NE.get(text, text) if g.get("lang") == "ne" else text
+
+
+_flash = flash
+
+
+def flash(msg, kind=None):
+    """Flash a message in the current language. kind is 'error' or 'ok'."""
+    _flash(tr(msg), kind or flash_kind(msg))
+
+
+def status_label(label):
+    """Translate a status label such as 'Overdue' or 'Due in 5d'."""
+    for prefix, key in (("Due in ", "Due in {n}d"), ("Expires in ", "Expires in {n}d")):
+        if label.startswith(prefix):
+            return tr(key).format(n=label[len(prefix):-1])
+    return tr(label)
+
+
+def status_key(label):
+    return ("ok" if label == "OK" else "soon" if label.startswith("Due in") else
+            "overdue" if label == "Overdue" else "failed" if label == "Failed" else "never")
+
+
+def standard_status(row):
+    """Return (label, css_class) for a reference standard."""
+    if not row["active"]:
+        return "Inactive", "grey"
+    days = (date.fromisoformat(row["valid_until"]) - date.today()).days
+    if days < 0:
+        return "Expired", "red"
+    if days <= 30:
+        return f"Expires in {days}d", "amber"
+    return "Valid", "green"
+
+
+app.jinja_env.globals.update(tr=tr, stl=status_label, status_key=status_key,
+                             std_status=standard_status)
+
+
+@app.context_processor
+def i18n():
+    return {"banner": BANNER[g.get("lang", "en")], "LANGS": LANGS}
+
+
+@app.context_processor
+def nav_counts():
+    """Number of sensors needing attention, shown as a badge in the sidebar."""
+    if not g.get("user"):
+        return {}
+    db = get_db()
+    rows = db.execute(LATEST).fetchall()
+    stds = db.execute("SELECT * FROM reference_standards WHERE active=1").fetchall()
+    return {"nav_alerts": sum(1 for r in rows if status(r)[0] != "OK"),
+            "std_alerts": sum(1 for x in stds if standard_status(x)[0] != "Valid")}
+
+
+def next_certificate(db, cal_date):
+    n = db.execute("SELECT COUNT(*) FROM calibrations WHERE certificate_no LIKE ?",
+                   (f"CAL-{cal_date[:4]}-%",)).fetchone()[0]
+    return f"CAL-{cal_date[:4]}-{n + 1:04d}"
+
+
+# ------------------------------- authentication -------------------------------
+OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang"}
+FAILS = {}   # (username, ip) -> (failed count, locked-until timestamp)
+
+
+def csrf_input():
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_hex(16)
+    return Markup(f'<input type="hidden" name="csrf" value="{session["csrf"]}">')
+
+
+app.jinja_env.globals["csrf_input"] = csrf_input
+
+
+def safe_next(target):
+    return target if target and target.startswith("/") and not target.startswith("//") \
+        else url_for("index")
+
+
+@app.before_request
+def gate():
+    g.user = None
+    g.lang = request.cookies.get("lang") if request.cookies.get("lang") in LANGS else "en"
+    if request.endpoint is None:
+        return
+    db = get_db()
+    if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
+        return None if request.endpoint in ("setup", "static", "set_lang") else redirect(url_for("setup"))
+    if session.get("user_id"):
+        g.user = db.execute("SELECT * FROM users WHERE user_id=? AND active=1",
+                            (session["user_id"],)).fetchone()
+        if not g.user:
+            session.clear()
+    if request.method == "POST":
+        sent = (request.form.get("csrf") or "").encode()
+        if not hmac.compare_digest(sent, (session.get("csrf") or "!").encode()):
+            abort(400, "Invalid or missing security token. Reload the page and try again.")
+    if not g.user and request.endpoint not in OPEN_ENDPOINTS:
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
+
+
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if g.user["role"] != "admin":
+            abort(403)
+        return f(*a, **kw)
+    return wrapper
+
+
+def check_new_password(pw, pw2):
+    if len(pw) < 8:
+        return "Password must be at least 8 characters."
+    if pw != pw2:
+        return "Passwords do not match."
+    return None
+
+
+@app.route("/lang/<code>")
+def set_lang(code):
+    if code not in LANGS:
+        abort(404)
+    resp = redirect(safe_next(request.args.get("next")))
+    resp.set_cookie("lang", code, max_age=365 * 24 * 3600, samesite="Lax")
+    return resp
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    """First run only: create the first administrator."""
+    db = get_db()
+    if db.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0:
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        f = request.form
+        err = check_new_password(f["password"], f["password2"])
+        if err or not f["username"].strip():
+            flash(err or "Username is required.")
+        else:
+            db.execute("INSERT INTO users(username, full_name, password_hash, role) "
+                       "VALUES (?,?,?, 'admin')",
+                       (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
+                        generate_password_hash(f["password"])))
+            db.commit()
+            flash("Administrator created. Please sign in.")
+            return redirect(url_for("login"))
+    return render_template("setup.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if g.user:
+        return redirect(url_for("index"))
+    if request.method == "POST":
+        name = request.form["username"].strip().lower()
+        key = (name, request.remote_addr)
+        if FAILS.get(key, (0, 0))[1] > time.time():
+            flash("Too many failed attempts. Try again in 5 minutes.")
+        else:
+            u = get_db().execute("SELECT * FROM users WHERE username=? AND active=1",
+                                 (name,)).fetchone()
+            if u and check_password_hash(u["password_hash"], request.form["password"]):
+                FAILS.pop(key, None)
+                session.clear()
+                session.permanent = True
+                session["user_id"] = u["user_id"]
+                return redirect(safe_next(request.args.get("next")))
+            count = FAILS.get(key, (0, 0))[0] + 1
+            FAILS[key] = (0, time.time() + 300) if count >= 5 else (count, 0)
+            flash("Invalid username or password.")
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    flash("You have been signed out.")
+    return redirect(url_for("login"))
+
+
+@app.route("/account", methods=["GET", "POST"])
+def account():
+    if request.method == "POST":
+        f = request.form
+        db = get_db()
+        if not check_password_hash(g.user["password_hash"], f["current"]):
+            flash("Current password is incorrect.")
+        elif (err := check_new_password(f["password"], f["password2"])):
+            flash(err)
+        else:
+            db.execute("UPDATE users SET password_hash=? WHERE user_id=?",
+                       (generate_password_hash(f["password"]), g.user["user_id"]))
+            db.commit()
+            flash("Password changed.")
+            return redirect(url_for("index"))
+    return render_template("account.html")
+
+
+@app.route("/users", methods=["GET", "POST"])
+@admin_required
+def users():
+    db = get_db()
+    if request.method == "POST":
+        f = request.form
+        err = check_new_password(f["password"], f["password"])
+        if err or not f["username"].strip() or f["role"] not in ("admin", "technician"):
+            flash(err or "Username and a valid role are required.")
+        else:
+            try:
+                db.execute("INSERT INTO users(username, full_name, password_hash, role) "
+                           "VALUES (?,?,?,?)",
+                           (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
+                            generate_password_hash(f["password"]), f["role"]))
+                db.commit()
+                flash("User created.")
+            except sqlite3.IntegrityError:
+                flash("That username already exists.")
+        return redirect(url_for("users"))
+    return render_template("users.html",
+                           rows=db.execute("SELECT * FROM users ORDER BY username").fetchall())
+
+
+@app.route("/users/<int:uid>/toggle", methods=["POST"])
+@admin_required
+def toggle_user(uid):
+    if uid == g.user["user_id"]:
+        flash("You cannot deactivate your own account.")
+    else:
+        db = get_db()
+        db.execute("UPDATE users SET active = 1 - active WHERE user_id=?", (uid,))
+        db.commit()
+        flash("User updated.")
+    return redirect(url_for("users"))
+
+
+@app.route("/users/<int:uid>/password", methods=["POST"])
+@admin_required
+def reset_password(uid):
+    pw = request.form["password"]
+    if (err := check_new_password(pw, pw)):
+        flash(err)
+    else:
+        db = get_db()
+        db.execute("UPDATE users SET password_hash=? WHERE user_id=?",
+                   (generate_password_hash(pw), uid))
+        db.commit()
+        flash("Password reset.")
+    return redirect(url_for("users"))
+
+
+@app.route("/")
+def index():
+    """Home page: summary, items needing attention, recent activity."""
+    db = get_db()
+    rows = db.execute(LATEST + " ORDER BY s.sensor_id").fetchall()
+    counts = dict(total=len(rows), ok=0, soon=0, overdue=0, failed=0, never=0)
+    for r in rows:
+        label = status(r)[0]
+        key = ("ok" if label == "OK" else "soon" if label.startswith("Due in") else
+               "overdue" if label == "Overdue" else "failed" if label == "Failed" else "never")
+        counts[key] += 1
+    order = {"Failed": 0, "Overdue": 1, "Never calibrated": 2}
+    attention = sorted((r for r in rows if status(r)[0] != "OK"),
+                       key=lambda r: (order.get(status(r)[0], 3), r["next_due"] or ""))
+    recent = db.execute(
+        "SELECT c.*, s.sensor_type, st.name AS station FROM calibrations c "
+        "JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id) "
+        "ORDER BY c.cal_id DESC LIMIT 6").fetchall()
+    stations_ = db.execute(
+        "SELECT st.station_id, st.name, COUNT(s.sensor_id) AS n FROM stations st "
+        "LEFT JOIN sensors s USING(station_id) GROUP BY st.station_id ORDER BY st.name").fetchall()
+    now = datetime.now()
+    greeting = tr("Good morning" if now.hour < 12 else "Good afternoon" if now.hour < 18
+                  else "Good evening")
+    if g.lang == "ne":
+        today = f"{tr(now.strftime('%A'))}, {now.day} {tr(now.strftime('%B'))} {now.year}"
+    else:
+        today = date.today().strftime("%A, %d %B %Y")
+    std_issues = [x for x in db.execute(
+        "SELECT * FROM reference_standards WHERE active=1 ORDER BY valid_until")
+        if standard_status(x)[0] != "Valid"]
+    return render_template("home.html", counts=counts, attention=attention[:8],
+                           attention_total=len(attention), recent=recent, stations=stations_,
+                           sensors=[r["sensor_id"] for r in rows], greeting=greeting,
+                           today=today, std_issues=std_issues)
+
+
+@app.route("/register")
+def register():
+    rows = get_db().execute(LATEST + " ORDER BY s.sensor_id").fetchall()
+    return render_template("register.html", rows=rows)
+
+
+@app.route("/stations", methods=["GET", "POST"])
+def stations():
+    db = get_db()
+    if request.method == "POST":
+        if g.user["role"] != "admin":
+            abort(403)
+        try:
+            db.execute("INSERT INTO stations(name, location) VALUES (?,?)",
+                       (request.form["name"].strip(), request.form["location"].strip()))
+            db.commit()
+            flash("Station added.")
+        except sqlite3.IntegrityError:
+            flash("That station already exists.")
+        return redirect(url_for("stations"))
+    return render_template("stations.html",
+                           rows=db.execute("SELECT * FROM stations ORDER BY name").fetchall())
+
+
+@app.route("/sensors/new", methods=["GET", "POST"])
+def new_sensor():
+    db = get_db()
+    stations_ = db.execute("SELECT * FROM stations ORDER BY name").fetchall()
+    if request.method == "POST":
+        f = request.form
+        try:
+            db.execute("INSERT INTO sensors VALUES (?,?,?,?,?,?,?,?)",
+                       (f["sensor_id"].strip().upper(), int(f["station_id"]),
+                        f["sensor_type"].strip(), f["manufacturer"].strip(),
+                        f["serial_number"].strip(), int(f["interval_days"]),
+                        float(f["tolerance"]), f["unit"].strip()))
+            db.commit()
+            flash("Sensor registered.")
+            return redirect(url_for("sensor", sensor_id=f["sensor_id"].strip().upper()))
+        except (sqlite3.IntegrityError, ValueError) as e:
+            flash(tr("Could not save sensor") + f": {e}", "error")
+    return render_template("sensor_form.html", stations=stations_)
+
+
+@app.route("/sensors/<sensor_id>")
+def sensor(sensor_id):
+    db = get_db()
+    s = db.execute(LATEST + " WHERE s.sensor_id=?", (sensor_id,)).fetchone()
+    if not s:
+        abort(404)
+    hist = db.execute("SELECT * FROM calibrations WHERE sensor_id=? ORDER BY cal_id DESC",
+                      (sensor_id,)).fetchall()
+    return render_template("sensor.html", s=s, hist=hist)
+
+
+@app.route("/sensors/<sensor_id>/calibrate", methods=["GET", "POST"])
+def calibrate(sensor_id):
+    db = get_db()
+    s = db.execute("SELECT * FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone()
+    if not s:
+        abort(404)
+    if request.method == "POST":
+        f = request.form
+        try:
+            cal_date = datetime.strptime(f["cal_date"], "%Y-%m-%d").date().isoformat()
+            refs = [float(x) for x in f.getlist("reference_value")]
+            meass = [float(x) for x in f.getlist("measured_value")]
+            raw = f.getlist("tolerance")
+            tols = ([float(t) if t.strip() else s["tolerance"] for t in raw]
+                    if raw else [s["tolerance"]] * len(refs))
+            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(refs) > 30
+                    or not all(math.isfinite(x) for x in refs + meass + tols)
+                    or any(t < 0 for t in tols)):
+                raise ValueError
+        except ValueError:
+            flash("Check the date and the numeric values for every measurement point.")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
+        std_id, std_details = None, None
+        sid = f.get("standard_id", "")
+        if sid.isdigit():
+            std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",
+                             (int(sid),)).fetchone()
+            problem = None
+            if not std:
+                problem = tr("Could not use that reference standard. Choose another one.")
+            elif std["valid_until"] < cal_date:
+                problem = tr("Cannot save: {code} expired on {d}. Use a standard that was valid "
+                             "on the calibration date.").format(code=std["code"], d=std["valid_until"])
+            elif std["calibrated_on"] > cal_date:
+                problem = tr("Cannot save: {code} was only calibrated on {d}, after this "
+                             "calibration date.").format(code=std["code"], d=std["calibrated_on"])
+            if problem:
+                flash(problem, "error")
+                return redirect(url_for("calibrate", sensor_id=sensor_id))
+            ref_text, std_id = f"{std['code']} – {std['name']}", std["standard_id"]
+            std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
+                                      "certificate": std["certificate_no"], "valid_until": std["valid_until"],
+                                      "uncertainty": std["uncertainty"]}, ensure_ascii=False)
+        else:
+            ref_text = f.get("reference_standard", "").strip()
+            if not ref_text:
+                flash("Could not save: choose a reference standard or type its name.")
+                return redirect(url_for("calibrate", sensor_id=sensor_id))
+        points = []
+        for ref, meas, tol in zip(refs, meass, tols):
+            err = round(meas - ref, 6)
+            points.append((ref, meas, err, "PASS" if abs(err) <= tol else "FAIL", tol))
+        worst = max(points, key=lambda p: abs(p[2]))          # point with the largest error
+        result = "FAIL" if any(p[3] == "FAIL" for p in points) else "PASS"
+        due = (date.fromisoformat(cal_date) + timedelta(days=s["interval_days"])).isoformat()
+        cert = next_certificate(db, cal_date)
+        cur = db.execute(
+            "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
+            "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
+            "standard_id,standard_details) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
+             result, cert, due, g.user["full_name"], len(points), std_id, std_details))
+        db.executemany(
+            "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
+            "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
+            [(cur.lastrowid, i, *p) for i, p in enumerate(points, 1)])
+        db.commit()
+        msg = tr("{n} point, max error {err} {unit} → {result}. Certificate {cert} issued."
+                 if len(points) == 1 else
+                 "{n} points, max error {err} {unit} → {result}. Certificate {cert} issued.")
+        flash(msg.format(n=len(points), err=f"{worst[2]:+}", unit=s["unit"], result=tr(result),
+                         cert=cert), "ok")
+        return redirect(url_for("certificate", cert=cert))
+    standards_ = db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
+    return render_template("calibrate.html", s=s, today=date.today().isoformat(), standards=standards_)
+
+
+@app.route("/certificate/<cert>")
+def certificate(cert):
+    db = get_db()
+    r = db.execute(
+        "SELECT c.*, s.sensor_type, s.manufacturer, s.serial_number, s.tolerance, s.unit, "
+        "st.name AS station FROM calibrations c JOIN sensors s USING(sensor_id) "
+        "JOIN stations st USING(station_id) WHERE certificate_no=?", (cert,)).fetchone()
+    if not r:
+        abort(404)
+    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+                     (r["cal_id"],)).fetchall()
+    details = json.loads(r["standard_details"]) if r["standard_details"] else None
+    return render_template("certificate.html", r=r, pts=pts, det=details)
+
+
+@app.route("/due")
+def due():
+    days = request.args.get("days", 30, type=int)
+    limit = (date.today() + timedelta(days=days)).isoformat()
+    rows = [r for r in get_db().execute(LATEST + " ORDER BY s.sensor_id")
+            if r["next_due"] is None or r["next_due"] <= limit or r["result"] == "FAIL"]
+    return render_template("due.html", rows=rows, days=days)
+
+
+# ------------------------------ reference standards ------------------------------
+STD_FIELDS = ("code", "name", "standard_type", "manufacturer", "serial_number", "uncertainty",
+              "traceability", "certificate_no", "calibrated_on", "valid_until")
+
+
+def read_standard(f):
+    d = {k: f.get(k, "").strip() for k in STD_FIELDS}
+    if not d["code"] or not d["name"]:
+        raise ValueError("Code and name are required.")
+    try:
+        cal, val = date.fromisoformat(d["calibrated_on"]), date.fromisoformat(d["valid_until"])
+    except ValueError:
+        raise ValueError("Enter valid calibration and expiry dates.")
+    if val < cal:
+        raise ValueError("The expiry date cannot be before the calibration date.")
+    d["code"] = d["code"].upper()
+    return d
+
+
+@app.route("/standards")
+def standards():
+    rows = get_db().execute("SELECT * FROM reference_standards ORDER BY code").fetchall()
+    return render_template("standards.html", rows=rows)
+
+
+@app.route("/standards/new", methods=["GET", "POST"])
+@admin_required
+def new_standard():
+    if request.method == "POST":
+        try:
+            d = read_standard(request.form)
+            db = get_db()
+            cur = db.execute(
+                "INSERT INTO reference_standards(code,name,standard_type,manufacturer,serial_number,"
+                "uncertainty,traceability,certificate_no,calibrated_on,valid_until) VALUES "
+                "(:code,:name,:standard_type,:manufacturer,:serial_number,:uncertainty,:traceability,"
+                ":certificate_no,:calibrated_on,:valid_until)", d)
+            db.commit()
+            flash("Reference standard added.")
+            return redirect(url_for("standard", sid=cur.lastrowid))
+        except ValueError as e:
+            flash(tr("Could not save the standard") + ": " + tr(str(e)), "error")
+        except sqlite3.IntegrityError:
+            flash(tr("Could not save the standard") + ": " + tr("That code already exists."), "error")
+    return render_template("standard_form.html", x=request.form if request.method == "POST" else None,
+                           editing=False)
+
+
+@app.route("/standards/<int:sid>")
+def standard(sid):
+    db = get_db()
+    x = db.execute("SELECT * FROM reference_standards WHERE standard_id=?", (sid,)).fetchone()
+    if not x:
+        abort(404)
+    used = db.execute("SELECT cal_date, sensor_id, result, certificate_no FROM calibrations "
+                      "WHERE standard_id=? ORDER BY cal_id DESC LIMIT 100", (sid,)).fetchall()
+    return render_template("standard.html", x=x, used=used)
+
+
+@app.route("/standards/<int:sid>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_standard(sid):
+    db = get_db()
+    x = db.execute("SELECT * FROM reference_standards WHERE standard_id=?", (sid,)).fetchone()
+    if not x:
+        abort(404)
+    if request.method == "POST":
+        try:
+            d = read_standard(request.form)
+            d.update(active=1 if request.form.get("active") else 0, sid=sid)
+            db.execute("UPDATE reference_standards SET code=:code, name=:name, standard_type=:standard_type,"
+                       " manufacturer=:manufacturer, serial_number=:serial_number, uncertainty=:uncertainty,"
+                       " traceability=:traceability, certificate_no=:certificate_no,"
+                       " calibrated_on=:calibrated_on, valid_until=:valid_until, active=:active"
+                       " WHERE standard_id=:sid", d)
+            db.commit()
+            flash("Reference standard updated.")
+            return redirect(url_for("standard", sid=sid))
+        except ValueError as e:
+            flash(tr("Could not save the standard") + ": " + tr(str(e)), "error")
+        except sqlite3.IntegrityError:
+            flash(tr("Could not save the standard") + ": " + tr("That code already exists."), "error")
+        x = request.form
+    return render_template("standard_form.html", x=x, editing=True, sid=sid)
+
+
+# ---------------------------------- export ----------------------------------
+EXPORT_COLUMNS = [
+    ("sensor_id", "Sensor ID"), ("station", "Station"), ("sensor_type", "Sensor type"),
+    ("manufacturer", "Manufacturer"), ("serial_number", "Serial number"),
+    ("cal_date", "Calibration date"), ("reference_standard", "Reference standard"),
+    ("n_points", "Number of points"), ("point_no", "Point no."),
+    ("point_tolerance", "Point tolerance (+/-)"),
+    ("reference_value", "Reference value"), ("measured_value", "Results (reading)"),
+    ("error", "Error"), ("result", "Pass/Fail"), ("overall_result", "Overall result"),
+    ("certificate_no", "Certificate"), ("next_due", "Next due date"),
+    ("performed_by", "Calibrated by"), ("unit", "Unit"), ("tolerance", "Tolerance (+/-)"),
+    ("status", "Status"),
+]
+
+HISTORY_SQL = """
+SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
+       c.measured_value, c.error, c.result, c.certificate_no, c.next_due, c.performed_by,
+       c.n_points
+FROM calibrations c JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
+"""
+
+POINTS_SQL = """
+SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.n_points, p.point_no,
+       p.reference_value, p.measured_value, p.error, p.result, p.tolerance AS point_tolerance,
+       c.result AS overall_result,
+       c.certificate_no, c.next_due, c.performed_by
+FROM calibration_points p JOIN calibrations c USING(cal_id)
+JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
+"""
+
+STATUS_FILTERS = {"ok": "OK", "overdue": "Overdue", "failed": "Failed",
+                  "never": "Never calibrated", "due_soon": "Due in"}
+
+
+def export_rows(args):
+    """Rows for the export, filtered by the query-string options. Returns (rows, scope)."""
+    scope = args.get("scope") if args.get("scope") in ("history", "points") else "latest"
+    where, params = [], []
+    stations_ = [int(x) for x in args.getlist("station") if x.isdigit()]
+    if stations_:
+        where.append(f"s.station_id IN ({','.join('?' * len(stations_))})")
+        params += stations_
+    sensors_ = [x for x in args.getlist("sensor") if x]
+    if sensors_:
+        where.append(f"s.sensor_id IN ({','.join('?' * len(sensors_))})")
+        params += sensors_
+    for key, op in (("date_from", ">="), ("date_to", "<=")):
+        val = args.get(key, "")
+        try:
+            date.fromisoformat(val)
+        except ValueError:
+            continue
+        where.append(f"c.cal_date {op} ?")
+        params.append(val)
+    if args.get("result") in ("PASS", "FAIL"):
+        where.append(("p.result" if scope == "points" else "c.result") + " = ?")
+        params.append(args["result"])
+    sql = {"history": HISTORY_SQL, "points": POINTS_SQL}.get(scope, LATEST)
+    sql += (" WHERE " + " AND ".join(where) if where else "")
+    sql += " ORDER BY s.sensor_id" + (", c.cal_date, c.cal_id" if scope != "latest" else "")
+    sql += ", p.point_no" if scope == "points" else ""
+    rows = [dict(r) for r in get_db().execute(sql, params)]
+    for r in rows:
+        r["status"] = status(r)[0] if scope == "latest" else ""
+        r.setdefault("point_no", "")
+        r.setdefault("point_tolerance", "")
+        r.setdefault("overall_result", r.get("result"))
+    wanted = STATUS_FILTERS.get(args.get("status", ""))
+    if wanted and scope == "latest":
+        rows = [r for r in rows if r["status"].startswith(wanted)]
+    return rows, scope
+
+
+def safe_cell(v):
+    """Stop spreadsheet programs from running text that starts like a formula."""
+    if v is None:
+        return ""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
+        return "'" + v
+    return v
+
+
+@app.route("/export")
+def export_csv():
+    db = get_db()
+    return render_template(
+        "export.html", columns=EXPORT_COLUMNS,
+        stations=db.execute("SELECT * FROM stations ORDER BY name").fetchall(),
+        sensors=db.execute("SELECT s.sensor_id, s.sensor_type, s.station_id, st.name AS station "
+                           "FROM sensors s JOIN stations st USING(station_id) "
+                           "ORDER BY s.sensor_id").fetchall())
+
+
+DATE_KEYS = {"cal_date", "next_due", "calibrated_on", "valid_until"}
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+STD_SHEET_COLUMNS = [("code", "Code"), ("name", "Name"), ("standard_type", "Type"),
+                     ("manufacturer", "Manufacturer"), ("serial_number", "Serial number"),
+                     ("uncertainty", "Uncertainty"), ("traceability", "Traceability"),
+                     ("certificate_no", "Certificate"), ("calibrated_on", "Calibrated on"),
+                     ("valid_until", "Valid until"), ("status", "Status"), ("active_txt", "Active")]
+
+
+def export_label(args):
+    sensors_ = [x for x in args.getlist("sensor") if x]
+    stations_ = [x for x in args.getlist("station") if x.isdigit()]
+    if len(sensors_) == 1:
+        label = sensors_[0]
+    elif len(stations_) == 1:
+        st = get_db().execute("SELECT name FROM stations WHERE station_id=?",
+                              (int(stations_[0]),)).fetchone()
+        label = st["name"] if st else "station"
+    else:
+        label = "selection" if (sensors_ or stations_) else "all"
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", label).strip("-") or "export"
+
+
+def export_value(key, v):
+    """Pass/Fail and status words follow the report language."""
+    if g.get("lang") != "ne" or v in (None, ""):
+        return v
+    if key in ("result", "overall_result"):
+        return tr(v)
+    if key == "status":
+        return status_label(v)
+    return v
+
+
+def build_xlsx(rows, cols, scope, per_station, with_standards, banner):
+    """Excel workbook with the banner on top of every sheet. Raises ImportError without openpyxl."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    fills = {k: PatternFill("solid", fgColor=v) for k, v in
+             dict(green="D5F0DD", red="F8D4D1", amber="FBE8C4", grey="E3E6EB").items()}
+    head_fill = PatternFill("solid", fgColor="14203A")
+    wb = Workbook()
+    wb.remove(wb.active)
+    used = set()
+
+    def new_sheet(name):
+        base = re.sub(r"[\[\]:*?/\\]", "-", name)[:28] or "Sheet"
+        n, i = base, 2
+        while n.lower() in used:
+            n, i = f"{base[:25]}-{i}", i + 1
+        used.add(n.lower())
+        return wb.create_sheet(n)
+
+    def color(key, v):
+        if key in ("result", "overall_result"):
+            return "green" if v == "PASS" else "red" if v == "FAIL" else None
+        if key == "status" and v:
+            v = str(v)
+            return ("green" if v in ("OK", "Valid") else "amber" if v.startswith(("Due in", "Expires in"))
+                    else "red" if v in ("Overdue", "Failed", "Expired") else "grey")
+        return None
+
+    def write_table(ws, keys, headers, data):
+        top, width = 1, max(len(headers), 4)
+        if banner:
+            for i, line in enumerate(banner, 1):
+                ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=width)
+                c = ws.cell(row=i, column=1, value=line)
+                c.alignment = Alignment(horizontal="center")
+                c.font = Font(bold=i in (1, 3), size=14 if i == 3 else 11,
+                              color="B6202F" if i == 1 else "14203A")
+            top = 6
+        for j, h in enumerate(headers, 1):
+            c = ws.cell(row=top, column=j, value=h)
+            c.font, c.fill = Font(bold=True, color="FFFFFF"), head_fill
+        for i, r in enumerate(data, top + 1):
+            for j, k in enumerate(keys, 1):
+                v = r.get(k)
+                col = color(k, v)                       # colour from the original (English) value
+                if v in (None, ""):
+                    v = None
+                else:
+                    if k in DATE_KEYS and isinstance(v, str):
+                        try:
+                            v = date.fromisoformat(v)
+                        except ValueError:
+                            pass
+                    v = export_value(k, v)
+                cell = ws.cell(row=i, column=j, value=v)
+                if isinstance(v, str) and v[:1] == "=":
+                    cell.data_type = "s"                # text, never a formula
+                if isinstance(v, date):
+                    cell.number_format = "yyyy-mm-dd"
+                if col:
+                    cell.fill = fills[col]
+        ws.freeze_panes = ws.cell(row=top + 1, column=1)
+        ws.auto_filter.ref = f"A{top}:{get_column_letter(len(headers))}{max(top + len(data), top)}"
+        for j, h in enumerate(headers, 1):
+            longest = max([len(str(h))] + [len(str(ws.cell(row=i, column=j).value or ""))
+                                           for i in range(top + 1, min(top + len(data), top + 200) + 1)])
+            ws.column_dimensions[get_column_letter(j)].width = min(longest + 3, 42)
+
+    keys, headers = [k for k, _ in cols], [h for _, h in cols]
+    if per_station:
+        groups = {}
+        for r in rows:
+            groups.setdefault(r["station"], []).append(r)
+        if scope == "latest":
+            summary = []
+            for name, grp in groups.items():
+                cnt = {"ok": 0, "soon": 0, "overdue": 0, "failed": 0, "never": 0}
+                for r in grp:
+                    cnt[status_key(r["status"])] += 1
+                summary.append(dict(station=name, sensors=len(grp), **cnt))
+            write_table(new_sheet(tr("Summary")),
+                        ["station", "sensors", "ok", "soon", "overdue", "failed", "never"],
+                        [tr(h) for h in ("Station", "Sensors", "OK", "Due within 30 days", "Overdue",
+                                         "Failed", "Never calibrated")], summary)
+        for name, grp in groups.items():
+            write_table(new_sheet(name), keys, headers, grp)
+    else:
+        write_table(new_sheet(tr({"latest": "Register", "history": "History", "points": "Points"}[scope])),
+                    keys, headers, rows)
+    if with_standards:
+        stds = [dict(x) for x in get_db().execute("SELECT * FROM reference_standards ORDER BY code")]
+        for x in stds:
+            x["status"] = standard_status(x)[0]
+            x["active_txt"] = tr("Yes") if x["active"] else tr("No")
+        write_table(new_sheet(tr("Reference standards")), [k for k, _ in STD_SHEET_COLUMNS],
+                    [tr(h) for _, h in STD_SHEET_COLUMNS], stds)
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+@app.route("/export/download")
+def export_download():
+    rows, scope = export_rows(request.args)
+    if not rows:
+        flash("No records match those filters.")
+        return redirect(url_for("export_csv"))
+    chosen = set(request.args.getlist("cols"))
+    cols = [c for c in EXPORT_COLUMNS if c[0] in chosen] or list(EXPORT_COLUMNS)
+    if scope != "latest":                        # status only makes sense for the register view
+        cols = [c for c in cols if c[0] != "status"]
+    if scope != "points":                        # per-point columns only for the points export
+        cols = [c for c in cols if c[0] not in ("point_no", "overall_result", "point_tolerance")]
+        rename = {"reference_value": "Reference value (worst point)",
+                  "measured_value": "Results (worst point)", "error": "Max error"}
+        cols = [(k, rename.get(k, h)) for k, h in cols]
+    cols = [(k, tr(h)) for k, h in cols]         # column headings follow the report language
+    banner = None if request.args.get("nobanner") else BANNER[g.lang]
+    fmt = request.args.get("format", "csv")
+    stamp = f"calibration_{scope}_{export_label(request.args)}_{date.today().isoformat()}"
+    if fmt == "xlsx":
+        try:
+            data = build_xlsx(rows, cols, scope, bool(request.args.get("per_station")),
+                              bool(request.args.get("with_standards")), banner)
+        except ImportError:
+            flash("Could not create the Excel file: the openpyxl package is missing. Install it with "
+                  "“python -m pip install openpyxl” and restart the app.")
+            return redirect(url_for("export_csv"))
+        return Response(data, mimetype=XLSX_MIME,
+                        headers={"Content-Disposition": f'attachment; filename="{stamp}.xlsx"'})
+    out = io.StringIO()
+    w = csv.writer(out)
+    if banner:
+        for line in banner:
+            w.writerow([line])
+        w.writerow([])
+    w.writerow([h for _, h in cols])
+    for r in rows:
+        w.writerow([safe_cell(export_value(k, r[k])) for k, _ in cols])
+    data = out.getvalue()
+    if fmt == "excel" or g.lang == "ne":         # UTF-8 BOM so Excel shows °C and Nepali text
+        data = "\ufeff" + data
+    return Response(data.encode("utf-8"), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{stamp}.csv"'})
+
+
+#if __name__ == "__main__":
+    # host="0.0.0.0" lets other PCs on your network connect; use "127.0.0.1" for this PC only
+  #  app.run(host="127.0.0.1", port=5000, debug=True)
+if __name__ == "__main__":
+    serve(app, host="127.0.0.1", port=5000)

@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}{{ tr("Users") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Users") }}</h1>
+<p>{{ tr("Administrators manage users, stations and reference standards. Technicians can register sensors and record calibrations.") }}</p>
+<form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
+<div><label>{{ tr("Full name") }}</label><input name="full_name"></div>
+<div><label>{{ tr("Username") }}</label><input name="username" required></div>
+<div><label>{{ tr("Password (min. 8 characters)") }}</label><input name="password" type="password" required></div>
+<div><label>{{ tr("Role") }}</label><select name="role"><option value="technician">{{ tr("Technician") }}</option><option value="admin">{{ tr("Administrator") }}</option></select></div>
+<div style="align-self:end"><button class="btn">{{ tr("Add user") }}</button></div></form>
+<div class="scroll"><table><tr><th>{{ tr("Username") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Role") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Reset password") }}</th><th></th></tr>
+{% for u in rows %}<tr><td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ tr(u.role|capitalize) }}</td>
+<td><span class="badge {{ 'green' if u.active else 'grey' }}">{{ tr('Active') if u.active else tr('Disabled') }}</span></td>
+<td><form method="post" action="{{ url_for('reset_password', uid=u.user_id) }}" style="display:flex;gap:6px">{{ csrf_input() }}
+<input name="password" type="password" placeholder="{{ tr('New password') }}" style="width:160px" required><button class="btn alt">{{ tr("Reset") }}</button></form></td>
+<td>{% if u.user_id != g.user.user_id %}<form method="post" action="{{ url_for('toggle_user', uid=u.user_id) }}">{{ csrf_input() }}
+<button class="btn alt">{{ tr('Disable') if u.active else tr('Enable') }}</button></form>{% endif %}</td></tr>{% endfor %}</table></div></div>{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}{% block title %}{{ tr("Record calibration") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Record calibration") }} — {{ s.sensor_id }}</h1>
+<p class="sub">{{ tr("Each point has its own allowed error (tolerance), pre-filled with this sensor's default of ±{tol} {unit}.").format(tol=s.tolerance, unit=s.unit) }}
+{{ tr("The sensor passes only if all points pass. Error, Pass/Fail, certificate number and next due date are worked out for you.") }}</p>
+<form method="post">{{ csrf_input() }}
+<div class="grid">
+<div><label>{{ tr("Calibration date") }}</label><input type="date" name="cal_date" value="{{ today }}" required></div>
+<div><label>{{ tr("Reference standard") }}</label>
+  <select name="standard_id" id="std">
+    <option value="">{{ tr("Other — not in the register") }}</option>
+    {% for x in standards %}{% set st = std_status(x) %}
+    <option value="{{ x.standard_id }}" {{ 'disabled' if st[0] == 'Expired' }}>{{ x.code }} — {{ x.name }} ({{ tr("EXPIRED {d}" if st[0] == 'Expired' else "valid until {d}").format(d=x.valid_until) }})</option>{% endfor %}
+  </select>
+  <input name="reference_standard" id="stdtext" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px">
+  <small class="hint">{{ tr("Standards come from the") }} <a href="{{ url_for('standards') }}">{{ tr("Reference standards") }}</a> {{ tr("register.") }}</small></div>
+</div>
+<h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
+<div class="toolbar" style="margin-bottom:10px">
+  <span class="hint">{{ tr("Quick setup:") }}</span>
+  <input id="gmin" type="number" step="any" placeholder="{{ tr('From') }}" style="min-width:0;width:100px" aria-label="{{ tr('From') }}">
+  <input id="gmax" type="number" step="any" placeholder="{{ tr('To') }}" style="min-width:0;width:100px" aria-label="{{ tr('To') }}">
+  <input id="gn" type="number" min="2" max="30" value="5" style="min-width:0;width:80px" aria-label="{{ tr('Number of points') }}" title="{{ tr('Number of points') }}">
+  <input id="gtol" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:0;width:100px" aria-label="{{ tr('Tolerance (±)') }}" title="{{ tr('Tolerance (±)') }}">
+  <button type="button" class="btn alt" id="gen">{{ tr("Create evenly spaced points") }}</button>
+</div>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("Sensor reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody></tbody></table></div>
+<p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
+<div class="preview" id="overall"></div>
+<button class="btn">{{ tr("Save and issue certificate") }}</button>
+<a class="btn alt" href="{{ url_for('sensor', sensor_id=s.sensor_id) }}">{{ tr("Cancel") }}</a></form></div>
+<script>
+const T = {{ {"fill": tr("Fill in every point to preview the overall result."),
+  "s1": tr("1 point, max error {e} {u} → overall"), "sN": tr("{n} points, max error {e} {u} → overall"),
+  "pass": tr("PASS"), "fail": tr("FAIL"), "f1": tr("FAIL (1 point out of tolerance)"), "fN": tr("FAIL ({k} points out of tolerance)"),
+  "rm": tr("Remove point"), "tol": tr("Tolerance (±)"), "gen": tr("Enter a start value, an end value, 2–30 points and a tolerance.")}|tojson }};
+const defTol = {{ s.tolerance }}, unit = {{ s.unit|tojson }};
+const body = document.querySelector('#pts tbody'), overall = document.getElementById('overall');
+function addRow(ref = '', tol = defTol) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="no"></td>
+    <td><input name="reference_value" type="number" step="any" required value="${ref}" style="min-width:120px"></td>
+    <td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td>
+    <td><input name="tolerance" type="number" step="any" min="0" value="${tol}" style="min-width:90px" aria-label="${T.tol}"></td>
+    <td class="err">—</td><td class="res">—</td>
+    <td><button type="button" class="btn alt del" style="padding:3px 10px" aria-label="${T.rm}">✕</button></td>`;
+  tr.querySelectorAll('input').forEach(i => i.addEventListener('input', update));
+  tr.querySelector('.del').onclick = () => { if (body.rows.length > 1) { tr.remove(); update(); } };
+  body.appendChild(tr); update();
+}
+function update() {
+  let filled = 0, fails = 0, worst = 0;
+  [...body.rows].forEach((tr, i) => {
+    tr.querySelector('.no').textContent = i + 1;
+    const [r, m, t] = tr.querySelectorAll('input'), err = tr.querySelector('.err'), res = tr.querySelector('.res');
+    if (r.value === '' || m.value === '') { err.textContent = '—'; res.textContent = '—'; return; }
+    const tol = t.value === '' ? defTol : parseFloat(t.value);
+    const e = parseFloat((m.value - r.value).toFixed(6)), pass = Math.abs(e) <= tol;
+    filled++; if (!pass) fails++; if (Math.abs(e) > Math.abs(worst)) worst = e;
+    err.textContent = (e > 0 ? '+' : '') + e;
+    res.innerHTML = `<span class="badge ${pass ? 'green' : 'red'}">${pass ? T.pass : T.fail}</span>`;
+  });
+  if (filled < body.rows.length) { overall.textContent = T.fill; return; }
+  const we = (worst > 0 ? '+' : '') + worst, head = (filled === 1 ? T.s1 : T.sN.replace('{n}', filled)).replace('{e}', we).replace('{u}', unit);
+  const verdict = fails ? (fails === 1 ? T.f1 : T.fN.replace('{k}', fails)) : T.pass;
+  overall.innerHTML = `${head} <span class="badge ${fails ? 'red' : 'green'}">${verdict}</span>`;
+}
+document.getElementById('add').onclick = () => addRow();
+document.getElementById('gen').onclick = () => {
+  const a = parseFloat(gmin.value), b = parseFloat(gmax.value), n = parseInt(gn.value), t = parseFloat(gtol.value);
+  if (isNaN(a) || isNaN(b) || !(n >= 2 && n <= 30) || isNaN(t) || t < 0) { alert(T.gen); return; }
+  body.innerHTML = '';
+  for (let i = 0; i < n; i++) addRow(parseFloat((a + (b - a) * i / (n - 1)).toFixed(6)), t);
+};
+// reference standard: pick the first valid one from the register, or type a name
+const std = document.getElementById('std'), stdtext = document.getElementById('stdtext');
+function stdChange() { const other = std.value === ''; stdtext.style.display = other ? '' : 'none'; stdtext.required = other; }
+const firstValid = [...std.options].find(o => o.value && !o.disabled); if (firstValid) std.value = firstValid.value;
+std.onchange = stdChange; stdChange();
+addRow();
+</script>{% endblock %}

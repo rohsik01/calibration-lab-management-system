@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}{{ tr("First-time setup") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block banner %}<div class="card">{% include "_banner.html" %}</div>{% endblock %}
+{% block content %}
+<div class="card" style="max-width:440px;margin:20px auto">
+<h1>{{ tr("First-time setup") }}</h1><p>{{ tr("Create the administrator account. You can add other users afterwards.") }}</p>
+<form method="post">{{ csrf_input() }}
+<p><label>{{ tr("Full name") }}</label><input name="full_name"></p>
+<p><label>{{ tr("Username") }}</label><input name="username" required></p>
+<p><label>{{ tr("Password (min. 8 characters)") }}</label><input name="password" type="password" required></p>
+<p><label>{{ tr("Repeat password") }}</label><input name="password2" type="password" required></p>
+<p><button class="btn">{{ tr("Create administrator") }}</button></p></form></div>{% endblock %}

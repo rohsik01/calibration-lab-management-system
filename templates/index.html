@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block content %}
+<div class="card"><h1>Calibration register</h1>
+<div class="actions"><a class="btn" href="{{ url_for('new_sensor') }}">+ Add sensor</a>
+<a class="btn alt" href="{{ url_for('export_csv') }}">Export CSV</a></div>
+{% include "_table.html" %}</div>{% endblock %}

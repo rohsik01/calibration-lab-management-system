@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ tr("Sign in") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block banner %}<div class="card">{% include "_banner.html" %}</div>{% endblock %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:20px auto">
+<h1>{{ tr("Sign in") }}</h1><p class="sub">{{ tr("Calibration Laboratory Management System") }}</p>
+<form method="post">{{ csrf_input() }}
+<p><label>{{ tr("Username") }}</label><input name="username" autofocus required></p>
+<p><label>{{ tr("Password") }}</label><input name="password" type="password" required></p>
+<p><button class="btn" style="width:100%">{{ tr("Sign in") }}</button></p></form></div>{% endblock %}
