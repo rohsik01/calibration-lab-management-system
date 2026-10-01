@@ -120,6 +120,18 @@ CREATE TABLE IF NOT EXISTS calibration_work_orders (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS calibration_review_history (
+    review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id),
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id),
+    submitted_by INTEGER NOT NULL REFERENCES users(user_id),
+    submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by INTEGER REFERENCES users(user_id),
+    reviewed_at TEXT,
+    decision TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (decision IN ('PENDING','APPROVED','RETURNED')),
+    comments TEXT
+);
 """
 
 LATEST = """
@@ -856,7 +868,24 @@ def work_order_detail(work_order_id):
         abort(404)
     if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
-    return render_template("work_order_detail.html", w=row, statuses=WORK_ORDER_STATUSES)
+    calibration = db.execute(
+        """SELECT * FROM calibrations WHERE request_id=? ORDER BY cal_id DESC LIMIT 1""",
+        (row["request_id"],)
+    ).fetchone()
+    points = db.execute(
+        "SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+        (calibration["cal_id"],)
+    ).fetchall() if calibration else []
+    reviews = db.execute(
+        """SELECT h.*, u.full_name AS submitted_by_name, v.full_name AS reviewer_name
+           FROM calibration_review_history h
+           JOIN users u ON u.user_id=h.submitted_by
+           LEFT JOIN users v ON v.user_id=h.reviewed_by
+           WHERE h.work_order_id=? ORDER BY h.review_id DESC""",
+        (work_order_id,)
+    ).fetchall()
+    return render_template("work_order_detail.html", w=row, statuses=WORK_ORDER_STATUSES,
+                           calibration=calibration, points=points, reviews=reviews)
 
 
 @app.route("/requests/<int:request_id>/assign", methods=["POST"])
@@ -937,28 +966,126 @@ def update_work_order_status(work_order_id):
     if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
     new_status = request.form.get("status", "").strip()
-    allowed = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW") if g.user["role"] != "admin" else WORK_ORDER_STATUSES
+    allowed = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW") if g.user["role"] != "admin" else ("CANCELLED",)
     if new_status not in allowed:
-        flash("You are not permitted to set that work order status.", "error")
+        flash("Completed work orders must be finalized through calibration review approval.", "error")
         return redirect(url_for("work_order_detail", work_order_id=work_order_id))
     now = datetime.now().isoformat(timespec="seconds")
+    if new_status == "AWAITING REVIEW":
+        calibration = db.execute(
+            "SELECT cal_id FROM calibrations WHERE request_id=? ORDER BY cal_id DESC LIMIT 1",
+            (row["request_id"],)
+        ).fetchone()
+        if not calibration:
+            flash("Record the calibration measurements before submitting this work order for review.", "error")
+            return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+        pending = db.execute(
+            "SELECT review_id FROM calibration_review_history WHERE work_order_id=? AND decision='PENDING'",
+            (work_order_id,)
+        ).fetchone()
+        with db:
+            if not pending:
+                db.execute(
+                    """INSERT INTO calibration_review_history
+                       (work_order_id, cal_id, submitted_by, submitted_at, decision)
+                       VALUES (?,?,?,?, 'PENDING')""",
+                    (work_order_id, calibration["cal_id"], g.user["user_id"], now)
+                )
+            db.execute("UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
+                       (now, work_order_id))
+            db.execute("UPDATE calibration_requests SET status='UNDER REVIEW', updated_at=? WHERE request_id=?",
+                       (now, row["request_id"]))
+        flash("Calibration submitted for review.")
+        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
     with db:
         db.execute("UPDATE calibration_work_orders SET status=?, updated_at=? WHERE work_order_id=?",
                    (new_status, now, work_order_id))
-        if new_status in ("ASSIGNED", "IN PROGRESS"):
-            db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
-                       (new_status if new_status == "ASSIGNED" else "IN CALIBRATION", now, row["request_id"]))
-        elif new_status == "AWAITING REVIEW":
-            db.execute("UPDATE calibration_requests SET status='UNDER REVIEW', updated_at=? WHERE request_id=?",
+        if new_status == "IN PROGRESS":
+            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION', updated_at=? WHERE request_id=?",
                        (now, row["request_id"]))
-        elif new_status == "COMPLETED":
-            db.execute("UPDATE calibration_requests SET status='COMPLETED', updated_at=? WHERE request_id=?",
+        elif new_status == "ASSIGNED":
+            db.execute("UPDATE calibration_requests SET status='ASSIGNED', updated_at=? WHERE request_id=?",
                        (now, row["request_id"]))
         elif new_status == "CANCELLED":
             db.execute("UPDATE calibration_requests SET status='CANCELLED', updated_at=? WHERE request_id=?",
                        (now, row["request_id"]))
     flash(f"Work order status updated to {new_status}.")
     return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+
+
+@app.route("/reviews")
+@admin_required
+def calibration_reviews():
+    db = get_db()
+    pending = db.execute(
+        """SELECT h.review_id, h.submitted_at, w.work_order_id, w.work_order_no,
+                  r.request_no, r.client_name, r.instrument_description,
+                  u.full_name AS technician_name, c.certificate_no, c.cal_date, c.result
+           FROM calibration_review_history h
+           JOIN calibration_work_orders w ON w.work_order_id=h.work_order_id
+           JOIN calibration_requests r ON r.request_id=w.request_id
+           JOIN users u ON u.user_id=h.submitted_by
+           JOIN calibrations c ON c.cal_id=h.cal_id
+           WHERE h.decision='PENDING'
+           ORDER BY h.submitted_at, h.review_id"""
+    ).fetchall()
+    recent = db.execute(
+        """SELECT h.*, w.work_order_no, r.request_no, r.client_name, c.certificate_no,
+                  u.full_name AS reviewer_name
+           FROM calibration_review_history h
+           JOIN calibration_work_orders w ON w.work_order_id=h.work_order_id
+           JOIN calibration_requests r ON r.request_id=w.request_id
+           JOIN calibrations c ON c.cal_id=h.cal_id
+           LEFT JOIN users u ON u.user_id=h.reviewed_by
+           WHERE h.decision!='PENDING'
+           ORDER BY h.reviewed_at DESC, h.review_id DESC LIMIT 20"""
+    ).fetchall()
+    return render_template("reviews.html", pending=pending, recent=recent)
+
+
+@app.route("/reviews/<int:review_id>/decision", methods=["POST"])
+@admin_required
+def decide_calibration_review(review_id):
+    db = get_db()
+    review = db.execute(
+        """SELECT h.*, w.request_id, w.status AS work_order_status
+           FROM calibration_review_history h
+           JOIN calibration_work_orders w ON w.work_order_id=h.work_order_id
+           WHERE h.review_id=?""", (review_id,)
+    ).fetchone()
+    if not review:
+        abort(404)
+    if review["decision"] != "PENDING":
+        flash("This review has already been decided.", "error")
+        return redirect(url_for("calibration_reviews"))
+    decision = request.form.get("decision", "").strip()
+    comments = request.form.get("comments", "").strip()
+    if decision not in ("APPROVED", "RETURNED"):
+        flash("Choose approve or return for correction.", "error")
+        return redirect(url_for("calibration_reviews"))
+    if decision == "RETURNED" and not comments:
+        flash("Enter review comments when returning a calibration for correction.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+    now = datetime.now().isoformat(timespec="seconds")
+    with db:
+        db.execute(
+            """UPDATE calibration_review_history
+               SET decision=?, comments=?, reviewed_by=?, reviewed_at=? WHERE review_id=?""",
+            (decision, comments, g.user["user_id"], now, review_id)
+        )
+        if decision == "APPROVED":
+            db.execute("UPDATE calibration_work_orders SET status='COMPLETED', updated_at=? WHERE work_order_id=?",
+                       (now, review["work_order_id"]))
+            db.execute("UPDATE calibration_requests SET status='COMPLETED', updated_at=? WHERE request_id=?",
+                       (now, review["request_id"]))
+        else:
+            db.execute("UPDATE calibration_work_orders SET status='IN PROGRESS', updated_at=? WHERE work_order_id=?",
+                       (now, review["work_order_id"]))
+            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION', updated_at=? WHERE request_id=?",
+                       (now, review["request_id"]))
+    flash("Calibration approved and request completed." if decision == "APPROVED"
+          else "Calibration returned to the technician for correction.")
+    return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
 
 
 # -------------------------- calibration requests ---------------------------
