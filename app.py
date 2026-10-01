@@ -527,12 +527,20 @@ def nav_counts():
              AND date(c.next_due) <= date('now','+30 day')"""
     ).fetchone()[0]
 
+    unread_notifications = db.execute(
+        "SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL",
+        (g.user["user_id"],)
+    ).fetchone()[0] if db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='notifications'"
+    ).fetchone() else 0
+
     return {"nav_alerts": sensor_alerts, "std_alerts": standard_alerts,
             "operational_alerts": operational_alerts,
             "new_calibration_requests": new_calibration_requests,
             "work_order_count": work_order_count,
             "calibration_review_count": calibration_review_count,
-            "due_overdue_count": due_overdue_count}
+            "due_overdue_count": due_overdue_count,
+            "unread_notifications": unread_notifications}
 
 
 def next_certificate(db, cal_date):
