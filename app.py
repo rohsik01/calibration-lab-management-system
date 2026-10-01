@@ -439,14 +439,31 @@ def i18n():
 
 @app.context_processor
 def nav_counts():
-    """Number of sensors needing attention, shown as a badge in the sidebar."""
+    """Number of sensors needing attention, shown as badges in the sidebar."""
     if not g.get("user"):
         return {}
     db = get_db()
     rows = db.execute(LATEST).fetchall()
     stds = db.execute("SELECT * FROM reference_standards WHERE active=1").fetchall()
-    return {"nav_alerts": sum(1 for r in rows if status(r)[0] != "OK"),
-            "std_alerts": sum(1 for x in stds if standard_status(x)[0] != "Valid")}
+    sensor_alerts = sum(1 for r in rows if status(r)[0] != "OK")
+    standard_alerts = sum(1 for x in stds if standard_status(x)[0] != "Valid")
+    pending_reviews = db.execute("SELECT COUNT(*) FROM calibration_review_history WHERE decision='PENDING'").fetchone()[0]
+    if g.user["role"] == "admin":
+        unassigned = db.execute("""SELECT COUNT(*) FROM calibration_requests r
+                                   WHERE r.status='REVIEWED'
+                                     AND NOT EXISTS (
+                                       SELECT 1 FROM calibration_work_orders w
+                                       WHERE w.request_id=r.request_id
+                                         AND w.status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')
+                                     )""").fetchone()[0]
+        operational_alerts = sensor_alerts + standard_alerts + pending_reviews + unassigned
+    else:
+        assigned = db.execute("""SELECT COUNT(*) FROM calibration_work_orders
+                                 WHERE assigned_technician_id=? AND status='ASSIGNED'""",
+                              (g.user["user_id"],)).fetchone()[0]
+        operational_alerts = sensor_alerts + assigned
+    return {"nav_alerts": sensor_alerts, "std_alerts": standard_alerts,
+            "operational_alerts": operational_alerts}
 
 
 def next_certificate(db, cal_date):
