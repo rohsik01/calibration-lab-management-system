@@ -31,6 +31,13 @@
 <table><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
 {% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
 <td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
-<p style="margin-top:40px">{{ tr("Signed") }}: ______________________ &nbsp; {{ tr("Date") }}: ____________</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:56px">
+  <div style="border-top:1px solid #333;padding-top:8px">
+    <strong>{{ tr("Prepared by") }}</strong><br>{{ r.performed_by or '—' }}
+  </div>
+  <div style="border-top:1px solid #333;padding-top:8px">
+    <strong>{{ tr("Approved by") }}</strong><br>{{ r.approved_by or '—' }}
+  </div>
+</div>
 {% if not preview %}<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
 <a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p>{% else %}<p style="color:#b91c1c;font-weight:700;text-align:center">UNVERIFIED PREVIEW — NOT VALID AS A CERTIFICATE</p><p class="noprint"><a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Back to requests") }}</a></p>{% endif %}</div>{% endblock %}
