@@ -1145,17 +1145,21 @@ def update_work_order_status(work_order_id):
         abort(404)
     if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
+
+    current = row["status"]
     new_status = request.form.get("status", "").strip()
-    if row["status"] in ("COMPLETED", "CANCELLED"):
+    if current in ("COMPLETED", "CANCELLED"):
         flash("This work order is already closed and cannot be changed.", "error")
         return redirect(url_for("work_order_detail", work_order_id=work_order_id))
-    if g.user["role"] != "admin" and row["status"] == "AWAITING REVIEW":
-        flash("A submitted work order can only be returned by an administrator reviewer.", "error")
+
+    if g.user["role"] == "admin":
+        allowed = {"ASSIGNED": {"CANCELLED"}, "IN PROGRESS": {"CANCELLED"}}
+    else:
+        allowed = {"ASSIGNED": {"IN PROGRESS"}, "IN PROGRESS": {"AWAITING REVIEW"}}
+    if new_status not in allowed.get(current, set()):
+        flash("Invalid work-order status transition.", "error")
         return redirect(url_for("work_order_detail", work_order_id=work_order_id))
-    allowed = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW") if g.user["role"] != "admin" else ("CANCELLED",)
-    if new_status not in allowed:
-        flash("Completed work orders must be finalized through calibration review approval.", "error")
-        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+
     now = datetime.now().isoformat(timespec="seconds")
     if new_status == "AWAITING REVIEW":
         calibration = db.execute(
@@ -1177,25 +1181,31 @@ def update_work_order_status(work_order_id):
                        VALUES (?,?,?,?, 'PENDING')""",
                     (work_order_id, calibration["cal_id"], g.user["user_id"], now)
                 )
-            db.execute("UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
-                       (now, work_order_id))
-            db.execute("UPDATE calibration_requests SET status='UNDER REVIEW', updated_at=? WHERE request_id=?",
-                       (now, row["request_id"]))
+            db.execute(
+                "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
+                (now, work_order_id)
+            )
+            transition_request_status(
+                db, row["request_id"], "UNDER REVIEW", g.user["user_id"],
+                "Calibration submitted for administrator review"
+            )
         flash("Calibration submitted for review.")
         return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+
     with db:
         db.execute("UPDATE calibration_work_orders SET status=?, updated_at=? WHERE work_order_id=?",
                    (new_status, now, work_order_id))
         if new_status == "IN PROGRESS":
-            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION', updated_at=? WHERE request_id=?",
-                       (now, row["request_id"]))
-        elif new_status == "ASSIGNED":
-            db.execute("UPDATE calibration_requests SET status='ASSIGNED', updated_at=? WHERE request_id=?",
-                       (now, row["request_id"]))
+            transition_request_status(
+                db, row["request_id"], "IN CALIBRATION", g.user["user_id"],
+                "Technician started calibration"
+            )
         elif new_status == "CANCELLED":
-            db.execute("UPDATE calibration_requests SET status='CANCELLED', updated_at=? WHERE request_id=?",
-                       (now, row["request_id"]))
-    flash(f"Work order status updated to {new_status}.")
+            transition_request_status(
+                db, row["request_id"], "CANCELLED", g.user["user_id"],
+                "Request cancelled"
+            )
+    flash("Work order status updated.")
     return redirect(url_for("work_order_detail", work_order_id=work_order_id))
 
 
