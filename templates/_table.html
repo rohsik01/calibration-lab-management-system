@@ -5,12 +5,12 @@
 <tr>
   <td><a href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ r.sensor_id }}</a></td>
   <td>{{ r.station }}</td><td>{{ r.sensor_type }}</td><td>{{ r.manufacturer }}</td><td>{{ r.serial_number }}</td>
-  <td>{{ r.cal_date or '—' }}</td><td>{{ r.reference_standard or '—' }}</td>
+  <td>{{ date_pair(r.cal_date) }}</td><td>{{ r.reference_standard or '—' }}</td>
   <td>{% if r.n_points and r.n_points > 1 %}{{ tr("{n} points").format(n=r.n_points) }}{% elif r.measured_value is not none %}{{ r.measured_value }} {{ r.unit }}{% else %}—{% endif %}</td>
   <td>{% if r.error is not none %}{{ '%+g'|format(r.error) }}{% else %}—{% endif %}</td>
   <td>{% if r.result %}<span class="badge {{ 'green' if r.result=='PASS' else 'red' }}">{{ tr(r.result) }}</span>{% else %}—{% endif %}</td>
   <td>{% if r.certificate_no %}<a href="{{ url_for('certificate', cert=r.certificate_no) }}">{{ r.certificate_no }}</a>{% else %}—{% endif %}</td>
-  <td>{{ r.next_due or '—' }}</td>
+  <td>{{ date_pair(r.next_due) }}</td>
   {% set st = status(r) %}<td><span class="badge {{ st[1] }}" data-s="{{ status_key(st[0]) }}">{{ stl(st[0]) }}</span></td>
 </tr>
 {% else %}<tr><td colspan="13">{{ tr("No sensors yet. Add a station, then register a sensor.") }}</td></tr>
