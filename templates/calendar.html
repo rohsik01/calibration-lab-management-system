@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% block title %}{{ tr("Nepali calendar") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card">
+  <div class="hero">
+    <div><h1>📅 {{ tr("Nepali calendar") }}</h1><div class="sub">{{ tr("Bikram Sambat calendar") }}</div></div>
+    <div class="actions" style="margin:0">
+      <a class="btn alt" href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}">‹ {{ tr("Previous") }}</a>
+      <a class="btn alt" href="{{ url_for('calendar_view') }}">{{ tr("Today") }}</a>
+      <a class="btn alt" href="{{ url_for('calendar_view', year=next_year, month=next_month) }}">{{ tr("Next") }} ›</a>
+    </div>
+  </div>
+  <h2 style="text-align:center;margin:20px 0 10px">{{ month_name_ne }} {{ year }}</h2>
+  <div class="scroll">
+    <table class="bs-calendar">
+      <thead><tr>{% for d in ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"] %}<th>{{ tr(d) }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for week in weeks %}<tr>{% for cell in week %}
+        {% if cell %}<td class="{{ 'today' if cell.ad == today_ad else '' }}"><div class="bs-day">{{ cell.day }}</div><div class="ad-day">{{ cell.ad.strftime('%Y-%m-%d') }}</div></td>
+        {% else %}<td></td>{% endif %}
+      {% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="text-align:center">{{ tr("Today") }}: <b>{{ today_bs.strftime("%K %N %D") }}</b> · {{ today_ad.strftime("%A, %d %B %Y") }}</p>
+</div>
+<style>
+.bs-calendar th,.bs-calendar td{text-align:center;white-space:normal;width:14.28%;height:70px}
+.bs-calendar th{background:#f4f6fa}
+.bs-calendar td{vertical-align:top;border:1px solid var(--line)}
+.bs-calendar td.today{outline:3px solid #1f5fbf;outline-offset:-3px;background:#eef5ff}
+.bs-day{font-size:20px;font-weight:700;margin-top:4px}.ad-day{font-size:11px;color:var(--mute);margin-top:2px}
+</style>
+{% endblock %}
