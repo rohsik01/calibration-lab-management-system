@@ -1710,6 +1710,33 @@ def calibrate(sensor_id):
     s = db.execute("SELECT * FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone()
     if not s:
         abort(404)
+    linked_request_id = request.values.get("request_id", "").strip()
+    if linked_request_id.isdigit():
+        linked_request = db.execute(
+            "SELECT request_id, sensor_id, status FROM calibration_requests WHERE request_id=?",
+            (int(linked_request_id),)
+        ).fetchone()
+        if not linked_request:
+            abort(404)
+        if linked_request["sensor_id"] and linked_request["sensor_id"] != sensor_id:
+            flash("This request belongs to a different registered instrument.", "error")
+            return redirect(url_for("work_order_detail", work_order_id=(
+                db.execute("SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
+                           (int(linked_request_id),)).fetchone() or {"work_order_id": 0}
+            )["work_order_id"])) if db.execute(
+                "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
+                (int(linked_request_id),)
+            ).fetchone() else redirect(url_for("calibration_request", request_id=int(linked_request_id)))
+        linked_order = db.execute(
+            "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
+            (int(linked_request_id),)
+        ).fetchone()
+        if g.user["role"] != "admin":
+            if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
+                abort(403)
+            if linked_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
+                flash("This work order is awaiting review or already closed; calibration data cannot be changed.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
     if request.method == "POST":
         f = request.form
         try:
