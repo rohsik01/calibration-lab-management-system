@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ w.work_order_no }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>{{ w.work_order_no }}</h1><p class="sub">{{ w.request_no }} · {{ w.client_name }} · {{ w.instrument_description }}</p></div><div class="actions"><a class="btn alt" href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ tr("Open request") }}</a>{% if w.sensor_id %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Start / record calibration") }}</a>{% endif %}</div></div>
+<div class="card"><h2>{{ tr("Work order details") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Status") }}</label><span class="badge {{ 'green' if w.status == 'COMPLETED' else 'amber' if w.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ w.status }}</span></div>
+<div><label>{{ tr("Assigned technician") }}</label><div>{{ w.technician_name }} ({{ w.technician_username }})</div></div>
+<div><label>{{ tr("Assigned by") }}</label><div>{{ w.assigned_by_name }}</div></div>
+<div><label>{{ tr("Assignment date") }}</label><div>{{ date_pair(w.assigned_at[:10]) }}</div></div>
+<div><label>{{ tr("Target completion") }}</label><div>{{ date_pair(w.target_date) }}</div></div>
+<div><label>{{ tr("Priority") }}</label><div><span class="badge {{ 'red' if w.priority == 'Urgent' else 'amber' if w.priority == 'High' else 'grey' }}">{{ w.priority }}</span></div></div>
+<div><label>{{ tr("Calibration method / procedure") }}</label><div>{{ w.calibration_method or '—' }}</div></div>
+<div><label>{{ tr("Reference standard") }}</label><div>{{ w.standard_code or '—' }}{% if w.standard_name %} — {{ w.standard_name }}{% endif %}</div></div>
+</div>
+{% if w.instructions %}<div style="margin-top:14px"><label>{{ tr("Technician instructions") }}</label><div class="preview">{{ w.instructions }}</div></div>{% endif %}
+<form method="post" action="{{ url_for('update_work_order_status', work_order_id=w.work_order_id) }}" class="actions" style="margin-top:18px">{{ csrf_input() }}<label style="margin:0">{{ tr("Update work status") }}</label>
+<select name="status" style="max-width:260px">
+{% if g.user.role == 'admin' %}{% for st in statuses %}<option {{ 'selected' if w.status == st }}>{{ st }}</option>{% endfor %}
+{% else %}{% for st in ('ASSIGNED','IN PROGRESS','AWAITING REVIEW') %}<option {{ 'selected' if w.status == st }}>{{ st }}</option>{% endfor %}{% endif %}
+</select><button class="btn">{{ tr("Update status") }}</button></form>
+</div>
+<div class="card"><h2>{{ tr("Request and instrument information") }}</h2><div class="grid">
+<div><label>{{ tr("Client / organization") }}</label><div>{{ w.client_name }}</div></div><div><label>{{ tr("Contact person") }}</label><div>{{ w.contact_person or '—' }}</div></div><div><label>{{ tr("Phone") }}</label><div>{{ w.contact_phone or '—' }}</div></div><div><label>{{ tr("Email") }}</label><div>{{ w.contact_email or '—' }}</div></div><div><label>{{ tr("Instrument") }}</label><div>{{ w.instrument_description }}</div></div><div><label>{{ tr("Registered sensor") }}</label><div>{{ w.sensor_id or '—' }}</div></div><div><label>{{ tr("Sensor type") }}</label><div>{{ w.sensor_type or '—' }}</div></div><div><label>{{ tr("Manufacturer") }}</label><div>{{ w.manufacturer or '—' }}</div></div><div><label>{{ tr("Serial number") }}</label><div>{{ w.serial_number or '—' }}</div></div><div><label>{{ tr("Station") }}</label><div>{{ w.station or '—' }}</div></div><div><label>{{ tr("Requested service") }}</label><div>{{ w.requested_service }}</div></div><div><label>{{ tr("Requested range / points") }}</label><div>{{ w.requested_range or '—' }}</div></div><div><label>{{ tr("Received date") }}</label><div>{{ date_pair(w.received_date) }}</div></div>
+</div>{% if w.remarks %}<div style="margin-top:14px"><label>{{ tr("Request remarks") }}</label><div class="preview">{{ w.remarks }}</div></div>{% endif %}</div>
+{% endblock %}
