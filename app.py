@@ -1720,13 +1720,7 @@ def calibrate(sensor_id):
             abort(404)
         if linked_request["sensor_id"] and linked_request["sensor_id"] != sensor_id:
             flash("This request belongs to a different registered instrument.", "error")
-            return redirect(url_for("work_order_detail", work_order_id=(
-                db.execute("SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
-                           (int(linked_request_id),)).fetchone() or {"work_order_id": 0}
-            )["work_order_id"])) if db.execute(
-                "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
-                (int(linked_request_id),)
-            ).fetchone() else redirect(url_for("calibration_request", request_id=int(linked_request_id)))
+            return redirect(url_for("calibration_request", request_id=int(linked_request_id)))
         linked_order = db.execute(
             "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
             (int(linked_request_id),)
