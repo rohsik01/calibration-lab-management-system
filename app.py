@@ -2113,11 +2113,11 @@ def calibrate(sensor_id):
             [(cur.lastrowid, i, *p) for i, p in enumerate(points, 1)])
         db.commit()
         if request_id:
-            db.execute(
-                "UPDATE calibration_requests SET status=?, updated_at=? "
-                "WHERE request_id=? AND status NOT IN ('COMPLETED','CANCELLED')",
-                ("IN CALIBRATION", datetime.now().isoformat(timespec="seconds"), request_id)
-            )
+            req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
+                                   (request_id,)).fetchone()
+            if req_state and req_state["status"] == "ASSIGNED":
+                transition_request_status(db, request_id, "IN CALIBRATION",
+                                          g.user["user_id"], "Calibration measurements recorded")
             db.commit()
         work_order = db.execute(
             "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
@@ -2204,8 +2204,11 @@ def calibrate_pending_request(request_id):
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
                 VALUES (?,?,?,?,?,?,?)""",[(cur.lastrowid,i,*p) for i,p in enumerate(pts,1)])
-            db.execute("UPDATE calibration_requests SET status='IN CALIBRATION',updated_at=? WHERE request_id=?",
-                       (datetime.now().isoformat(timespec="seconds"),request_id))
+            req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
+                                   (request_id,)).fetchone()
+            if req_state and req_state["status"] == "ASSIGNED":
+                transition_request_status(db, request_id, "IN CALIBRATION",
+                                          g.user["user_id"], "Calibration measurements recorded")
             db.commit()
             flash("Calibration measurements saved. Submit the work order for administrator review.")
             return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
