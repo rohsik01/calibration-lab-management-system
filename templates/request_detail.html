@@ -93,7 +93,8 @@
   {% if r.sensor_id and work_order and work_order.assigned_technician_id == g.user.user_id %}
   <a class="btn" href="{{ url_for('calibrate', sensor_id=r.sensor_id, request_id=r.request_id) }}">🧪 {{ tr("Add calibration data") }}</a>
   {% elif not r.sensor_id and work_order and work_order.assigned_technician_id == g.user.user_id %}
-  <div class="preview">{{ tr("This request has no registered instrument linked yet. Ask an administrator to link or register the instrument before entering calibration data.") }}</div>
+  <a class="btn" href="{{ url_for('calibrate_pending_request', request_id=r.request_id) }}">🧪 {{ tr("Add calibration data") }}</a>
+  <div class="preview">{{ tr("This instrument is pending registration. The sensor will be added only after administrator approval of this calibration.") }}</div>
   {% elif g.user.role != 'admin' and work_order and work_order.assigned_technician_id != g.user.user_id %}
   <p class="sub">{{ tr("Only the technician assigned to this work order can enter calibration data.") }}</p>
   {% endif %}
