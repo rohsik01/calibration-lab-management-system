@@ -527,12 +527,17 @@ def nav_counts():
              AND date(c.next_due) <= date('now','+30 day')"""
     ).fetchone()[0]
 
-    unread_notifications = db.execute(
-        "SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL",
-        (g.user["user_id"],)
-    ).fetchone()[0] if db.execute(
+    notifications_table = db.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='notifications'"
-    ).fetchone() else 0
+    ).fetchone()
+    if notifications_table:
+        sync_notifications(db, build_operational_alerts(db))
+        unread_notifications = db.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL",
+            (g.user["user_id"],)
+        ).fetchone()[0]
+    else:
+        unread_notifications = 0
 
     return {"nav_alerts": sensor_alerts, "std_alerts": standard_alerts,
             "operational_alerts": operational_alerts,
