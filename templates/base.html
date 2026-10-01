@@ -104,6 +104,7 @@
         {% if nav_alerts %}<span class="pill">{{ nav_alerts }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}
         {% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
+      <a class="item {{ 'active' if ep == 'calendar_view' }}" href="{{ url_for('calendar_view') }}"><span class="ic">📅</span>{{ tr("Nepali calendar") }}</a>
       <div class="grp">{{ tr("Manage") }}</div>
       <a class="item {{ 'active' if ep == 'new_sensor' }}" href="{{ url_for('new_sensor') }}"><span class="ic">➕</span>{{ tr("Add sensor") }}</a>
       <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
