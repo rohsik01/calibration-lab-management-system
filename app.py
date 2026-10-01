@@ -722,63 +722,10 @@ def check_new_password(pw, pw2):
     return None
 
 
-def bs_date_label(ad_date, nepali=False):
-    """Return a readable Bikram Sambat date for a Gregorian date."""
-    from nepali_datetime import date as bs_date
-    b = bs_date.from_datetime_date(ad_date)
-    fmt = "%K %N %D" if nepali else "%Y %B %d"
-    return b.strftime(fmt)
-
-
-def bs_month_grid(year, month):
-    """Return a Sunday-first BS month grid using the library's BS calendar data."""
-    from nepali_datetime import date as bs_date
-    first = bs_date(year, month, 1)
-    days = 0
-    cur = first
-    while cur.month == month:
-        days += 1
-        cur = cur + timedelta(days=1)
-    first_weekday = first.to_datetime_date().weekday()  # Mon=0 ... Sun=6
-    sunday_index = (first_weekday + 1) % 7
-    weeks = []
-    week = [None] * sunday_index
-    for day in range(1, days + 1):
-        cell = bs_date(year, month, day)
-        week.append({
-            "day": day,
-            "bs": cell,
-            "ad": cell.to_datetime_date(),
-        })
-        if len(week) == 7:
-            weeks.append(week)
-            week = []
-    if week:
-        weeks.append(week + [None] * (7 - len(week)))
-    return weeks
-
-
-        for line in banner:
-            w.writerow([line])
-        w.writerow([])
-    w.writerow([h for _, h in cols])
-    for r in rows:
-        w.writerow([safe_cell(export_value(k, r[k])) for k, _ in cols])
-    data = out.getvalue()
-    if fmt == "excel" or g.lang == "ne":         # UTF-8 BOM so Excel shows °C and Nepali text
-        data = "\ufeff" + data
-    return Response(data.encode("utf-8"), mimetype="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": f'attachment; filename="{stamp}.csv"'})
-
-
-# Route modules are imported only after all shared helpers, configuration, schema,
-# authentication gates, and the Flask application object are initialized.
+# Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
 from routes import sensors, calibrations, notifications, standards, reports
 
-#if __name__ == "__main__":
-    # host="0.0.0.0" lets other PCs on your network connect; use "127.0.0.1" for this PC only
-  #  app.run(host="127.0.0.1", port=5000, debug=True)
 if __name__ == "__main__":
     serve(app, host="127.0.0.1", port=5000)
 # workflow optimization marker
