@@ -2,7 +2,7 @@
 <div class="card"><h1>{{ tr("Register sensor") }}</h1>
 {% if not stations %}<p><a href="{{ url_for('stations') }}">{{ tr("Add a station first.") }}</a></p>{% else %}
 <form method="post">{{ csrf_input() }}<div class="grid">
-<div><label>{{ tr("Sensor ID") }}</label><input name="sensor_id" placeholder="TS-001" required><small class="hint">{{ tr("A unique label, e.g. TS-001.") }}</small></div>
+<div><label>{{ tr("Sensor ID") }}</label><input value="{{ tr("Auto generated") }}" readonly><small class="hint">{{ tr("Automatically generated from sensor type and station name, e.g. PS_Tarahara_1001.") }}</small></div>
 <div><label>{{ tr("Station") }}</label><select name="station_id">{% for s in stations %}<option value="{{ s.station_id }}">{{ s.name }}</option>{% endfor %}</select></div>
 <div><label>{{ tr("Sensor type") }}</label><input name="sensor_type" placeholder="{{ tr('Temperature') }}" required></div>
 <div><label>{{ tr("Manufacturer") }}</label><input name="manufacturer"></div>
