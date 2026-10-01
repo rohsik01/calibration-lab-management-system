@@ -726,6 +726,18 @@ def check_new_password(pw, pw2):
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
 from routes import sensors, calibrations, notifications, standards, reports
 
+def run_server():
+    """Run the application with the same app object used by imports/tests.
+
+    Host and port can be overridden with CALIBRATION_HOST/CALIBRATION_PORT.
+    By default the server remains local-only for safety.
+    """
+    host = os.environ.get("CALIBRATION_HOST", "127.0.0.1")
+    port = int(os.environ.get("CALIBRATION_PORT", "5000"))
+    print(f"Calibration Lab server: http://{host}:{port}", flush=True)
+    serve(app, host=host, port=port)
+
+
 if __name__ == "__main__":
-    serve(app, host="127.0.0.1", port=5000)
+    run_server()
 # workflow optimization marker
