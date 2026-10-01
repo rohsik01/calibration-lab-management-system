@@ -14,12 +14,42 @@
 <div><label>{{ tr("Reference standard") }}</label><div>{{ w.standard_code or '—' }}{% if w.standard_name %} — {{ w.standard_name }}{% endif %}</div></div>
 </div>
 {% if w.instructions %}<div style="margin-top:14px"><label>{{ tr("Technician instructions") }}</label><div class="preview">{{ w.instructions }}</div></div>{% endif %}
+{% if w.status != 'COMPLETED' and w.status != 'CANCELLED' %}
 <form method="post" action="{{ url_for('update_work_order_status', work_order_id=w.work_order_id) }}" class="actions" style="margin-top:18px">{{ csrf_input() }}<label style="margin:0">{{ tr("Update work status") }}</label>
 <select name="status" style="max-width:260px">
-{% if g.user.role == 'admin' %}{% for st in statuses %}<option {{ 'selected' if w.status == st }}>{{ st }}</option>{% endfor %}
-{% else %}{% for st in ('ASSIGNED','IN PROGRESS','AWAITING REVIEW') %}<option {{ 'selected' if w.status == st }}>{{ st }}</option>{% endfor %}{% endif %}
-</select><button class="btn">{{ tr("Update status") }}</button></form>
+{% if g.user.role == 'admin' %}<option {{ 'selected' if w.status == 'CANCELLED' }} value="CANCELLED">{{ tr("CANCELLED") }}</option>
+{% else %}{% for st in ('ASSIGNED','IN PROGRESS','AWAITING REVIEW') %}<option value="{{ st }}" {{ 'selected' if w.status == st }}>{{ st }}</option>{% endfor %}{% endif %}
+</select><button class="btn">{{ tr("Update status / submit for review") }}</button></form>
+{% endif %}
+
 </div>
+<div class="card"><h2>{{ tr("Calibration results") }}</h2>
+{% if calibration %}
+<div class="grid">
+<div><label>{{ tr("Certificate number") }}</label><div><a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a></div></div>
+<div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
+<div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
+<div><label>{{ tr("Performed by") }}</label><div>{{ calibration.performed_by or '—' }}</div></div>
+<div><label>{{ tr("Reference standard used") }}</label><div>{{ calibration.reference_standard }}</div></div>
+<div><label>{{ tr("Next due date") }}</label><div>{{ date_pair(calibration.next_due) }}</div></div>
+</div>
+<div class="scroll" style="margin-top:12px"><table><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("Measured value") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Tolerance") }}</th><th>{{ tr("Result") }}</th></tr></thead><tbody>
+{% for p in points %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ p.error }}</td><td>{{ p.tolerance if p.tolerance is not none else '—' }}</td><td><span class="badge {{ 'green' if p.result == 'PASS' else 'red' }}">{{ p.result }}</span></td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<p class="sub">{{ tr("No calibration measurements have been recorded for this request yet.") }}</p>{% endif %}
+</div>
+<div class="card"><h2>{{ tr("Review history") }}</h2>
+{% if reviews %}<div class="scroll"><table><thead><tr><th>{{ tr("Submitted") }}</th><th>{{ tr("Submitted by") }}</th><th>{{ tr("Decision") }}</th><th>{{ tr("Reviewer") }}</th><th>{{ tr("Reviewed at") }}</th><th>{{ tr("Comments") }}</th></tr></thead><tbody>
+{% for h in reviews %}<tr><td>{{ h.submitted_at }}</td><td>{{ h.submitted_by_name }}</td><td><span class="badge {{ 'green' if h.decision == 'APPROVED' else 'red' if h.decision == 'RETURNED' else 'amber' }}">{{ h.decision }}</span></td><td>{{ h.reviewer_name or '—' }}</td><td>{{ h.reviewed_at or '—' }}</td><td style="white-space:normal;min-width:180px">{{ h.comments or '—' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="sub">{{ tr("No review decisions have been recorded yet.") }}</p>{% endif %}
+</div>
+{% if g.user.role == 'admin' and w.status == 'AWAITING REVIEW' %}
+<div class="card"><h2>{{ tr("Reviewer decision") }}</h2><p class="sub">{{ tr("Check the measurements and certificate above before making a decision.") }}</p>
+<form method="post" action="{{ url_for('decide_calibration_review', review_id=reviews[0].review_id) if reviews and reviews[0].decision == 'PENDING' else '#' }}">
+{{ csrf_input() }}<label>{{ tr("Review comments") }}</label><textarea name="comments" rows="3" placeholder="{{ tr('Required when returning for correction') }}"></textarea>
+<div class="actions" style="margin-top:12px"><button class="btn" name="decision" value="APPROVED">{{ tr("Approve and complete request") }}</button><button class="btn alt" name="decision" value="RETURNED">{{ tr("Return to technician") }}</button></div>
+</form></div>
+{% endif %}
 <div class="card"><h2>{{ tr("Request and instrument information") }}</h2><div class="grid">
 <div><label>{{ tr("Client / organization") }}</label><div>{{ w.client_name }}</div></div><div><label>{{ tr("Contact person") }}</label><div>{{ w.contact_person or '—' }}</div></div><div><label>{{ tr("Phone") }}</label><div>{{ w.contact_phone or '—' }}</div></div><div><label>{{ tr("Email") }}</label><div>{{ w.contact_email or '—' }}</div></div><div><label>{{ tr("Instrument") }}</label><div>{{ w.instrument_description }}</div></div><div><label>{{ tr("Registered sensor") }}</label><div>{{ w.sensor_id or '—' }}</div></div><div><label>{{ tr("Sensor type") }}</label><div>{{ w.sensor_type or '—' }}</div></div><div><label>{{ tr("Manufacturer") }}</label><div>{{ w.manufacturer or '—' }}</div></div><div><label>{{ tr("Serial number") }}</label><div>{{ w.serial_number or '—' }}</div></div><div><label>{{ tr("Station") }}</label><div>{{ w.station or '—' }}</div></div><div><label>{{ tr("Requested service") }}</label><div>{{ w.requested_service }}</div></div><div><label>{{ tr("Requested range / points") }}</label><div>{{ w.requested_range or '—' }}</div></div><div><label>{{ tr("Received date") }}</label><div>{{ date_pair(w.received_date) }}</div></div>
 </div>{% if w.remarks %}<div style="margin-top:14px"><label>{{ tr("Request remarks") }}</label><div class="preview">{{ w.remarks }}</div></div>{% endif %}</div>
