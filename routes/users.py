@@ -1,0 +1,82 @@
+"""Route module: users."""
+from app import *
+
+@app.route("/users", methods=["GET", "POST"])
+@admin_required
+def users():
+    db = get_db()
+    if request.method == "POST":
+        f = request.form
+        err = check_new_password(f["password"], f["password"])
+        if err or not f["username"].strip() or f["role"] not in ("admin", "technician", "general_user"):
+            flash(err or "Username and a valid role are required.")
+        else:
+            try:
+                db.execute("INSERT INTO users(username, full_name, password_hash, role) "
+                           "VALUES (?,?,?,?)",
+                           (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
+                            generate_password_hash(f["password"]), f["role"]))
+                db.commit()
+                flash("User created.")
+            except sqlite3.IntegrityError:
+                flash("That username already exists.")
+        return redirect(url_for("users"))
+    return render_template("users.html",
+                           rows=db.execute("SELECT * FROM users ORDER BY username").fetchall())
+
+
+
+@app.route("/users/<int:uid>/delete", methods=["POST"])
+@admin_required
+def delete_user(uid):
+    if uid == g.user["user_id"]:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("users"))
+    db = get_db()
+    u = db.execute("SELECT user_id, username, role, active FROM users WHERE user_id=?", (uid,)).fetchone()
+    if not u:
+        abort(404)
+    if u["role"] == "admin" and u["active"]:
+        active_admins = db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0]
+        if active_admins <= 1:
+            flash("The last active administrator cannot be deleted.", "error")
+            return redirect(url_for("users"))
+    try:
+        with db:
+            db.execute("DELETE FROM users WHERE user_id=?", (uid,))
+        flash(f"User '{u['username']}' was deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the user.", "error")
+    return redirect(url_for("users"))
+
+@app.route("/users/<int:uid>/toggle", methods=["POST"])
+@admin_required
+def toggle_user(uid):
+    if uid == g.user["user_id"]:
+        flash("You cannot deactivate your own account.")
+    else:
+        db = get_db()
+        db.execute("UPDATE users SET active = 1 - active WHERE user_id=?", (uid,))
+        db.commit()
+        flash("User updated.")
+    return redirect(url_for("users"))
+
+
+@app.route("/users/<int:uid>/password", methods=["POST"])
+@admin_required
+def reset_password(uid):
+    pw = request.form["password"]
+    if (err := check_new_password(pw, pw)):
+        flash(err)
+    else:
+        db = get_db()
+        db.execute("UPDATE users SET password_hash=? WHERE user_id=?",
+                   (generate_password_hash(pw), uid))
+        db.commit()
+        flash("Password reset.")
+    return redirect(url_for("users"))
+
+
+
+# ------------------------------ Nepali calendar ------------------------------
+
