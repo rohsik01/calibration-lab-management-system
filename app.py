@@ -722,6 +722,13 @@ def check_new_password(pw, pw2):
     return None
 
 
+# When app.py is executed directly, Python names this module "__main__".
+# Route modules import the shared Flask app as "app", so alias this module first
+# to prevent Python from loading app.py a second time and creating a second Flask app.
+if __name__ == "__main__":
+    import sys
+    sys.modules.setdefault("app", sys.modules[__name__])
+
 # Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
 from routes import sensors, calibrations, notifications, standards, reports
