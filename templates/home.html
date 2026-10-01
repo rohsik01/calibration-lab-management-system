@@ -62,7 +62,19 @@
 {% endif %}
 
 {% if stations %}
-<div class="card" style="margin-top:20px"><h2>{{ tr("Stations") }}</h2>
-  <div class="chips">{% for s in stations %}<a class="chip" href="{{ url_for('register', q=s.name) }}">{{ s.name }} · {{ tr("{n} sensor" if s.n == 1 else "{n} sensors").format(n=s.n) }}</a>{% endfor %}</div></div>
+<div class="card" style="margin-top:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+    <h2 style="margin:0">{{ tr("Recent stations") }}</h2>
+    <a class="btn alt" href="{{ url_for('stations') }}">{{ tr("See more") }} →</a>
+  </div>
+  <div class="chips" style="margin-top:12px">
+    {% for s in stations[:6] %}
+    <a class="chip" href="{{ url_for('register', q=s.name) }}">{{ s.name }} · {{ tr("{n} sensor" if s.n == 1 else "{n} sensors").format(n=s.n) }}</a>
+    {% endfor %}
+  </div>
+  {% if stations|length > 6 %}
+  <p class="hint" style="margin:12px 0 0">{{ tr("Showing {n} of {m} stations").format(n=6, m=stations|length) }}</p>
+  {% endif %}
+</div>
 {% endif %}
 {% endblock %}
