@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
     full_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin','technician')),
+    role TEXT NOT NULL CHECK (role IN ('admin','technician','general_user')),
     active INTEGER NOT NULL DEFAULT 1,
     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
     totp_secret TEXT,
@@ -176,6 +176,26 @@ with sqlite3.connect(DB) as _c:
         _c.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
     if "recovery_codes" not in _cols:
         _c.execute("ALTER TABLE users ADD COLUMN recovery_codes TEXT")
+    # Upgrade legacy user table so the general_user role is accepted while preserving accounts.
+    _user_sql = _c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
+    if "'general_user'" not in _user_sql:
+        _c.execute("""CREATE TABLE users_new (
+            user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            full_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('admin','technician','general_user')),
+            active INTEGER NOT NULL DEFAULT 1,
+            two_factor_enabled INTEGER NOT NULL DEFAULT 0,
+            totp_secret TEXT,
+            recovery_codes TEXT)""")
+        _c.execute("""INSERT INTO users_new
+            (user_id, username, full_name, password_hash, role, active,
+             two_factor_enabled, totp_secret, recovery_codes)
+            SELECT user_id, username, full_name, password_hash, role, active,
+                   two_factor_enabled, totp_secret, recovery_codes FROM users""")
+        _c.execute("DROP TABLE users")
+        _c.execute("ALTER TABLE users_new RENAME TO users")
     # upgrade older databases: record who performed each calibration
     if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
@@ -420,6 +440,12 @@ def gate():
             abort(400, "Invalid or missing security token. Reload the page and try again.")
     if not g.user and request.endpoint not in OPEN_ENDPOINTS:
         return redirect(url_for("login", next=request.full_path.rstrip("?")))
+    if g.user and g.user["role"] == "general_user":
+        allowed = {"index", "calibration_requests", "new_calibration_request",
+                   "calibration_request", "certificate", "account", "logout",
+                   "set_lang", "static"}
+        if request.endpoint not in allowed:
+            abort(403)
 
 
 def admin_required(f):
@@ -613,7 +639,7 @@ def users():
     if request.method == "POST":
         f = request.form
         err = check_new_password(f["password"], f["password"])
-        if err or not f["username"].strip() or f["role"] not in ("admin", "technician"):
+        if err or not f["username"].strip() or f["role"] not in ("admin", "technician", "general_user"):
             flash(err or "Username and a valid role are required.")
         else:
             try:
@@ -763,6 +789,8 @@ def calendar_view():
 @app.route("/")
 def index():
     """Home page: summary, items needing attention, recent activity."""
+    if g.user["role"] == "general_user":
+        return redirect(url_for("calibration_requests"))
     db = get_db()
     rows = db.execute(LATEST + " ORDER BY s.sensor_id").fetchall()
     counts = dict(total=len(rows), ok=0, soon=0, overdue=0, failed=0, never=0)
@@ -1129,6 +1157,8 @@ def calibration_requests():
 
 @app.route("/requests/new", methods=["GET", "POST"])
 def new_calibration_request():
+    if g.user["role"] == "admin":
+        abort(403)
     db = get_db()
     sensors_ = db.execute(
         "SELECT s.sensor_id, s.sensor_type, s.manufacturer, s.serial_number, st.name AS station "
