@@ -21,6 +21,34 @@
 </form>
 </div>
 {% endif %}
-<div class="scroll"><table class="js-table"><tr><th>{{ tr("Station ID") }}</th><th>{{ tr("Station Name") }}</th><th>{{ tr("Location") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Last edited") }}</th><th>{{ tr("Actions") }}</th></tr>
-{% for r in rows %}<tr><td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td>{{ r.type or 'Meteorological' }}</td><td>{{ r.updated_at[:16].replace('T', ' ') if r.updated_at else '—' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a>{% if g.user.role == "admin" %}<form method="post" action="{{ url_for('delete_station', station_id=r.station_id) }}" style="display:inline;margin-left:8px" onsubmit="return confirm('Delete this station, its sensors and all calibration records?')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>{% endif %}</td></tr>
-{% else %}<tr><td colspan="6">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<form method="post" action="{{ url_for('bulk_delete_stations') }}" onsubmit="return confirm('{{ tr("Delete all selected stations, their sensors, and all calibration records? This cannot be undone.") }}')">
+{{ csrf_input() }}
+<div class="actions" style="margin-bottom:10px">
+{% if g.user.role == "admin" %}<button class="btn alt" id="bulkDeleteBtn" type="submit" disabled>{{ tr("Delete selected") }}</button>{% endif %}
+<span id="selectedStationCount" class="hint"></span>
+</div>
+<div class="scroll"><table class="js-table"><tr>{% if g.user.role == "admin" %}<th><input type="checkbox" id="selectAllStations" title="{{ tr("Select all") }}"></th>{% endif %}<th>{{ tr("Station ID") }}</th><th>{{ tr("Station Name") }}</th><th>{{ tr("Location") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Last edited") }}</th><th>{{ tr("Actions") }}</th></tr>
+{% for r in rows %}<tr>{% if g.user.role == "admin" %}<td><input type="checkbox" class="station-check" name="station_ids" value="{{ r.station_id }}"></td>{% endif %}<td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td>{{ r.type or 'Meteorological' }}</td><td>{{ r.updated_at[:16].replace('T', ' ') if r.updated_at else '—' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a>{% if g.user.role == "admin" %}<form method="post" action="{{ url_for('delete_station', station_id=r.station_id) }}" style="display:inline;margin-left:8px" onsubmit="return confirm('Delete this station, its sensors and all calibration records?')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="{{ 7 if g.user.role == "admin" else 6 }}">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div>
+</form>
+{% if g.user.role == "admin" %}<script>
+(function () {
+  const all = document.getElementById("selectAllStations");
+  const boxes = Array.from(document.querySelectorAll(".station-check"));
+  const button = document.getElementById("bulkDeleteBtn");
+  const count = document.getElementById("selectedStationCount");
+  function update() {
+    const selected = boxes.filter(b => b.checked).length;
+    button.disabled = selected === 0;
+    count.textContent = selected ? selected + " selected" : "";
+    if (all) all.checked = boxes.length > 0 && selected === boxes.length;
+    if (all) all.indeterminate = selected > 0 && selected < boxes.length;
+  }
+  all?.addEventListener("change", function () {
+    boxes.forEach(b => { b.checked = all.checked; });
+    update();
+  });
+  boxes.forEach(b => b.addEventListener("change", update));
+  update();
+})();
+</script>{% endif %}</div>{% endblock %}
