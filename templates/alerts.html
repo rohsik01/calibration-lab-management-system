@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Alerts") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="hero">
+    <div><h1>🔔 {{ tr("Operational alerts") }}</h1><div class="sub">{{ tr("Action items for calibration work, reviews and instrument due dates") }}</div></div>
+    <a class="btn alt" href="{{ url_for('index') }}">← {{ tr("Dashboard") }}</a>
+  </div>
+</div>
+{% if alerts %}
+<div class="stats">
+  <div class="stat red"><span class="n">{{ alerts|selectattr("severity","equalto","critical")|list|length }}</span><span class="sub">{{ tr("Critical") }}</span></div>
+  <div class="stat amber"><span class="n">{{ alerts|selectattr("severity","equalto","warning")|list|length }}</span><span class="sub">{{ tr("Attention") }}</span></div>
+  <div class="stat brand"><span class="n">{{ alerts|length }}</span><span class="sub">{{ tr("Total alerts") }}</span></div>
+</div>
+<div class="card"><div class="scroll"><table class="js-table">
+<tr><th>{{ tr("Priority") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Alert") }}</th><th>{{ tr("Details") }}</th><th>{{ tr("Action") }}</th></tr>
+{% for a in alerts %}<tr>
+<td><span class="badge {{ 'red' if a.severity == 'critical' else 'amber' if a.severity == 'warning' else 'grey' }}">{{ tr(a.severity|capitalize) }}</span></td>
+<td>{{ tr(a.kind|replace("_"," ")|title) }}</td><td><strong>{{ tr(a.title) }}</strong></td><td>{{ a.description }}</td>
+<td>{% if a.endpoint %}<a class="btn alt" style="padding:4px 10px" href="{{ url_for(a.endpoint, **a) }}">{{ tr("Open") }} →</a>{% endif %}</td>
+</tr>{% endfor %}</table></div></div>
+{% else %}
+<div class="card"><div class="empty" style="padding:50px"><div style="font-size:42px">✅</div><h2>{{ tr("No operational alerts") }}</h2><div class="sub">{{ tr("There are no overdue sensors, pending reviews or assigned work requiring attention.") }}</div></div></div>
+{% endif %}
+{% endblock %}
