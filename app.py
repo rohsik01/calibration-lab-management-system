@@ -1791,6 +1791,13 @@ def calibrate(sensor_id):
                 ("IN CALIBRATION", datetime.now().isoformat(timespec="seconds"), request_id)
             )
             db.commit()
+        work_order = db.execute(
+            "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
+            (request_id,)
+        ).fetchone() if request_id else None
+        if work_order:
+            flash("Calibration measurements saved. Submit the work order for review before the certificate is released.")
+            return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
         msg = tr("{n} point, max error {err} {unit} → {result}. Certificate {cert} issued."
                  if len(points) == 1 else
                  "{n} points, max error {err} {unit} → {result}. Certificate {cert} issued.")
@@ -1815,6 +1822,16 @@ def certificate(cert):
         "JOIN stations st USING(station_id) WHERE certificate_no=?", (cert,)).fetchone()
     if not r:
         abort(404)
+    if r["request_id"]:
+        work_order = db.execute(
+            "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
+            (r["request_id"],)
+        ).fetchone()
+        if work_order and work_order["status"] != "COMPLETED" and g.user["role"] != "admin":
+            if work_order["assigned_technician_id"] != g.user["user_id"]:
+                abort(403)
+            flash("This certificate is not released yet. It must be approved by an administrator reviewer.")
+            return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
