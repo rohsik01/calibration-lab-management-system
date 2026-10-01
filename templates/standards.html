@@ -2,8 +2,8 @@
 <div class="card"><h1>{{ tr("Reference standards") }}</h1>
 <p class="sub">{{ tr("The instruments used as references when calibrating sensors. A standard that has expired cannot be used for new calibrations.") }}</p>
 <div class="actions">{% if g.user.role == 'admin' %}<a class="btn" href="{{ url_for('new_standard') }}">+ {{ tr("Add standard") }}</a>{% endif %}</div>
-<div class="scroll"><table class="js-table"><tr><th>{{ tr("Code") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Serial") }}</th><th>{{ tr("Uncertainty") }}</th><th>{{ tr("Traceability") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Valid until") }}</th><th>{{ tr("Status") }}</th></tr>
+<div class="scroll"><table class="js-table"><tr><th>{{ tr("Code") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Serial") }}</th><th>{{ tr("Uncertainty") }}</th><th>{{ tr("Traceability") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Valid until") }}</th><th>{{ tr("Status") }}</th>{% if g.user.role == "admin" %}<th>{{ tr("Actions") }}</th>{% endif %}</tr>
 {% for x in rows %}{% set st = std_status(x) %}<tr><td><a href="{{ url_for('standard', sid=x.standard_id) }}">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ x.standard_type or '—' }}</td>
 <td>{{ x.serial_number or '—' }}</td><td>{{ x.uncertainty or '—' }}</td><td>{{ x.traceability or '—' }}</td><td>{{ x.certificate_no or '—' }}</td><td>{{ date_pair(x.valid_until) }}</td>
-<td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td></tr>
+<td><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></td>{% if g.user.role == "admin" %}<td><form method="post" action="{{ url_for('delete_standard', sid=x.standard_id) }}" onsubmit="return confirm('Delete this reference standard? It cannot be deleted if used by a calibration.')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form></td>{% endif %}</tr>
 {% else %}<tr><td colspan="9">{{ tr("No reference standards yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
