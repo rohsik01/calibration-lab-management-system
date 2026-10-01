@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Record calibration") }} · {{ req.request_no }}{% endblock %}
+{% block content %}
+<div class="card">
+<h1>{{ tr("Record calibration") }} — {{ req.instrument_description }}</h1>
+<div class="preview">
+<b>{{ tr("Pending sensor registration") }}</b><br>
+{{ tr("Sensor type") }}: {{ req.pending_sensor_type }} ·
+{{ tr("Manufacturer") }}: {{ req.pending_manufacturer or '—' }} ·
+S/N: {{ req.pending_serial_number }} ·
+{{ tr("Station") }}: {{ req.pending_station_name }} ·
+{{ tr("Unit") }}: {{ req.pending_unit or '—' }}
+<br><small>{{ tr("The sensor will be added to the official sensor register only when an administrator approves this calibration.") }}</small>
+</div>
+<form method="post">{{ csrf_input() }}
+<div class="grid">
+<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required></div>
+<div><label>{{ tr("Reference standard") }}</label>
+<select name="standard_id" id="std"><option value="">{{ tr("Other — not in the register") }}</option>
+{% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
+<input name="reference_standard" id="stdtext" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px"></div>
+</div>
+<h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("Sensor reading") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr></thead><tbody></tbody></table></div>
+<p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
+<div class="preview">{{ tr("Tolerance default") }}: ±{{ req.pending_tolerance or 0.5 }} {{ req.pending_unit or '' }}</div>
+<div class="actions" style="margin-top:18px"><button class="btn">{{ tr("Save calibration for review") }}</button>
+<a class="btn alt" href="{{ url_for('work_order_detail', work_order_id=request.args.get('work_order_id', 0)) }}">{{ tr("Cancel") }}</a></div>
+</form></div>
+<script>
+const body=document.querySelector('#pts tbody'), defTol={{ req.pending_tolerance or 0.5 }};
+function addRow(){
+ const tr=document.createElement('tr');
+ tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="tolerance" type="number" step="any" min="0" value="'+defTol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
+ tr.querySelector('.del').onclick=()=>{if(body.rows.length>1)tr.remove(); renumber();};
+ body.appendChild(tr); renumber();
+}
+function renumber(){[...body.rows].forEach((r,i)=>r.querySelector('.no').textContent=i+1);}
+document.getElementById('add').onclick=addRow; addRow();
+const std=document.getElementById('std'), stdtext=document.getElementById('stdtext');
+function toggle(){const other=std.value==='';stdtext.style.display=other?'':'none';stdtext.required=other;}
+std.onchange=toggle; toggle();
+</script>
+{% endblock %}
