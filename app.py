@@ -660,7 +660,7 @@ def index():
     stations_ = db.execute(
         "SELECT st.station_id, st.name, COUNT(s.sensor_id) AS n "
         "FROM stations st LEFT JOIN sensors s USING(station_id) "
-        "GROUP BY st.station_id ORDER BY st.station_id DESC").fetchall()
+        "GROUP BY st.station_id ORDER BY st.updated_at DESC, st.station_id DESC").fetchall()
     now = datetime.now()
     bs_today = bs_date_label(date.today())
     greeting = tr("Good morning" if now.hour < 12 else "Good afternoon" if now.hour < 18
