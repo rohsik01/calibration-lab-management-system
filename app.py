@@ -979,10 +979,66 @@ def index():
     std_issues = [x for x in db.execute(
         "SELECT * FROM reference_standards WHERE active=1 ORDER BY valid_until")
         if standard_status(x)[0] != "Valid"]
+    # KPI dashboard data: workflow pipeline, review queue, workload, turnaround and trends.
+    request_counts = {st: db.execute("SELECT COUNT(*) FROM calibration_requests WHERE status=?", (st,)).fetchone()[0]
+                      for st in REQUEST_STATUSES}
+    pending_reviews = db.execute("""SELECT COUNT(*) FROM calibration_review_history
+                                  WHERE decision='PENDING'""").fetchone()[0]
+    active_work_orders = db.execute("""SELECT COUNT(*) FROM calibration_work_orders
+                                      WHERE status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')""").fetchone()[0]
+    overdue_sensors = counts["overdue"]
+    failed_calibrations = db.execute("SELECT COUNT(*) FROM calibrations WHERE result='FAIL'").fetchone()[0]
+    completed_requests = request_counts["COMPLETED"]
+    avg_turnaround = db.execute("""SELECT AVG(julianday(updated_at) - julianday(received_date))
+                                  FROM calibration_requests
+                                  WHERE status='COMPLETED' AND received_date IS NOT NULL AND updated_at IS NOT NULL""").fetchone()[0]
+    avg_turnaround = round(avg_turnaround, 1) if avg_turnaround is not None else 0
+
+    workload_sql = """SELECT u.user_id, u.full_name,
+                             COUNT(CASE WHEN w.status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW') THEN 1 END) AS active,
+                             COUNT(CASE WHEN w.status='COMPLETED' THEN 1 END) AS completed
+                      FROM users u
+                      LEFT JOIN calibration_work_orders w ON w.assigned_technician_id=u.user_id
+                      WHERE u.role='technician' AND u.active=1
+                      GROUP BY u.user_id, u.full_name
+                      ORDER BY active DESC, completed DESC, u.full_name"""
+    technician_workload = db.execute(workload_sql).fetchall()
+
+    monthly_rows = db.execute("""SELECT substr(cal_date,1,7) AS month,
+                                        COUNT(*) AS total,
+                                        SUM(CASE WHEN result='PASS' THEN 1 ELSE 0 END) AS passed,
+                                        SUM(CASE WHEN result='FAIL' THEN 1 ELSE 0 END) AS failed
+                                 FROM calibrations
+                                 WHERE cal_date >= date('now','-5 months','start of month')
+                                 GROUP BY substr(cal_date,1,7)
+                                 ORDER BY month""").fetchall()
+    monthly = [dict(x) for x in monthly_rows]
+    max_monthly = max([x["total"] for x in monthly] or [1])
+
+    recent_activity = db.execute("""SELECT a.created_at, a.action, a.entity_type, a.entity_id,
+                                           u.full_name, u.role
+                                    FROM audit_log a
+                                    LEFT JOIN users u ON u.user_id=a.user_id
+                                    ORDER BY a.audit_id DESC LIMIT 10""").fetchall()
+
+    dashboard = {
+        "request_counts": request_counts,
+        "pending_reviews": pending_reviews,
+        "active_work_orders": active_work_orders,
+        "overdue_sensors": overdue_sensors,
+        "failed_calibrations": failed_calibrations,
+        "completed_requests": completed_requests,
+        "avg_turnaround": avg_turnaround,
+        "technician_workload": technician_workload,
+        "monthly": monthly,
+        "max_monthly": max_monthly,
+        "recent_activity": recent_activity,
+    }
     return render_template("home.html", counts=counts, attention=attention[:8],
                            attention_total=len(attention), recent=recent, stations=stations_,
                            sensors=[r["sensor_id"] for r in rows], greeting=greeting,
-                           today=today, bs_today=bs_today, std_issues=std_issues)
+                           today=today, bs_today=bs_today, std_issues=std_issues,
+                           dashboard=dashboard)
 
 
 # ----------------------- calibration work orders ----------------------------
