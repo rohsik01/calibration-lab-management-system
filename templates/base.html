@@ -101,10 +101,10 @@
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
       {% endif %}
       <div class="grp">{{ tr("Records") }}</div>
-      <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Calibration requests") }}</a>
+      <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Calibration requests") }}{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
       {% if g.user.role != 'general_user' %}
       <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
-      <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}</a>
+      <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Alerts") }}
         {% if operational_alerts %}<span class="pill">{{ operational_alerts }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}
@@ -118,7 +118,7 @@
       <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
       {% endif %}
       {% if g.user.role == 'admin' %}
-      <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}</a>
+      <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
       <div class="grp">{{ tr("Administration") }}</div>
       <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users") }}</a>
       {% endif %}
