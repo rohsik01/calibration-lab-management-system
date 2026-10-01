@@ -21,6 +21,6 @@
 </form>
 </div>
 {% endif %}
-<div class="scroll"><table class="js-table"><tr><th>{{ tr("Station ID") }}</th><th>{{ tr("Station Name") }}</th><th>{{ tr("Location") }}</th><th>{{ tr("Type") }}</th><th></th></tr>
-{% for r in rows %}<tr><td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td>{{ r.type or 'Meteorological' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a></td></tr>
-{% else %}<tr><td colspan="5">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<div class="scroll"><table class="js-table"><tr><th>{{ tr("Station ID") }}</th><th>{{ tr("Station Name") }}</th><th>{{ tr("Location") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Last edited") }}</th><th></th></tr>
+{% for r in rows %}<tr><td>{{ r.station_id }}</td><td>{{ r.name }}</td><td>{{ r.location or '—' }}</td><td>{{ r.type or 'Meteorological' }}</td><td>{{ r.updated_at[:16].replace('T', ' ') if r.updated_at else '—' }}</td><td><a href="{{ url_for('export_download', station=r.station_id) }}">{{ tr("Export CSV") }}</a></td></tr>
+{% else %}<tr><td colspan="6">{{ tr("No stations yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
