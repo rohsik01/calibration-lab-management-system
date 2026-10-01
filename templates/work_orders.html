@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Work orders") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero">
+<div><h1>{{ tr("Calibration work orders") }}</h1><p class="sub">{% if g.user.role == 'admin' %}{{ tr("View and manage all technician assignments.") }}{% else %}{{ tr("Work assigned specifically to you by the administrator.") }}{% endif %}</p></div>
+{% if g.user.role == 'admin' %}<a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Review calibration requests") }}</a>{% endif %}
+</div>
+<div class="stats">
+{% for st in statuses %}
+<a class="stat {{ 'green' if st == 'COMPLETED' else 'amber' if st in ('IN PROGRESS','AWAITING REVIEW') else 'brand' if st == 'ASSIGNED' else 'grey' }}" href="{{ url_for('work_orders', status=st) }}"><span class="n">{{ counts[st] }}</span><span>{{ st }}</span></a>
+{% endfor %}
+</div>
+<div class="card">
+<form method="get" class="toolbar">
+<input name="q" value="{{ q }}" placeholder="{{ tr('Search work order, request, client, instrument or technician') }}">
+<select name="status"><option value="">{{ tr("All statuses") }}</option>{% for st in statuses %}<option value="{{ st }}" {{ 'selected' if status_filter == st }}>{{ st }}</option>{% endfor %}</select>
+<button class="btn">{{ tr("Filter") }}</button>
+{% if q or status_filter %}<a class="btn alt" href="{{ url_for('work_orders') }}">{{ tr("Clear") }}</a>{% endif %}
+</form>
+<div class="scroll"><table class="js-table">
+<tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument / service") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Assigned") }}</th><th>{{ tr("Target date") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
+{% for w in rows %}
+<tr>
+<td><a href="{{ url_for('work_order_detail', work_order_id=w.work_order_id) }}"><b>{{ w.work_order_no }}</b></a></td>
+<td><a href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ w.request_no }}</a></td>
+<td>{{ w.client_name }}</td>
+<td>{{ w.instrument_description }}<small class="hint">{{ w.requested_service }}</small></td>
+<td>{{ w.technician_name }}</td><td>{{ date_pair(w.assigned_at[:10]) }}</td><td>{{ date_pair(w.target_date) }}</td>
+<td><span class="badge {{ 'red' if w.priority == 'Urgent' else 'amber' if w.priority == 'High' else 'grey' }}">{{ w.priority }}</span></td>
+<td><span class="badge {{ 'green' if w.status == 'COMPLETED' else 'amber' if w.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ w.status }}</span></td>
+</tr>
+{% else %}<tr><td colspan="9" class="empty">{{ tr("No work orders found.") }}</td></tr>{% endfor %}
+</table></div>
+</div>
+{% endblock %}
