@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS sensors (
     unit TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS calibrations (
     cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sensor_id TEXT NOT NULL REFERENCES sensors(sensor_id),
+    sensor_id TEXT REFERENCES sensors(sensor_id),
     cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
     reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS calibration_requests (
     contact_phone TEXT,
     contact_email TEXT,
     sensor_id TEXT REFERENCES sensors(sensor_id),
+    pending_sensor_type TEXT, pending_manufacturer TEXT, pending_serial_number TEXT,
+    pending_interval_days INTEGER, pending_tolerance REAL, pending_unit TEXT,
+    pending_station_name TEXT, pending_station_location TEXT,
     instrument_description TEXT NOT NULL,
     requested_service TEXT NOT NULL,
     requested_range TEXT,
@@ -196,6 +199,33 @@ with sqlite3.connect(DB) as _c:
                    two_factor_enabled, totp_secret, recovery_codes FROM users""")
         _c.execute("DROP TABLE users")
         _c.execute("ALTER TABLE users_new RENAME TO users")
+    # Upgrade legacy calibration table to allow unregistered instruments during review.
+    _cal_sql = _c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='calibrations'").fetchone()[0]
+    if "sensor_id TEXT NOT NULL" in _cal_sql or "sensor_id INTEGER NOT NULL" in _cal_sql:
+        _c.execute("""CREATE TABLE calibrations_new (
+            cal_id INTEGER PRIMARY KEY AUTOINCREMENT, sensor_id TEXT REFERENCES sensors(sensor_id),
+            cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
+            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+            result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+            certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL)""")
+        _c.execute("""INSERT INTO calibrations_new
+            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,next_due FROM calibrations""")
+        _c.execute("DROP TABLE calibrations"); _c.execute("ALTER TABLE calibrations_new RENAME TO calibrations")
+    _req_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_requests)")]
+    for _col,_ddl in (("pending_sensor_type","TEXT"),("pending_manufacturer","TEXT"),("pending_serial_number","TEXT"),
+                       ("pending_interval_days","INTEGER"),("pending_tolerance","REAL"),("pending_unit","TEXT"),
+                       ("pending_station_name","TEXT"),("pending_station_location","TEXT")):
+        if _col not in _req_cols: _c.execute(f"ALTER TABLE calibration_requests ADD COLUMN {_col} {_ddl}")
+    _c.execute("""UPDATE calibration_requests SET
+        pending_sensor_type=(SELECT sensor_type FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_manufacturer=(SELECT manufacturer FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_serial_number=(SELECT serial_number FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_interval_days=(SELECT interval_days FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_tolerance=(SELECT tolerance FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_unit=(SELECT unit FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_station_name=(SELECT st.name FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id),
+        pending_station_location=(SELECT st.location FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id)
+        WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL)
     # upgrade older databases: record who performed each calibration
     if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
@@ -1183,20 +1213,36 @@ def new_calibration_request():
             sensor_id = f.get("sensor_id", "").strip() or None
             if sensor_id and not db.execute("SELECT 1 FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone():
                 raise ValueError("Selected sensor does not exist.")
+            pending = {
+                "sensor_type": f.get("pending_sensor_type","").strip(), "manufacturer": f.get("pending_manufacturer","").strip(),
+                "serial_number": f.get("pending_serial_number","").strip(), "interval_days": f.get("pending_interval_days","").strip(),
+                "tolerance": f.get("pending_tolerance","").strip(), "unit": f.get("pending_unit","").strip(),
+                "station_name": f.get("pending_station_name","").strip(), "station_location": f.get("pending_station_location","").strip()
+            }
+            if not sensor_id:
+                if not pending["sensor_type"] or not pending["serial_number"] or not pending["station_name"]:
+                    raise ValueError("For a new sensor, sensor type, serial number and station name are required.")
+                try: pending["interval_days"]=int(pending["interval_days"] or 365); pending["tolerance"]=float(pending["tolerance"] or 0.5)
+                except ValueError: raise ValueError("Enter valid calibration interval and tolerance for the new sensor.")
+                if pending["interval_days"] <= 0 or pending["tolerance"] < 0: raise ValueError("Calibration interval must be positive and tolerance cannot be negative.")
+            else: pending={k:None for k in pending}
             received_iso = received.isoformat()
             request_no = next_request_number(db, received_iso)
             now = datetime.now().isoformat(timespec="seconds")
             cur = db.execute(
                 """INSERT INTO calibration_requests
                 (request_no, client_name, contact_person, contact_phone, contact_email,
-                 sensor_id, instrument_description, requested_service, requested_range,
+                 sensor_id, pending_sensor_type, pending_manufacturer, pending_serial_number,
+                 pending_interval_days, pending_tolerance, pending_unit, pending_station_name, pending_station_location,
+                 instrument_description, requested_service, requested_range,
                  received_date, requested_due_date, priority, condition_received, remarks,
                  status, created_by, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (request_no, client, f.get("contact_person","").strip(),
-                 f.get("contact_phone","").strip(), f.get("contact_email","").strip(),
-                 sensor_id, description, service, f.get("requested_range","").strip(),
-                 received_iso, due.isoformat() if due else None, priority,
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (request_no, client, f.get("contact_person","").strip(), f.get("contact_phone","").strip(),
+                 f.get("contact_email","").strip(), sensor_id, pending["sensor_type"], pending["manufacturer"],
+                 pending["serial_number"], pending["interval_days"], pending["tolerance"], pending["unit"],
+                 pending["station_name"], pending["station_location"], description, service,
+                 f.get("requested_range","").strip(), received_iso, due.isoformat() if due else None, priority,
                  f.get("condition_received","").strip(), f.get("remarks","").strip(),
                  "RECEIVED", g.user["full_name"], now, now)
             )
