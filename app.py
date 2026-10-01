@@ -82,6 +82,28 @@ CREATE TABLE IF NOT EXISTS calibration_points (
     point_no INTEGER NOT NULL,
     reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')));
+CREATE TABLE IF NOT EXISTS calibration_requests (
+    request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_no TEXT UNIQUE NOT NULL,
+    client_name TEXT NOT NULL,
+    contact_person TEXT,
+    contact_phone TEXT,
+    contact_email TEXT,
+    sensor_id TEXT REFERENCES sensors(sensor_id),
+    instrument_description TEXT NOT NULL,
+    requested_service TEXT NOT NULL,
+    requested_range TEXT,
+    received_date TEXT NOT NULL,
+    requested_due_date TEXT,
+    priority TEXT NOT NULL DEFAULT 'Normal' CHECK (priority IN ('Low','Normal','High','Urgent')),
+    condition_received TEXT,
+    remarks TEXT,
+    status TEXT NOT NULL DEFAULT 'RECEIVED'
+        CHECK (status IN ('RECEIVED','REVIEWED','ASSIGNED','IN CALIBRATION','UNDER REVIEW','COMPLETED','CANCELLED')),
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 LATEST = """
@@ -143,7 +165,7 @@ with sqlite3.connect(DB) as _c:
                    SELECT s.tolerance FROM calibrations c JOIN sensors s USING(sensor_id)
                    WHERE c.cal_id = calibration_points.cal_id) WHERE tolerance IS NULL""")
     # upgrade older databases: link calibrations to the reference-standards register
-    for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT")):
+    for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT"), ("request_id", "INTEGER")):
         if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
             _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
 
@@ -260,6 +282,31 @@ def next_certificate(db, cal_date):
     n = db.execute("SELECT COUNT(*) FROM calibrations WHERE certificate_no LIKE ?",
                    (f"CAL-{cal_date[:4]}-%",)).fetchone()[0]
     return f"CAL-{cal_date[:4]}-{n + 1:04d}"
+
+
+def next_request_number(db, received_date):
+    """Generate the next laboratory calibration request number for the year."""
+    year = received_date[:4]
+    row = db.execute(
+        "SELECT request_no FROM calibration_requests WHERE request_no LIKE ? "
+        "ORDER BY request_id DESC LIMIT 1", (f"REQ-{year}-%",)
+    ).fetchone()
+    try:
+        n = int(row["request_no"].rsplit("-", 1)[1]) + 1 if row else 1
+    except (ValueError, IndexError):
+        n = db.execute("SELECT COUNT(*) FROM calibration_requests WHERE request_no LIKE ?",
+                       (f"REQ-{year}-%",)).fetchone()[0] + 1
+    candidate = f"REQ-{year}-{n:04d}"
+    while db.execute("SELECT 1 FROM calibration_requests WHERE request_no=?", (candidate,)).fetchone():
+        n += 1
+        candidate = f"REQ-{year}-{n:04d}"
+    return candidate
+
+
+REQUEST_STATUSES = (
+    "RECEIVED", "REVIEWED", "ASSIGNED", "IN CALIBRATION",
+    "UNDER REVIEW", "COMPLETED", "CANCELLED"
+)
 
 
 # ------------------------------- authentication -------------------------------
@@ -700,6 +747,147 @@ def index():
                            attention_total=len(attention), recent=recent, stations=stations_,
                            sensors=[r["sensor_id"] for r in rows], greeting=greeting,
                            today=today, bs_today=bs_today, std_issues=std_issues)
+
+
+# -------------------------- calibration requests ---------------------------
+
+@app.route("/requests")
+def calibration_requests():
+    db = get_db()
+    q = request.args.get("q", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    sql = """
+        SELECT r.*, s.sensor_type, s.serial_number, st.name AS station
+        FROM calibration_requests r
+        LEFT JOIN sensors s ON s.sensor_id = r.sensor_id
+        LEFT JOIN stations st ON st.station_id = s.station_id
+    """
+    where, params = [], []
+    if q:
+        where.append("""(r.request_no LIKE ? OR r.client_name LIKE ? OR
+                         r.instrument_description LIKE ? OR COALESCE(r.contact_person,'') LIKE ? OR
+                         COALESCE(s.serial_number,'') LIKE ?)""")
+        like = f"%{q}%"
+        params.extend([like, like, like, like, like])
+    if status_filter in REQUEST_STATUSES:
+        where.append("r.status=?")
+        params.append(status_filter)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY r.request_id DESC"
+    rows = db.execute(sql, params).fetchall()
+    counts = {st: db.execute("SELECT COUNT(*) FROM calibration_requests WHERE status=?", (st,)).fetchone()[0]
+              for st in REQUEST_STATUSES}
+    return render_template("requests.html", rows=rows, counts=counts,
+                           statuses=REQUEST_STATUSES, q=q, status_filter=status_filter)
+
+
+@app.route("/requests/new", methods=["GET", "POST"])
+def new_calibration_request():
+    db = get_db()
+    sensors_ = db.execute(
+        "SELECT s.sensor_id, s.sensor_type, s.manufacturer, s.serial_number, st.name AS station "
+        "FROM sensors s JOIN stations st USING(station_id) ORDER BY s.sensor_id"
+    ).fetchall()
+    if request.method == "POST":
+        f = request.form
+        try:
+            client = f.get("client_name", "").strip()
+            description = f.get("instrument_description", "").strip()
+            service = f.get("requested_service", "").strip()
+            received = date.fromisoformat(f.get("received_date", "").strip())
+            due_text = f.get("requested_due_date", "").strip()
+            due = date.fromisoformat(due_text) if due_text else None
+            priority = f.get("priority", "Normal").strip()
+            if not client or not description or not service:
+                raise ValueError("Client, instrument description and requested service are required.")
+            if priority not in ("Low", "Normal", "High", "Urgent"):
+                raise ValueError("Invalid priority.")
+            if due and due < received:
+                raise ValueError("Requested due date cannot be before the received date.")
+            sensor_id = f.get("sensor_id", "").strip() or None
+            if sensor_id and not db.execute("SELECT 1 FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone():
+                raise ValueError("Selected sensor does not exist.")
+            received_iso = received.isoformat()
+            request_no = next_request_number(db, received_iso)
+            now = datetime.now().isoformat(timespec="seconds")
+            cur = db.execute(
+                """INSERT INTO calibration_requests
+                (request_no, client_name, contact_person, contact_phone, contact_email,
+                 sensor_id, instrument_description, requested_service, requested_range,
+                 received_date, requested_due_date, priority, condition_received, remarks,
+                 status, created_by, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (request_no, client, f.get("contact_person","").strip(),
+                 f.get("contact_phone","").strip(), f.get("contact_email","").strip(),
+                 sensor_id, description, service, f.get("requested_range","").strip(),
+                 received_iso, due.isoformat() if due else None, priority,
+                 f.get("condition_received","").strip(), f.get("remarks","").strip(),
+                 "RECEIVED", g.user["full_name"], now, now)
+            )
+            db.commit()
+            flash(f"Calibration request {request_no} was created.")
+            return redirect(url_for("calibration_request", request_id=cur.lastrowid))
+        except ValueError as e:
+            flash(str(e), "error")
+    return render_template("request_form.html", sensors=sensors_, today=date.today().isoformat())
+
+
+@app.route("/requests/<int:request_id>")
+def calibration_request(request_id):
+    db = get_db()
+    row = db.execute(
+        """SELECT r.*, s.sensor_type, s.manufacturer, s.serial_number,
+                  s.unit, st.name AS station, st.location AS station_location
+           FROM calibration_requests r
+           LEFT JOIN sensors s ON s.sensor_id=r.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           WHERE r.request_id=?""", (request_id,)
+    ).fetchone()
+    if not row:
+        abort(404)
+    calibrations = db.execute(
+        """SELECT c.*, s.sensor_type, s.unit
+           FROM calibrations c JOIN sensors s USING(sensor_id)
+           WHERE c.request_id=? ORDER BY c.cal_id DESC""", (request_id,)
+    ).fetchall()
+    return render_template("request_detail.html", r=row, calibrations=calibrations,
+                           statuses=REQUEST_STATUSES)
+
+
+@app.route("/requests/<int:request_id>/status", methods=["POST"])
+@admin_required
+def update_calibration_request_status(request_id):
+    new_status = request.form.get("status", "").strip()
+    if new_status not in REQUEST_STATUSES:
+        flash("Invalid calibration request status.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    db = get_db()
+    row = db.execute("SELECT request_no FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
+    if not row:
+        abort(404)
+    db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
+               (new_status, datetime.now().isoformat(timespec="seconds"), request_id))
+    db.commit()
+    flash(f"Request {row['request_no']} status changed to {new_status}.")
+    return redirect(url_for("calibration_request", request_id=request_id))
+
+
+@app.route("/requests/<int:request_id>/delete", methods=["POST"])
+@admin_required
+def delete_calibration_request(request_id):
+    db = get_db()
+    row = db.execute("SELECT request_no FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
+    if not row:
+        abort(404)
+    linked = db.execute("SELECT COUNT(*) FROM calibrations WHERE request_id=?", (request_id,)).fetchone()[0]
+    if linked:
+        flash(f"Request {row['request_no']} cannot be deleted because it is linked to {linked} calibration record(s).", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    db.execute("DELETE FROM calibration_requests WHERE request_id=?", (request_id,))
+    db.commit()
+    flash(f"Request {row['request_no']} was deleted.")
+    return redirect(url_for("calibration_requests"))
 
 
 @app.route("/register")
@@ -1216,9 +1404,10 @@ def calibrate(sensor_id):
         cur = db.execute(
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
             "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
-            "standard_id,standard_details) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "standard_id,standard_details,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
-             result, cert, due, g.user["full_name"], len(points), std_id, std_details))
+             result, cert, due, g.user["full_name"], len(points), std_id, std_details,
+             int(f["request_id"]) if f.get("request_id","").isdigit() else None))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
@@ -1231,7 +1420,12 @@ def calibrate(sensor_id):
                          cert=cert), "ok")
         return redirect(url_for("certificate", cert=cert))
     standards_ = db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
-    return render_template("calibrate.html", s=s, today=date.today().isoformat(), standards=standards_)
+    requests_ = db.execute(
+        "SELECT request_id, request_no, client_name, instrument_description FROM calibration_requests "
+        "WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY request_id DESC"
+    ).fetchall()
+    return render_template("calibrate.html", s=s, today=date.today().isoformat(),
+                           standards=standards_, requests=requests_)
 
 
 @app.route("/certificate/<cert>")
