@@ -1157,7 +1157,7 @@ def calibration_requests():
 
 @app.route("/requests/new", methods=["GET", "POST"])
 def new_calibration_request():
-    if g.user["role"] == "admin":
+    if g.user["role"] != "general_user":
         abort(403)
     db = get_db()
     sensors_ = db.execute(
