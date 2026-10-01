@@ -1,7 +1,6 @@
 {% extends "base.html" %}{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no }}{% endblock %}
 {% block banner %}{% endblock %}
 {% block content %}
-{% block content %}
 <style>
   .certificate-page{width:100%;max-width:190mm;margin:0 auto;background:#fff;padding:10mm 11mm;overflow:hidden}
   .certificate-page table{table-layout:fixed;width:100%;font-size:11px}
@@ -56,7 +55,7 @@
 <table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
 {% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
 <td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-top:56px">
+<div class="signature">
   <div style="border-top:1px solid #333;padding-top:8px">
     <strong>{{ tr("Prepared by") }}</strong><br>{{ r.performed_by or '—' }}
   </div>
