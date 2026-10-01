@@ -946,6 +946,55 @@ def work_order_detail(work_order_id):
                            calibration=calibration, points=points, reviews=reviews)
 
 
+@app.route("/requests/bulk-assign", methods=["POST"])
+@admin_required
+def bulk_assign_calibration_requests():
+    db=get_db()
+    ids=list(dict.fromkeys(int(x) for x in request.form.getlist("request_ids") if str(x).isdigit()))
+    tech_id=request.form.get("technician_id","").strip()
+    tech=db.execute("SELECT user_id,full_name FROM users WHERE user_id=? AND role='technician' AND active=1",
+                    (tech_id,)).fetchone() if tech_id.isdigit() else None
+    if not ids or not tech:
+        flash("Select at least one request and an active technician.","error"); return redirect(url_for("calibration_requests"))
+    target_text=request.form.get("target_date","").strip()
+    try: target=date.fromisoformat(target_text).isoformat() if target_text else None
+    except ValueError:
+        flash("Enter a valid target date.","error"); return redirect(url_for("calibration_requests"))
+    method=request.form.get("calibration_method","").strip()
+    std_text=request.form.get("standard_id","").strip(); standard_id=None
+    if std_text:
+        if not std_text.isdigit(): flash("Select a valid reference standard.","error"); return redirect(url_for("calibration_requests"))
+        st=db.execute("SELECT standard_id FROM reference_standards WHERE standard_id=? AND active=1",(int(std_text),)).fetchone()
+        if not st: flash("Select an active reference standard.","error"); return redirect(url_for("calibration_requests"))
+        standard_id=st["standard_id"]
+    now=datetime.now().isoformat(timespec="seconds"); assigned=0; skipped=0
+    with db:
+        for rid in ids:
+            req=db.execute("SELECT * FROM calibration_requests WHERE request_id=?",(rid,)).fetchone()
+            if not req or req["status"] in ("COMPLETED","CANCELLED","UNDER REVIEW"):
+                skipped+=1; continue
+            existing=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(rid,)).fetchone()
+            target_use=target or req["requested_due_date"]
+            if existing:
+                db.execute("""UPDATE calibration_work_orders SET assigned_technician_id=?,assigned_by=?,assigned_at=?,
+                    target_date=?,calibration_method=?,standard_id=?,instructions=?,
+                    status=CASE WHEN status IN ('ASSIGNED','CANCELLED') THEN 'ASSIGNED' ELSE status END,updated_at=?
+                    WHERE request_id=?""",
+                    (tech["user_id"],g.user["user_id"],now,target_use,method,standard_id,
+                     request.form.get("instructions","").strip(),now,rid))
+            else:
+                wo=next_work_order_number(db,now[:10])
+                db.execute("""INSERT INTO calibration_work_orders
+                    (work_order_no,request_id,assigned_technician_id,assigned_by,assigned_at,target_date,
+                     calibration_method,standard_id,instructions,status,created_at,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,'ASSIGNED',?,?)""",
+                    (wo,rid,tech["user_id"],g.user["user_id"],now,target_use,method,standard_id,
+                     request.form.get("instructions","").strip(),now,now))
+            db.execute("UPDATE calibration_requests SET status='ASSIGNED',updated_at=? WHERE request_id=?",(now,rid))
+            assigned+=1
+    flash(f"{assigned} request(s) assigned to {tech['full_name']}."+(f" Skipped {skipped} ineligible request(s)." if skipped else ""))
+    return redirect(url_for("calibration_requests"))
+
 @app.route("/requests/<int:request_id>/assign", methods=["POST"])
 @admin_required
 def assign_calibration_request(request_id):
@@ -1138,6 +1187,37 @@ def decide_calibration_review(review_id):
             (decision, comments, g.user["user_id"], now, review_id)
         )
         if decision == "APPROVED":
+            req = db.execute(
+                """SELECT r.* FROM calibration_requests r
+                   JOIN calibration_work_orders w ON w.request_id=r.request_id
+                   WHERE w.work_order_id=?""", (review["work_order_id"],)
+            ).fetchone()
+            if req and not req["sensor_id"]:
+                if not req["pending_sensor_type"] or not req["pending_serial_number"] or not req["pending_station_name"]:
+                    flash("Cannot approve: pending sensor details are incomplete.", "error")
+                    return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+                station = db.execute("SELECT station_id FROM stations WHERE name=?", (req["pending_station_name"],)).fetchone()
+                if station:
+                    station_id = station["station_id"]
+                else:
+                    station_id = db.execute(
+                        "INSERT INTO stations(name,location,type,updated_at) VALUES (?,?,?,?)",
+                        (req["pending_station_name"], req["pending_station_location"] or "", "Meteorological", now)
+                    ).lastrowid
+                if db.execute("SELECT 1 FROM sensors WHERE serial_number=?", (req["pending_serial_number"],)).fetchone():
+                    flash("Cannot approve: a sensor with this serial number already exists.", "error")
+                    return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+                sensor_id = _station_sensor_id(db, station_id, req["pending_sensor_type"])
+                db.execute(
+                    "INSERT INTO sensors(sensor_id,station_id,sensor_type,manufacturer,serial_number,interval_days,tolerance,unit) VALUES (?,?,?,?,?,?,?,?)",
+                    (sensor_id,station_id,req["pending_sensor_type"],req["pending_manufacturer"] or "",
+                     req["pending_serial_number"],req["pending_interval_days"] or 365,
+                     req["pending_tolerance"] if req["pending_tolerance"] is not None else 0.5,req["pending_unit"] or "")
+                )
+                db.execute("UPDATE calibration_requests SET sensor_id=?, updated_at=? WHERE request_id=?",
+                           (sensor_id,now,req["request_id"]))
+                db.execute("UPDATE calibrations SET sensor_id=? WHERE cal_id=? AND sensor_id IS NULL",
+                           (sensor_id,review["cal_id"]))
             db.execute("UPDATE calibration_work_orders SET status='COMPLETED', updated_at=? WHERE work_order_id=?",
                        (now, review["work_order_id"]))
             db.execute("UPDATE calibration_requests SET status='COMPLETED', updated_at=? WHERE request_id=?",
