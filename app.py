@@ -2070,7 +2070,7 @@ def calibrate_pending_request(request_id):
             cur=db.execute("""INSERT INTO calibrations
                 (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
                  next_due,performed_by,n_points,standard_id,standard_details,request_id)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,request_id))
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
