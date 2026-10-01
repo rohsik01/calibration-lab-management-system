@@ -6,4 +6,5 @@
 <form method="post">{{ csrf_input() }}
 <p><label>{{ tr("Username") }}</label><input name="username" autofocus required></p>
 <p><label>{{ tr("Password") }}</label><input name="password" type="password" required></p>
-<p><button class="btn" style="width:100%">{{ tr("Sign in") }}</button></p></form></div>{% endblock %}
+<p><button class="btn" style="width:100%">{{ tr("Sign in") }}</button></p>
+<p class="hint" style="text-align:center"><a href="{{ url_for('calendar_view') }}">{{ tr("Open Nepali calendar") }}</a></p></form></div>{% endblock %}
