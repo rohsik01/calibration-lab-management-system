@@ -100,6 +100,7 @@
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
       <div class="grp">{{ tr("Records") }}</div>
       <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
+      <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Calibration requests") }}</a>
       <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}
         {% if nav_alerts %}<span class="pill">{{ nav_alerts }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}
