@@ -17,8 +17,22 @@
 <tr><th>{{ tr("Priority") }}</th><th>{{ tr("Type") }}</th><th>{{ tr("Alert") }}</th><th>{{ tr("Details") }}</th><th>{{ tr("Action") }}</th></tr>
 {% for a in alerts %}<tr>
 <td><span class="badge {{ 'red' if a.severity == 'critical' else 'amber' if a.severity == 'warning' else 'grey' }}">{{ tr(a.severity|capitalize) }}</span></td>
-<td>{{ tr(a.kind|replace("_"," ")|title) }}</td><td><strong>{{ tr(a.title) }}</strong></td><td>{{ a.description }}</td>
-<td>{% if a.endpoint %}<a class="btn alt" style="padding:4px 10px" href="{{ url_for(a.endpoint, **a) }}">{{ tr("Open") }} →</a>{% endif %}</td>
+<td>{{ tr(a.kind|replace("_"," ")|title) }}</td>
+<td><strong>{{ tr(a.title) }}</strong></td>
+<td>{{ a.description }}</td>
+<td>
+{% if a.endpoint %}
+  {% if a.endpoint == 'sensor' and a.sensor_id %}
+    <a class="btn alt" style="padding:4px 10px" href="{{ url_for('sensor', sensor_id=a.sensor_id) }}">{{ tr("Open") }} →</a>
+  {% elif a.endpoint == 'calibration_reviews' and a.review_id %}
+    <a class="btn alt" style="padding:4px 10px" href="{{ url_for('calibration_reviews', review_id=a.review_id) }}">{{ tr("Open") }} →</a>
+  {% elif a.endpoint == 'work_order_detail' and a.work_order_id %}
+    <a class="btn alt" style="padding:4px 10px" href="{{ url_for('work_order_detail', work_order_id=a.work_order_id) }}">{{ tr("Open") }} →</a>
+  {% elif a.endpoint == 'calibration_request' and a.request_id %}
+    <a class="btn alt" style="padding:4px 10px" href="{{ url_for('calibration_request', request_id=a.request_id) }}">{{ tr("Open") }} →</a>
+  {% endif %}
+{% endif %}
+</td>
 </tr>{% endfor %}</table></div></div>
 {% else %}
 <div class="card"><div class="empty" style="padding:50px"><div style="font-size:42px">✅</div><h2>{{ tr("No operational alerts") }}</h2><div class="sub">{{ tr("There are no overdue sensors, pending reviews or assigned work requiring attention.") }}</div></div></div>
