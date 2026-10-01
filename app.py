@@ -1261,8 +1261,11 @@ def calibration_requests():
     rows = db.execute(sql, params).fetchall()
     counts = {st: db.execute("SELECT COUNT(*) FROM calibration_requests WHERE status=?", (st,)).fetchone()[0]
               for st in REQUEST_STATUSES}
+    technicians = db.execute("SELECT user_id, full_name, username FROM users WHERE role='technician' AND active=1 ORDER BY full_name").fetchall()
+    standards = db.execute("SELECT standard_id, code, name, valid_until FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     return render_template("requests.html", rows=rows, counts=counts,
-                           statuses=REQUEST_STATUSES, q=q, status_filter=status_filter)
+                           statuses=REQUEST_STATUSES, q=q, status_filter=status_filter,
+                           technicians=technicians, standards=standards)
 
 
 @app.route("/requests/new", methods=["GET", "POST"])
