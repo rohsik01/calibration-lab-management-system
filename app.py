@@ -1307,19 +1307,12 @@ def new_calibration_request():
             sensor_id = f.get("sensor_id", "").strip() or None
             if sensor_id and not db.execute("SELECT 1 FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone():
                 raise ValueError("Selected sensor does not exist.")
-            pending = {
-                "sensor_type": f.get("pending_sensor_type","").strip(), "manufacturer": f.get("pending_manufacturer","").strip(),
-                "serial_number": f.get("pending_serial_number","").strip(), "interval_days": f.get("pending_interval_days","").strip(),
-                "tolerance": f.get("pending_tolerance","").strip(), "unit": f.get("pending_unit","").strip(),
-                "station_name": f.get("pending_station_name","").strip(), "station_location": f.get("pending_station_location","").strip()
-            }
-            if not sensor_id:
-                if not pending["sensor_type"] or not pending["serial_number"] or not pending["station_name"]:
-                    raise ValueError("For a new sensor, sensor type, serial number and station name are required.")
-                try: pending["interval_days"]=int(pending["interval_days"] or 365); pending["tolerance"]=float(pending["tolerance"] or 0.5)
-                except ValueError: raise ValueError("Enter valid calibration interval and tolerance for the new sensor.")
-                if pending["interval_days"] <= 0 or pending["tolerance"] < 0: raise ValueError("Calibration interval must be positive and tolerance cannot be negative.")
-            else: pending={k:None for k in pending}
+            # General users submit only the calibration request. For an unregistered
+            # sensor, the technician records the sensor/registration details later.
+            pending = {k: None for k in (
+                "sensor_type", "manufacturer", "serial_number", "interval_days",
+                "tolerance", "unit", "station_name", "station_location"
+            )}
             received_iso = received.isoformat()
             request_no = next_request_number(db, received_iso)
             now = datetime.now().isoformat(timespec="seconds")
@@ -2031,6 +2024,22 @@ def calibrate_pending_request(request_id):
         return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
     if request.method=="POST":
         try:
+            # The technician must complete the registration details for an
+            # unregistered sensor before entering its calibration measurements.
+            sensor_type = request.form.get("sensor_type", "").strip()
+            manufacturer = request.form.get("manufacturer", "").strip()
+            serial_number = request.form.get("serial_number", "").strip()
+            station_name = request.form.get("station_name", "").strip()
+            station_location = request.form.get("station_location", "").strip()
+            unit = request.form.get("unit", "").strip()
+            interval_days = int(request.form.get("interval_days", "365").strip() or 365)
+            tolerance = float(request.form.get("sensor_tolerance", "0.5").strip() or 0.5)
+            if not sensor_type or not serial_number or not station_name:
+                raise ValueError("Sensor type, serial number and station name are required.")
+            if interval_days <= 0 or tolerance < 0:
+                raise ValueError("Calibration interval must be positive and tolerance cannot be negative.")
+            if db.execute("SELECT 1 FROM sensors WHERE serial_number=? COLLATE NOCASE", (serial_number,)).fetchone():
+                raise ValueError("A sensor with this serial number already exists.")
             cal_date=date.fromisoformat(request.form.get("cal_date","").strip()).isoformat()
             refs=[float(x) for x in request.form.getlist("reference_value")]
             meass=[float(x) for x in request.form.getlist("measured_value")]
@@ -2047,8 +2056,17 @@ def calibrate_pending_request(request_id):
             elif not std_text: raise ValueError("Choose a reference standard or type its name.")
             if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
                 raise ValueError("A calibration record already exists for this request.")
+            # Keep the sensor unregistered until administrator approval.
+            # These details live on the request while the calibration is under review.
+            db.execute("""UPDATE calibration_requests SET
+                pending_sensor_type=?, pending_manufacturer=?, pending_serial_number=?,
+                pending_interval_days=?, pending_tolerance=?, pending_unit=?,
+                pending_station_name=?, pending_station_location=?, updated_at=?
+                WHERE request_id=?""",
+                       (sensor_type, manufacturer, serial_number, interval_days, tolerance, unit,
+                        station_name, station_location, datetime.now().isoformat(timespec="seconds"), request_id))
             cert=next_certificate(db,cal_date)
-            due=(date.fromisoformat(cal_date)+timedelta(days=int(req["pending_interval_days"] or 365))).isoformat()
+            due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
                 (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
                  next_due,performed_by,n_points,standard_id,standard_details,request_id)
