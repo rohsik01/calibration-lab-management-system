@@ -462,8 +462,49 @@ def nav_counts():
                                  WHERE assigned_technician_id=? AND status='ASSIGNED'""",
                               (g.user["user_id"],)).fetchone()[0]
         operational_alerts = sensor_alerts + assigned
+    # Sidebar workflow counters.
+    # Admins see all actionable new requests, active work orders and pending reviews.
+    # Technicians see only their own actionable work orders; general users see
+    # new requests relevant to their own submitted requests.
+    if g.user["role"] == "admin":
+        new_calibration_requests = db.execute(
+            "SELECT COUNT(*) FROM calibration_requests WHERE status='RECEIVED'"
+        ).fetchone()[0]
+        work_order_count = db.execute(
+            "SELECT COUNT(*) FROM calibration_work_orders "
+            "WHERE status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')"
+        ).fetchone()[0]
+        calibration_review_count = pending_reviews
+    elif g.user["role"] == "technician":
+        new_calibration_requests = db.execute(
+            """SELECT COUNT(*) FROM calibration_requests r
+               JOIN calibration_work_orders w ON w.request_id=r.request_id
+               WHERE w.assigned_technician_id=?
+                 AND r.status IN ('ASSIGNED','IN CALIBRATION')""",
+            (g.user["user_id"],)
+        ).fetchone()[0]
+        work_order_count = db.execute(
+            """SELECT COUNT(*) FROM calibration_work_orders
+               WHERE assigned_technician_id=?
+                 AND status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')""",
+            (g.user["user_id"],)
+        ).fetchone()[0]
+        calibration_review_count = 0
+    else:
+        new_calibration_requests = db.execute(
+            """SELECT COUNT(*) FROM calibration_requests
+               WHERE created_by=?
+                 AND status IN ('RECEIVED','REVIEWED','ASSIGNED','IN CALIBRATION','UNDER REVIEW')""",
+            (g.user["full_name"],)
+        ).fetchone()[0]
+        work_order_count = 0
+        calibration_review_count = 0
+
     return {"nav_alerts": sensor_alerts, "std_alerts": standard_alerts,
-            "operational_alerts": operational_alerts}
+            "operational_alerts": operational_alerts,
+            "new_calibration_requests": new_calibration_requests,
+            "work_order_count": work_order_count,
+            "calibration_review_count": calibration_review_count}
 
 
 def next_certificate(db, cal_date):
