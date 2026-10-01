@@ -123,6 +123,16 @@ CREATE TABLE IF NOT EXISTS calibration_work_orders (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS calibration_request_status_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id INTEGER NOT NULL REFERENCES calibration_requests(request_id) ON DELETE CASCADE,
+    old_status TEXT,
+    new_status TEXT NOT NULL,
+    changed_by INTEGER REFERENCES users(user_id),
+    changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    comments TEXT
+);
+
 CREATE TABLE IF NOT EXISTS calibration_review_history (
     review_id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id),
