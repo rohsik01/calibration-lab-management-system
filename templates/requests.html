@@ -24,11 +24,27 @@
     <button class="btn">{{ tr("Filter") }}</button>
     {% if q or status_filter %}<a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Clear") }}</a>{% endif %}
   </form>
+  {% if g.user.role == 'admin' %}
+  <form method="post" action="{{ url_for('bulk_assign_calibration_requests') }}" id="bulkAssign">
+  {{ csrf_input() }}
+  <div class="card" style="margin:14px 0;background:#f8fafd">
+    <h3>{{ tr("Bulk assignment") }}</h3>
+    <div class="grid">
+      <div><label>{{ tr("Technician") }}</label><select name="technician_id" required><option value="">{{ tr("Select technician") }}</option>{% for t in technicians %}<option value="{{ t.user_id }}">{{ t.full_name }} ({{ t.username }})</option>{% endfor %}</select></div>
+      <div><label>{{ tr("Target completion date") }}</label><input type="date" name="target_date"></div>
+      <div><label>{{ tr("Calibration method / procedure") }}</label><input name="calibration_method"></div>
+      <div><label>{{ tr("Reference standard") }}</label><select name="standard_id"><option value="">{{ tr("Select later / not specified") }}</option>{% for s in standards %}<option value="{{ s.standard_id }}">{{ s.code }} — {{ s.name }}</option>{% endfor %}</select></div>
+    </div>
+    <div style="margin-top:10px"><label>{{ tr("Technician instructions") }}</label><textarea name="instructions" rows="2"></textarea></div>
+    <button class="btn" style="margin-top:10px" onclick="return confirm('{{ tr("Assign all selected requests?") }}')">{{ tr("Assign selected requests") }}</button>
+  </div>
+  {% endif %}
   <div class="scroll">
     <table class="js-table">
-      <tr><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
+      <tr>{% if g.user.role == 'admin' %}<th><input type="checkbox" id="selectAll"></th>{% endif %}<th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
       {% for r in rows %}
       <tr>
+        {% if g.user.role == 'admin' %}<td><input type="checkbox" name="request_ids" value="{{ r.request_id }}" class="request-check"></td>{% endif %}
         <td><a href="{{ url_for('calibration_request', request_id=r.request_id) }}"><b>{{ r.request_no }}</b></a></td>
         <td>{{ r.client_name }}{% if r.contact_person %}<small class="hint">{{ r.contact_person }}</small>{% endif %}</td>
         <td>{{ r.instrument_description }}</td>
@@ -40,5 +56,10 @@
       {% else %}<tr><td colspan="8" class="empty">{{ tr("No calibration requests found.") }}</td></tr>{% endfor %}
     </table>
   </div>
+  {% if g.user.role == 'admin' %}</form>
+  <script>
+  const all=document.getElementById('selectAll');
+  if(all) all.addEventListener('change',()=>document.querySelectorAll('.request-check').forEach(x=>x.checked=all.checked));
+  </script>{% endif %}
 </div>
 {% endblock %}
