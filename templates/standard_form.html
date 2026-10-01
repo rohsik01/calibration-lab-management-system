@@ -14,4 +14,23 @@
 <div><label>{{ tr("Valid until (AD)") }}</label><input type="date" name="valid_until" value="{{ x.valid_until }}" required></div>
 {% if editing %}<div><label>{{ tr("Active") }}</label><label style="color:inherit"><input type="checkbox" name="active" value="1" {{ 'checked' if x.active }} style="width:auto"> {{ tr("Available for new calibrations") }}</label></div>{% endif %}
 </div><p><button class="btn">{{ tr("Save") }}</button>
-<a class="btn alt" href="{{ url_for('standard', sid=sid) if editing else url_for('standards') }}">{{ tr("Cancel") }}</a></p></form></div>{% endblock %}
+<a class="btn alt" href="{{ url_for('standard', sid=sid) if editing else url_for('standards') }}">{{ tr("Cancel") }}</a></p></form></div>
+<script>
+async function showBs(name, output) {
+  const input = document.querySelector('[name="' + name + '"]');
+  const out = document.getElementById(output);
+  if (!input || !out) return;
+  async function update() {
+    if (!input.value) return;
+    try {
+      const r = await fetch('{{ url_for("api_bs_date") }}?ad=' + encodeURIComponent(input.value));
+      const d = await r.json();
+      if (d.bs) out.textContent = d.bs + ' BS';
+    } catch (e) {}
+  }
+  input.addEventListener('change', update);
+  update();
+}
+showBs('calibrated_on', 'calibrated-bs');
+showBs('valid_until', 'valid-bs');
+</script>{% endblock %}
