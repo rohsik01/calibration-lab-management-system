@@ -10,8 +10,8 @@
 <div><label>{{ tr("Uncertainty") }}</label><input name="uncertainty" value="{{ x.uncertainty }}" placeholder="±0.05 °C (k=2)"></div>
 <div><label>{{ tr("Traceability") }}</label><input name="traceability" value="{{ x.traceability }}"><small class="hint">{{ tr("Body or chain the standard is traceable to.") }}</small></div>
 <div><label>{{ tr("Certificate") }}</label><input name="certificate_no" value="{{ x.certificate_no }}"></div>
-<div><label>{{ tr("Calibrated on (AD)") }}</label><input type="date" name="calibrated_on" value="{{ x.calibrated_on }}" required></div>
-<div><label>{{ tr("Valid until (AD)") }}</label><input type="date" name="valid_until" value="{{ x.valid_until }}" required></div>
+<div><label>{{ tr("Calibrated on (AD)") }}</label><input type="date" name="calibrated_on" value="{{ x.calibrated_on }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="calibrated-bs">{{ date_pair(x.calibrated_on) }}</span></small></div>
+<div><label>{{ tr("Valid until (AD)") }}</label><input type="date" name="valid_until" value="{{ x.valid_until }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="valid-bs">{{ date_pair(x.valid_until) }}</span></small></div>
 {% if editing %}<div><label>{{ tr("Active") }}</label><label style="color:inherit"><input type="checkbox" name="active" value="1" {{ 'checked' if x.active }} style="width:auto"> {{ tr("Available for new calibrations") }}</label></div>{% endif %}
 </div><p><button class="btn">{{ tr("Save") }}</button>
 <a class="btn alt" href="{{ url_for('standard', sid=sid) if editing else url_for('standards') }}">{{ tr("Cancel") }}</a></p></form></div>
