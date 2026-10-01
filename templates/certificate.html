@@ -1,10 +1,12 @@
 {% extends "base.html" %}{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no }}{% endblock %}
 {% block banner %}{% endblock %}
 {% block content %}
-<div class="card" style="max-width:780px;margin:auto">
+{% if preview %}<div class="card" style="max-width:780px;margin:0 auto 16px;border:2px solid #b91c1c;color:#b91c1c;text-align:center"><h2 style="margin:0">UNVERIFIED — PREVIEW ONLY</h2><p style="margin:4px 0">This calibration record has not been verified by an administrator. Not an official certificate.</p></div>{% endif %}
+<div class="card" style="max-width:780px;margin:auto;position:relative;overflow:hidden">
+{% if preview %}<div aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;overflow:hidden"><div style="transform:rotate(-32deg);font-size:clamp(36px,8vw,76px);font-weight:900;color:rgba(185,28,28,.16);white-space:nowrap">UNVERIFIED</div></div>{% endif %}
 {% include "_banner.html" %}
 <h1 style="text-align:center;margin-top:14px">{{ tr("Calibration Certificate") }}</h1>
-<p style="text-align:center;color:var(--mute)">{{ r.certificate_no }}</p>
+<p style="text-align:center;color:var(--mute)">{{ r.certificate_no }}{% if preview %} · PREVIEW — UNVERIFIED{% endif %}</p>
 <table>
 <tr><th>{{ tr("Sensor ID") }}</th><td>{{ r.sensor_id }}</td></tr>
 <tr><th>{{ tr("Station") }}</th><td>{{ r.station }}</td></tr>
@@ -30,5 +32,5 @@
 {% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
 <td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
 <p style="margin-top:40px">{{ tr("Signed") }}: ______________________ &nbsp; {{ tr("Date") }}: ____________</p>
-<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
-<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p></div>{% endblock %}
+{% if not preview %}<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
+<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p>{% else %}<p style="color:#b91c1c;font-weight:700;text-align:center">UNVERIFIED PREVIEW — NOT VALID AS A CERTIFICATE</p><p class="noprint"><a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Back to requests") }}</a></p>{% endif %}</div>{% endblock %}
