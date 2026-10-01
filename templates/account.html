@@ -1,7 +1,31 @@
-{% extends "base.html" %}{% block title %}{{ tr("Change password") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
-<div class="card" style="max-width:440px"><h1>{{ tr("Change password") }}</h1>
+{% extends "base.html" %}{% block title %}{{ tr("My account") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card" style="max-width:520px"><h1>{{ tr("My account") }}</h1>
+<p class="sub">{{ g.user.full_name }} · {{ g.user.username }}</p>
 <form method="post">{{ csrf_input() }}
 <p><label>{{ tr("Current password") }}</label><input name="current" type="password" required></p>
 <p><label>{{ tr("New password (min. 8 characters)") }}</label><input name="password" type="password" required></p>
 <p><label>{{ tr("Repeat new password") }}</label><input name="password2" type="password" required></p>
-<p><button class="btn">{{ tr("Change password") }}</button></p></form></div>{% endblock %}
+<p><button class="btn">{{ tr("Change password") }}</button></p></form></div>
+
+<div class="card" style="max-width:520px"><h2>🔐 {{ tr("Two-factor authentication") }}</h2>
+{% if g.user.two_factor_enabled %}
+<p><span class="badge green">{{ tr("Enabled") }}</span></p>
+<p class="sub">{{ tr("Your account requires a six-digit authenticator code after your password.") }}</p>
+<form method="post" action="{{ url_for('disable_2fa') }}">{{ csrf_input() }}
+<p><label>{{ tr("Current password") }}</label><input name="current_password" type="password" required></p>
+<p><label>{{ tr("Authenticator code") }}</label><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></p>
+<p><button class="btn alt">{{ tr("Disable two-factor authentication") }}</button></p></form>
+{% else %}
+<p><span class="badge grey">{{ tr("Not enabled") }}</span></p>
+<p class="sub">{{ tr("Use an authenticator app such as Google Authenticator or Authy to protect this account.") }}</p>
+<p><a class="btn" href="{{ url_for('setup_2fa') }}">{{ tr("Set up two-factor authentication") }}</a></p>
+{% endif %}
+</div>
+
+{% if recovery_codes %}
+<div class="card" style="max-width:520px"><h2>⚠️ {{ tr("Save your recovery codes") }}</h2>
+<p class="hint">{{ tr("Each recovery code can be used once if you lose access to your authenticator. This list is shown only now.") }}</p>
+<div class="preview"><code>{% for code in recovery_codes %}{{ code }}{% if not loop.last %}<br>{% endif %}{% endfor %}</code></div>
+<p class="hint">{{ tr("Store these codes somewhere secure. They are not shown again.") }}</p></div>
+{% endif %}
+{% endblock %}
