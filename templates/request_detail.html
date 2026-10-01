@@ -98,7 +98,7 @@
 {% endif %}
 <div class="scroll" style="margin-top:14px"><table>
 <tr><th>{{ tr("Certificate") }}</th><th>{{ tr("Date") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Performed by") }}</th><th>{{ tr("Next due") }}</th></tr>
-{% for c in calibrations %}<tr><td><a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a></td><td>{{ date_pair(c.cal_date) }}</td><td><span class="badge {{ 'green' if c.result == 'PASS' else 'red' }}">{{ c.result }}</span></td><td>{{ c.performed_by or '—' }}</td><td>{{ date_pair(c.next_due) }}</td></tr>
+{% for c in calibrations %}<tr><td>{% if r.status == 'COMPLETED' %}<a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a>{% else %}{{ c.certificate_no }} <span class="badge amber">UNVERIFIED</span>{% endif %}</td><td>{{ date_pair(c.cal_date) }}</td><td><span class="badge {{ 'green' if c.result == 'PASS' else 'red' }}">{{ c.result }}</span></td><td>{{ c.performed_by or '—' }}</td><td>{{ date_pair(c.next_due) }}</td></tr>
 {% else %}<tr><td colspan="5" class="empty">{{ tr("No calibration record linked yet.") }}</td></tr>{% endfor %}
 </table></div>
 </div>
