@@ -2071,9 +2071,17 @@ def calibrate_pending_request(request_id):
 def certificate(cert):
     db = get_db()
     r = db.execute(
-        "SELECT c.*, s.sensor_type, s.manufacturer, s.serial_number, s.tolerance, s.unit, "
-        "st.name AS station FROM calibrations c JOIN sensors s USING(sensor_id) "
-        "JOIN stations st USING(station_id) WHERE certificate_no=?", (cert,)).fetchone()
+        """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
+                  COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
+                  COALESCE(s.unit, rq.pending_unit) AS unit,
+                  COALESCE(st.name, rq.pending_station_name) AS station
+           FROM calibrations c
+           LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           WHERE c.certificate_no=?""", (cert,)).fetchone()
     if not r:
         abort(404)
     work_order = None
