@@ -1063,8 +1063,22 @@ def calibration_request(request_id):
            FROM calibrations c JOIN sensors s USING(sensor_id)
            WHERE c.request_id=? ORDER BY c.cal_id DESC""", (request_id,)
     ).fetchall()
+    technicians = db.execute(
+        "SELECT user_id, full_name, username FROM users "
+        "WHERE role='technician' AND active=1 ORDER BY full_name"
+    ).fetchall()
+    standards = db.execute(
+        "SELECT standard_id, code, name, valid_until FROM reference_standards "
+        "WHERE active=1 ORDER BY code"
+    ).fetchall()
+    work_order = db.execute(
+        "SELECT w.*, u.full_name AS technician_name FROM calibration_work_orders w "
+        "JOIN users u ON u.user_id=w.assigned_technician_id WHERE w.request_id=?",
+        (request_id,)
+    ).fetchone()
     return render_template("request_detail.html", r=row, calibrations=calibrations,
-                           statuses=REQUEST_STATUSES)
+                           statuses=REQUEST_STATUSES, technicians=technicians,
+                           standards=standards, work_order=work_order)
 
 
 @app.route("/requests/<int:request_id>/status", methods=["POST"])
