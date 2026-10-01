@@ -533,6 +533,30 @@ def users():
                            rows=db.execute("SELECT * FROM users ORDER BY username").fetchall())
 
 
+
+@app.route("/users/<int:uid>/delete", methods=["POST"])
+@admin_required
+def delete_user(uid):
+    if uid == g.user["user_id"]:
+        flash("You cannot delete your own account.", "error")
+        return redirect(url_for("users"))
+    db = get_db()
+    u = db.execute("SELECT user_id, username, role, active FROM users WHERE user_id=?", (uid,)).fetchone()
+    if not u:
+        abort(404)
+    if u["role"] == "admin" and u["active"]:
+        active_admins = db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0]
+        if active_admins <= 1:
+            flash("The last active administrator cannot be deleted.", "error")
+            return redirect(url_for("users"))
+    try:
+        with db:
+            db.execute("DELETE FROM users WHERE user_id=?", (uid,))
+        flash(f"User '{u['username']}' was deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the user.", "error")
+    return redirect(url_for("users"))
+
 @app.route("/users/<int:uid>/toggle", methods=["POST"])
 @admin_required
 def toggle_user(uid):
@@ -683,6 +707,33 @@ def register():
     rows = get_db().execute(LATEST + " ORDER BY s.sensor_id").fetchall()
     return render_template("register.html", rows=rows)
 
+
+
+@app.route("/stations/<int:station_id>/delete", methods=["POST"])
+@admin_required
+def delete_station(station_id):
+    db = get_db()
+    station = db.execute("SELECT * FROM stations WHERE station_id=?", (station_id,)).fetchone()
+    if not station:
+        abort(404)
+    try:
+        with db:
+            sensor_rows = db.execute("SELECT sensor_id FROM sensors WHERE station_id=?", (station_id,)).fetchall()
+            sensor_ids = [r["sensor_id"] for r in sensor_rows]
+            if sensor_ids:
+                ph = ",".join("?" * len(sensor_ids))
+                cal_rows = db.execute(f"SELECT cal_id FROM calibrations WHERE sensor_id IN ({ph})", sensor_ids).fetchall()
+                cal_ids = [r["cal_id"] for r in cal_rows]
+                if cal_ids:
+                    cp = ",".join("?" * len(cal_ids))
+                    db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({cp})", cal_ids)
+                    db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({cp})", cal_ids)
+                db.execute(f"DELETE FROM sensors WHERE sensor_id IN ({ph})", sensor_ids)
+            db.execute("DELETE FROM stations WHERE station_id=?", (station_id,))
+        flash(f"Station '{station['name']}' and its sensors/calibration records were deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the station and its related records.", "error")
+    return redirect(url_for("stations"))
 
 @app.route("/stations", methods=["GET", "POST"])
 def stations():
@@ -1017,6 +1068,45 @@ def sensor_bulk_upload():
     return redirect(url_for("register"))
 
 
+
+@app.route("/sensors/<sensor_id>/delete", methods=["POST"])
+@admin_required
+def delete_sensor(sensor_id):
+    db = get_db()
+    sensor = db.execute("SELECT sensor_id FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone()
+    if not sensor:
+        abort(404)
+    try:
+        with db:
+            cal_rows = db.execute("SELECT cal_id FROM calibrations WHERE sensor_id=?", (sensor_id,)).fetchall()
+            cal_ids = [r["cal_id"] for r in cal_rows]
+            if cal_ids:
+                cp = ",".join("?" * len(cal_ids))
+                db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({cp})", cal_ids)
+                db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({cp})", cal_ids)
+            db.execute("DELETE FROM sensors WHERE sensor_id=?", (sensor_id,))
+        flash(f"Sensor '{sensor_id}' and its calibration history were deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the sensor and its calibration history.", "error")
+    return redirect(url_for("register"))
+
+
+@app.route("/calibrations/<int:cal_id>/delete", methods=["POST"])
+@admin_required
+def delete_calibration(cal_id):
+    db = get_db()
+    row = db.execute("SELECT certificate_no, sensor_id FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if not row:
+        abort(404)
+    try:
+        with db:
+            db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
+            db.execute("DELETE FROM calibrations WHERE cal_id=?", (cal_id,))
+        flash(f"Calibration record '{row['certificate_no']}' was deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the calibration record.", "error")
+    return redirect(url_for("sensor", sensor_id=row["sensor_id"]))
+
 @app.route("/sensors/<sensor_id>")
 def sensor(sensor_id):
     db = get_db()
@@ -1187,6 +1277,26 @@ def standard(sid):
                       "WHERE standard_id=? ORDER BY cal_id DESC LIMIT 100", (sid,)).fetchall()
     return render_template("standard.html", x=x, used=used)
 
+
+
+@app.route("/standards/<int:sid>/delete", methods=["POST"])
+@admin_required
+def delete_standard(sid):
+    db = get_db()
+    x = db.execute("SELECT code FROM reference_standards WHERE standard_id=?", (sid,)).fetchone()
+    if not x:
+        abort(404)
+    used = db.execute("SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)).fetchone()[0]
+    if used:
+        flash(f"Reference standard '{x['code']}' cannot be deleted because it is linked to {used} calibration record(s).", "error")
+        return redirect(url_for("standard", sid=sid))
+    try:
+        with db:
+            db.execute("DELETE FROM reference_standards WHERE standard_id=?", (sid,))
+        flash(f"Reference standard '{x['code']}' was deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the reference standard.", "error")
+    return redirect(url_for("standards"))
 
 @app.route("/standards/<int:sid>/edit", methods=["GET", "POST"])
 @admin_required
