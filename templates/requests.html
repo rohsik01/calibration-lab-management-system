@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Calibration requests") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <div><h1>{{ tr("Calibration requests") }}</h1><p class="sub">{{ tr("Register, review and track customer calibration work from receipt to completion.") }}</p></div>
+  <a class="btn" href="{{ url_for('new_calibration_request') }}">+ {{ tr("New calibration request") }}</a>
+</div>
+
+<div class="stats">
+  {% for st in statuses %}
+  <a class="stat {{ 'brand' if st == 'RECEIVED' else 'grey' }}" href="{{ url_for('calibration_requests', status=st) }}">
+    <span class="n">{{ counts[st] }}</span><span>{{ st }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <form method="get" class="toolbar">
+    <input name="q" value="{{ q }}" placeholder="{{ tr('Search request no., client, instrument or serial number') }}">
+    <select name="status">
+      <option value="">{{ tr("All statuses") }}</option>
+      {% for st in statuses %}<option value="{{ st }}" {{ 'selected' if status_filter == st }}>{{ st }}</option>{% endfor %}
+    </select>
+    <button class="btn">{{ tr("Filter") }}</button>
+    {% if q or status_filter %}<a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Clear") }}</a>{% endif %}
+  </form>
+  <div class="scroll">
+    <table class="js-table">
+      <tr><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{{ url_for('calibration_request', request_id=r.request_id) }}"><b>{{ r.request_no }}</b></a></td>
+        <td>{{ r.client_name }}{% if r.contact_person %}<small class="hint">{{ r.contact_person }}</small>{% endif %}</td>
+        <td>{{ r.instrument_description }}</td>
+        <td>{{ r.sensor_id or '—' }}{% if r.serial_number %}<small class="hint">S/N {{ r.serial_number }}</small>{% endif %}</td>
+        <td>{{ date_pair(r.received_date) }}</td><td>{{ date_pair(r.requested_due_date) }}</td>
+        <td><span class="badge {{ 'red' if r.priority == 'Urgent' else 'amber' if r.priority == 'High' else 'grey' }}">{{ r.priority }}</span></td>
+        <td><span class="badge {{ 'green' if r.status == 'COMPLETED' else 'red' if r.status == 'CANCELLED' else 'amber' if r.status in ('IN CALIBRATION','UNDER REVIEW') else 'grey' }}">{{ r.status }}</span></td>
+      </tr>
+      {% else %}<tr><td colspan="8" class="empty">{{ tr("No calibration requests found.") }}</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}
