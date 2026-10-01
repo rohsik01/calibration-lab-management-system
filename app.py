@@ -709,31 +709,70 @@ def register():
 
 
 
+def _delete_station_records(db, station_ids):
+    station_ids = [int(x) for x in station_ids]
+    if not station_ids:
+        return 0
+    sp = ",".join("?" * len(station_ids))
+    sensor_rows = db.execute(f"SELECT sensor_id FROM sensors WHERE station_id IN ({sp})", station_ids).fetchall()
+    sensor_ids = [r["sensor_id"] for r in sensor_rows]
+    if sensor_ids:
+        xp = ",".join("?" * len(sensor_ids))
+        cal_rows = db.execute(f"SELECT cal_id FROM calibrations WHERE sensor_id IN ({xp})", sensor_ids).fetchall()
+        cal_ids = [r["cal_id"] for r in cal_rows]
+        if cal_ids:
+            cp = ",".join("?" * len(cal_ids))
+            db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({cp})", cal_ids)
+            db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({cp})", cal_ids)
+        db.execute(f"DELETE FROM sensors WHERE sensor_id IN ({xp})", sensor_ids)
+    db.execute(f"DELETE FROM stations WHERE station_id IN ({sp})", station_ids)
+    return len(station_ids)
+
+
 @app.route("/stations/<int:station_id>/delete", methods=["POST"])
 @admin_required
 def delete_station(station_id):
     db = get_db()
-    station = db.execute("SELECT * FROM stations WHERE station_id=?", (station_id,)).fetchone()
+    station = db.execute("SELECT station_id, name FROM stations WHERE station_id=?", (station_id,)).fetchone()
     if not station:
         abort(404)
     try:
         with db:
-            sensor_rows = db.execute("SELECT sensor_id FROM sensors WHERE station_id=?", (station_id,)).fetchall()
-            sensor_ids = [r["sensor_id"] for r in sensor_rows]
-            if sensor_ids:
-                ph = ",".join("?" * len(sensor_ids))
-                cal_rows = db.execute(f"SELECT cal_id FROM calibrations WHERE sensor_id IN ({ph})", sensor_ids).fetchall()
-                cal_ids = [r["cal_id"] for r in cal_rows]
-                if cal_ids:
-                    cp = ",".join("?" * len(cal_ids))
-                    db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({cp})", cal_ids)
-                    db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({cp})", cal_ids)
-                db.execute(f"DELETE FROM sensors WHERE sensor_id IN ({ph})", sensor_ids)
-            db.execute("DELETE FROM stations WHERE station_id=?", (station_id,))
+            _delete_station_records(db, [station_id])
         flash(f"Station '{station['name']}' and its sensors/calibration records were deleted.")
     except sqlite3.Error:
         flash("Could not delete the station and its related records.", "error")
     return redirect(url_for("stations"))
+
+
+@app.route("/stations/bulk-delete", methods=["POST"])
+@admin_required
+def bulk_delete_stations():
+    raw_ids = request.form.getlist("station_ids")
+    station_ids = []
+    for value in raw_ids:
+        try:
+            station_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    station_ids = list(dict.fromkeys(station_ids))
+    if not station_ids:
+        flash("Select at least one station to delete.", "error")
+        return redirect(url_for("stations"))
+    db = get_db()
+    placeholders = ",".join("?" * len(station_ids))
+    existing = db.execute(
+        f"SELECT station_id FROM stations WHERE station_id IN ({placeholders})", station_ids
+    ).fetchall()
+    existing_ids = [r["station_id"] for r in existing]
+    try:
+        with db:
+            deleted = _delete_station_records(db, existing_ids)
+        flash(f"{deleted} station(s) and their sensors/calibration records were deleted.")
+    except sqlite3.Error:
+        flash("Could not delete the selected stations and their related records.", "error")
+    return redirect(url_for("stations"))
+
 
 @app.route("/stations", methods=["GET", "POST"])
 def stations():
