@@ -841,6 +841,56 @@ def station_bulk_upload():
 
 
 
+def _sensor_id_prefix(sensor_type):
+    """Return the standard two-letter Sensor ID prefix for a sensor type."""
+    value = re.sub(r"[^A-Za-z]", "", (sensor_type or "").strip()).lower()
+    prefixes = {
+        "temperature": "TS",
+        "pressure": "PS",
+        "humidity": "HS",
+        "relativehumidity": "RHS",
+        "rainfall": "RS",
+        "precipitation": "RS",
+        "wind": "WS",
+        "windspeed": "WS",
+        "winddirection": "WD",
+        "solar": "SS",
+        "radiation": "RS",
+        "visibility": "VS",
+        "waterlevel": "WL",
+    }
+    if value in prefixes:
+        return prefixes[value]
+    letters = re.findall(r"[A-Za-z]+", (sensor_type or "").upper())
+    initials = "".join(word[0] for word in letters)
+    return (initials[:3] or "SN").upper()
+
+
+def _station_sensor_id(db, station_id, sensor_type):
+    """Generate IDs such as PS_Tarahara_1001, incrementing per station and type."""
+    station = db.execute("SELECT name FROM stations WHERE station_id=?", (station_id,)).fetchone()
+    if not station:
+        raise ValueError("Selected station does not exist.")
+    prefix = _sensor_id_prefix(sensor_type)
+    station_label = re.sub(r"[^A-Za-z0-9]+", "_", station["name"].strip()).strip("_")
+    if not station_label:
+        station_label = "Station"
+    pattern = f"{prefix}_{station_label}_%"
+    rows = db.execute("SELECT sensor_id FROM sensors WHERE sensor_id LIKE ?",
+                      (pattern,)).fetchall()
+    numbers = []
+    for row in rows:
+        match = re.fullmatch(rf"{re.escape(prefix)}_{re.escape(station_label)}_(\\d+)", row["sensor_id"])
+        if match:
+            numbers.append(int(match.group(1)))
+    next_number = max(numbers, default=1000) + 1
+    sensor_id = f"{prefix}_{station_label}_{next_number:04d}"
+    while db.execute("SELECT 1 FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone():
+        next_number += 1
+        sensor_id = f"{prefix}_{station_label}_{next_number:04d}"
+    return sensor_id
+
+
 @app.route("/sensors/new", methods=["GET", "POST"])
 def new_sensor():
     db = get_db()
@@ -848,14 +898,18 @@ def new_sensor():
     if request.method == "POST":
         f = request.form
         try:
+            station_id = int(f["station_id"])
+            sensor_type = f["sensor_type"].strip()
+            if not sensor_type:
+                raise ValueError("Sensor type is required.")
+            sensor_id = _station_sensor_id(db, station_id, sensor_type)
             db.execute("INSERT INTO sensors VALUES (?,?,?,?,?,?,?,?)",
-                       (f["sensor_id"].strip().upper(), int(f["station_id"]),
-                        f["sensor_type"].strip(), f["manufacturer"].strip(),
+                       (sensor_id, station_id, sensor_type, f["manufacturer"].strip(),
                         f["serial_number"].strip(), int(f["interval_days"]),
                         float(f["tolerance"]), f["unit"].strip()))
             db.commit()
-            flash("Sensor registered.")
-            return redirect(url_for("sensor", sensor_id=f["sensor_id"].strip().upper()))
+            flash(f"Sensor registered with ID {sensor_id}.")
+            return redirect(url_for("sensor", sensor_id=sensor_id))
         except (sqlite3.IntegrityError, ValueError) as e:
             flash(tr("Could not save sensor") + f": {e}", "error")
     return render_template("sensor_form.html", stations=stations_)
