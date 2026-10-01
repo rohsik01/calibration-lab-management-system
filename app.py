@@ -407,6 +407,35 @@ REQUEST_STATUSES = (
     "UNDER REVIEW", "COMPLETED", "CANCELLED"
 )
 
+REQUEST_STATUS_TRANSITIONS = {
+    "RECEIVED": {"REVIEWED", "CANCELLED"},
+    "REVIEWED": {"ASSIGNED", "CANCELLED"},
+    "ASSIGNED": {"IN CALIBRATION", "CANCELLED"},
+    "IN CALIBRATION": {"UNDER REVIEW", "CANCELLED"},
+    "UNDER REVIEW": {"COMPLETED", "IN CALIBRATION"},
+    "COMPLETED": set(),
+    "CANCELLED": set(),
+}
+
+def transition_request_status(db, request_id, new_status, changed_by=None, comments=None):
+    row = db.execute("SELECT status FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
+    if not row:
+        raise ValueError("Calibration request not found.")
+    current = row["status"]
+    if current == new_status:
+        raise ValueError("Request is already " + new_status + ".")
+    if new_status not in REQUEST_STATUS_TRANSITIONS.get(current, set()):
+        raise ValueError("Invalid status transition: " + current + " -> " + new_status + ".")
+    now = datetime.now().isoformat(timespec="seconds")
+    db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
+               (new_status, now, request_id))
+    db.execute("""INSERT INTO calibration_request_status_history
+                  (request_id, old_status, new_status, changed_by, changed_at, comments)
+                  VALUES (?,?,?,?,?,?)""",
+               (request_id, current, new_status, changed_by, now, comments))
+    return now
+
+
 
 def next_work_order_number(db, assigned_date=None):
     """Generate a sequential work order number for the assignment year."""
