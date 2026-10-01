@@ -207,9 +207,20 @@ with sqlite3.connect(DB) as _c:
             cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
             reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
             result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
-            certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL)""")
+            certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
+            performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1,
+            standard_id INTEGER, standard_details TEXT, request_id INTEGER)""")
         _c.execute("""INSERT INTO calibrations_new
-            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,next_due FROM calibrations""")
+            (cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+             certificate_no,next_due,performed_by,n_points,standard_id,standard_details,request_id)
+            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+                   certificate_no,next_due,
+                   CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='performed_by') THEN performed_by ELSE NULL END,
+                   CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='n_points') THEN n_points ELSE 1 END,
+                   CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='standard_id') THEN standard_id ELSE NULL END,
+                   CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='standard_details') THEN standard_details ELSE NULL END,
+                   CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='request_id') THEN request_id ELSE NULL END
+            FROM calibrations""")
         _c.execute("DROP TABLE calibrations"); _c.execute("ALTER TABLE calibrations_new RENAME TO calibrations")
     _req_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_requests)")]
     for _col,_ddl in (("pending_sensor_type","TEXT"),("pending_manufacturer","TEXT"),("pending_serial_number","TEXT"),
