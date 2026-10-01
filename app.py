@@ -733,6 +733,9 @@ if __name__ == "__main__":
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
 from routes import sensors, calibrations, notifications, standards, reports
 
+# Navigation counters use these notification helpers after all route modules load.
+from routes.notifications import build_operational_alerts, sync_notifications
+
 def run_server():
     """Run the application with the same app object used by imports/tests.
 
