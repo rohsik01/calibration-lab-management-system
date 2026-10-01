@@ -12,5 +12,4 @@
 <td><span class="badge {{ 'green' if u.active else 'grey' }}">{{ tr('Active') if u.active else tr('Disabled') }}</span></td>
 <td><form method="post" action="{{ url_for('reset_password', uid=u.user_id) }}" style="display:flex;gap:6px">{{ csrf_input() }}
 <input name="password" type="password" placeholder="{{ tr('New password') }}" style="width:160px" required><button class="btn alt">{{ tr("Reset") }}</button></form></td>
-<td>{% if u.user_id != g.user.user_id %}<form method="post" action="{{ url_for('toggle_user', uid=u.user_id) }}">{{ csrf_input() }}
-<button class="btn alt">{{ tr('Disable') if u.active else tr('Enable') }}</button></form>{% endif %}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<td>{% if u.user_id != g.user.user_id %}<form method="post" action="{{ url_for('toggle_user', uid=u.user_id) }}" style="display:inline">{{ csrf_input() }}<button class="btn alt">{{ tr('Disable') if u.active else tr('Enable') }}</button></form> <form method="post" action="{{ url_for('delete_user', uid=u.user_id) }}" style="display:inline" onsubmit="return confirm('Delete this user permanently?')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>{% endif %}</td></tr>{% endfor %}</table></div></div>{% endblock %}
