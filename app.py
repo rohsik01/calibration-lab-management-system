@@ -1711,6 +1711,12 @@ def calibrate(sensor_id):
     if not s:
         abort(404)
     linked_request_id = request.values.get("request_id", "").strip()
+    if g.user["role"] == "admin":
+        flash("Administrators verify calibration data but do not enter technician measurements.", "error")
+        return redirect(url_for("sensor", sensor_id=sensor_id))
+    if not linked_request_id.isdigit():
+        flash("Calibration measurements must be entered from an assigned calibration work order.", "error")
+        return redirect(url_for("calibration_requests"))
     if linked_request_id.isdigit():
         linked_request = db.execute(
             "SELECT request_id, sensor_id, status FROM calibration_requests WHERE request_id=?",
@@ -1725,12 +1731,11 @@ def calibrate(sensor_id):
             "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
             (int(linked_request_id),)
         ).fetchone()
-        if g.user["role"] != "admin":
-            if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
-                abort(403)
-            if linked_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
-                flash("This work order is awaiting review or already closed; calibration data cannot be changed.", "error")
-                return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
+        if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
+            abort(403)
+        if linked_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
+            flash("This work order is awaiting review or already closed; calibration data cannot be changed.", "error")
+            return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
     if request.method == "POST":
         f = request.form
         try:
@@ -1776,6 +1781,9 @@ def calibrate(sensor_id):
         request_id = None
         if f.get("request_id", "").isdigit():
             request_id = int(f["request_id"])
+            if str(request_id) != linked_request_id:
+                flash("The selected request does not match the assigned work order.", "error")
+                return redirect(url_for("calibration_requests"))
             req = db.execute(
                 "SELECT request_id, sensor_id, status FROM calibration_requests WHERE request_id=?",
                 (request_id,)
@@ -1850,20 +1858,27 @@ def certificate(cert):
         "JOIN stations st USING(station_id) WHERE certificate_no=?", (cert,)).fetchone()
     if not r:
         abort(404)
+    work_order = None
     if r["request_id"]:
         work_order = db.execute(
             "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
             (r["request_id"],)
         ).fetchone()
-        if work_order and work_order["status"] != "COMPLETED" and g.user["role"] != "admin":
-            if work_order["assigned_technician_id"] != g.user["user_id"]:
-                abort(403)
-            flash("This certificate is not released yet. It must be approved by an administrator reviewer.")
-            return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
+    # Release only the exact calibration record approved by an administrator.
+    approved = db.execute(
+        "SELECT 1 FROM calibration_review_history WHERE cal_id=? AND decision='APPROVED' LIMIT 1",
+        (r["cal_id"],)
+    ).fetchone()
+    if not approved:
+        if not work_order or g.user["role"] != "technician" or work_order["assigned_technician_id"] != g.user["user_id"]:
+            abort(403)
+        preview = True
+    else:
+        preview = False
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    return render_template("certificate.html", r=r, pts=pts, det=details)
+    return render_template("certificate.html", r=r, pts=pts, det=details, preview=preview)
 
 
 @app.route("/due")
