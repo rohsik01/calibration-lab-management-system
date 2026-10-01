@@ -7,7 +7,7 @@
 <a class="btn alt" href="{{ url_for('export_download', sensor=s.sensor_id, scope='points') }}">{{ tr("Export every point (CSV)") }}</a></div>
 <h2>{{ tr("Calibration history") }}</h2>
 <div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Reference standard") }}</th><th>{{ tr("Points") }}</th><th>{{ tr("Max error") }}</th><th>{{ tr("Pass/Fail") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Next due") }}</th><th>{{ tr("By") }}</th></tr>
-{% for h in hist %}<tr><td>{{ h.cal_date }}</td><td>{{ h.reference_standard }}</td><td>{{ h.n_points }}</td>
+{% for h in hist %}<tr><td>{{ date_pair(h.cal_date) }}</td><td>{{ h.reference_standard }}</td><td>{{ h.n_points }}</td>
 <td>{{ '%+g'|format(h.error) }} {{ s.unit }}</td><td><span class="badge {{ 'green' if h.result=='PASS' else 'red' }}">{{ tr(h.result) }}</span></td>
-<td><a href="{{ url_for('certificate', cert=h.certificate_no) }}">{{ h.certificate_no }}</a></td><td>{{ h.next_due }}</td><td>{{ h.performed_by or '—' }}</td></tr>
+<td><a href="{{ url_for('certificate', cert=h.certificate_no) }}">{{ h.certificate_no }}</a></td><td>{{ date_pair(h.next_due) }}</td><td>{{ h.performed_by or '—' }}</td></tr>
 {% else %}<tr><td colspan="8">{{ tr("No calibrations recorded.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
