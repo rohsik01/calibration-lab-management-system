@@ -214,6 +214,18 @@ def standard_status(row):
     return "Valid", "green"
 
 
+def bs_date_pair(iso_value):
+    """Display an ISO Gregorian date together with its Bikram Sambat equivalent."""
+    if not iso_value:
+        return "—"
+    try:
+        ad = date.fromisoformat(str(iso_value)[:10])
+        from nepali_datetime import date as bs_date
+        b = bs_date.from_datetime_date(ad)
+        return f"{ad.isoformat()} / {b.year:04d}-{b.month:02d}-{b.day:02d} BS"
+    except (ValueError, TypeError):
+        return str(iso_value)
+
 app.jinja_env.globals.update(tr=tr, stl=status_label, status_key=status_key,
                              std_status=standard_status, date_pair=bs_date_pair)
 
@@ -542,18 +554,6 @@ def reset_password(uid):
 
 
 # ------------------------------ Nepali calendar ------------------------------
-def bs_date_pair(iso_value):
-    """Display an ISO Gregorian date together with its Bikram Sambat equivalent."""
-    if not iso_value:
-        return "—"
-    try:
-        ad = date.fromisoformat(str(iso_value)[:10])
-        from nepali_datetime import date as bs_date
-        b = bs_date.from_datetime_date(ad)
-        return f"{ad.isoformat()} / {b.year:04d}-{b.month:02d}-{b.day:02d} BS"
-    except (ValueError, TypeError):
-        return str(iso_value)
-
 
 def bs_date_label(ad_date, nepali=False):
     """Return a readable Bikram Sambat date for a Gregorian date."""
