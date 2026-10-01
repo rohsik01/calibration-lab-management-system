@@ -45,7 +45,7 @@ DB = "calibration.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations (
     station_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, location TEXT,
-    type TEXT NOT NULL DEFAULT 'Meteorological');
+    type TEXT NOT NULL DEFAULT 'Meteorological', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS sensors (
     sensor_id TEXT PRIMARY KEY,
     station_id INTEGER NOT NULL REFERENCES stations(station_id),
@@ -110,9 +110,14 @@ def close_db(_):
 
 with sqlite3.connect(DB) as _c:
     _c.executescript(SCHEMA)
-    # upgrade older databases: station type
-    if "type" not in [r[1] for r in _c.execute("PRAGMA table_info(stations)")]:
+    # upgrade older databases: station type and last-edited timestamp
+    _station_cols = [r[1] for r in _c.execute("PRAGMA table_info(stations)")]
+    if "type" not in _station_cols:
         _c.execute("ALTER TABLE stations ADD COLUMN type TEXT NOT NULL DEFAULT 'Meteorological'")
+    if "updated_at" not in _station_cols:
+        _c.execute("ALTER TABLE stations ADD COLUMN updated_at TEXT")
+        _c.execute("UPDATE stations SET updated_at=? WHERE updated_at IS NULL",
+                    (datetime.now().isoformat(timespec="seconds"),))
     # upgrade older databases: optional TOTP two-factor authentication
     _cols = [r[1] for r in _c.execute("PRAGMA table_info(users)")]
     if "two_factor_enabled" not in _cols:
@@ -691,8 +696,8 @@ def stations():
             station_type = request.form.get("type", "").strip() or "Meteorological"
             if not name:
                 raise ValueError("Station name is required.")
-            db.execute("INSERT INTO stations(name, location, type) VALUES (?,?,?)",
-                       (name, location, station_type))
+            db.execute("INSERT INTO stations(name, location, type, updated_at) VALUES (?,?,?,?)",
+                       (name, location, station_type, datetime.now().isoformat(timespec="seconds")))
             db.commit()
             flash("Station added.")
         except sqlite3.IntegrityError:
@@ -701,7 +706,7 @@ def stations():
             flash(str(e), "error")
         return redirect(url_for("stations"))
     return render_template("stations.html",
-                           rows=db.execute("SELECT * FROM stations ORDER BY station_id").fetchall())
+                           rows=db.execute("SELECT * FROM stations ORDER BY updated_at DESC, station_id DESC").fetchall())
 
 
 def _excel_workbook(instructions, sheet_name, headers, sample_rows):
@@ -816,8 +821,8 @@ def station_bulk_upload():
                 if sid is None:
                     if db.execute("SELECT 1 FROM stations WHERE name=? COLLATE NOCASE", (name,)).fetchone():
                         raise ValueError(f"Row {row_no}: station name '{name}' already exists.")
-                    db.execute("INSERT INTO stations(name, location, type) VALUES (?,?,?)",
-                               (name, location, station_type))
+                    db.execute("INSERT INTO stations(name, location, type, updated_at) VALUES (?,?,?,?)",
+                               (name, location, station_type, datetime.now().isoformat(timespec="seconds")))
                 else:
                     existing = db.execute("SELECT station_id FROM stations WHERE station_id=?", (sid,)).fetchone()
                     if existing:
@@ -825,8 +830,8 @@ def station_bulk_upload():
                                                (name, sid)).fetchone()
                         if conflict:
                             raise ValueError(f"Row {row_no}: station name '{name}' belongs to another station.")
-                        db.execute("UPDATE stations SET name=?, location=?, type=? WHERE station_id=?",
-                                   (name, location, station_type, sid))
+                        db.execute("UPDATE stations SET name=?, location=?, type=?, updated_at=? WHERE station_id=?",
+                                   (name, location, station_type, datetime.now().isoformat(timespec="seconds"), sid))
                     else:
                         if db.execute("SELECT 1 FROM stations WHERE name=? COLLATE NOCASE", (name,)).fetchone():
                             raise ValueError(f"Row {row_no}: station name '{name}' already exists.")
