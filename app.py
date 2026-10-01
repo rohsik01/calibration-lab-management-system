@@ -44,7 +44,8 @@ DB = "calibration.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations (
-    station_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, location TEXT);
+    station_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, location TEXT,
+    type TEXT NOT NULL DEFAULT 'Meteorological');
 CREATE TABLE IF NOT EXISTS sensors (
     sensor_id TEXT PRIMARY KEY,
     station_id INTEGER NOT NULL REFERENCES stations(station_id),
@@ -109,6 +110,9 @@ def close_db(_):
 
 with sqlite3.connect(DB) as _c:
     _c.executescript(SCHEMA)
+    # upgrade older databases: station type
+    if "type" not in [r[1] for r in _c.execute("PRAGMA table_info(stations)")]:
+        _c.execute("ALTER TABLE stations ADD COLUMN type TEXT NOT NULL DEFAULT 'Meteorological'")
     # upgrade older databases: optional TOTP two-factor authentication
     _cols = [r[1] for r in _c.execute("PRAGMA table_info(users)")]
     if "two_factor_enabled" not in _cols:
@@ -681,15 +685,160 @@ def stations():
         if g.user["role"] != "admin":
             abort(403)
         try:
-            db.execute("INSERT INTO stations(name, location) VALUES (?,?)",
-                       (request.form["name"].strip(), request.form["location"].strip()))
+            name = request.form["name"].strip()
+            location = request.form.get("location", "").strip()
+            station_type = request.form.get("type", "").strip() or "Meteorological"
+            if not name:
+                raise ValueError("Station name is required.")
+            db.execute("INSERT INTO stations(name, location, type) VALUES (?,?,?)",
+                       (name, location, station_type))
             db.commit()
             flash("Station added.")
         except sqlite3.IntegrityError:
             flash("That station already exists.")
+        except ValueError as e:
+            flash(str(e), "error")
         return redirect(url_for("stations"))
     return render_template("stations.html",
-                           rows=db.execute("SELECT * FROM stations ORDER BY name").fetchall())
+                           rows=db.execute("SELECT * FROM stations ORDER BY station_id").fetchall())
+
+
+def _excel_workbook(instructions, sheet_name, headers, sample_rows):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    info = wb.create_sheet("Instructions")
+    info.append(["Calibration Lab Management System - Bulk Upload"])
+    for line in instructions:
+        info.append([line])
+    info["A1"].font = Font(bold=True, size=14)
+    for cell in info["A"]:
+        cell.alignment = Alignment(wrap_text=True, vertical="top")
+    info.column_dimensions["A"].width = 110
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F5FBF")
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+    for row in sample_rows:
+        ws.append(row)
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[chr(64 + col) if col <= 26 else "A"].width = 24
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+@app.route("/stations/bulk-sample")
+def station_bulk_sample():
+    data = _excel_workbook(
+        [
+            "Fill one station per row in the 'Stations' sheet.",
+            "Station ID: leave blank when creating a new station. Enter an existing numeric Station ID only when updating that station.",
+            "Station Name is required and must be unique.",
+            "Location and Type are required for complete station details. Example Type: Meteorological, Hydrological, Agrometeorological, Radar.",
+            "Do not change the column headings."
+        ],
+        "Stations",
+        ["Station ID", "Station Name", "Location", "Type"],
+        [["", "Example Station", "Dharan, Sunsari", "Meteorological"]]
+    )
+    return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="station_bulk_upload_sample.xlsx"'})
+
+
+@app.route("/stations/bulk-upload", methods=["POST"])
+@admin_required
+def station_bulk_upload():
+    upload = request.files.get("file")
+    if not upload or not upload.filename.lower().endswith((".xlsx", ".xlsm")):
+        flash("Please choose an Excel .xlsx file.", "error")
+        return redirect(url_for("stations"))
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(upload, read_only=True, data_only=True)
+        ws = wb["Stations"] if "Stations" in wb.sheetnames else wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            raise ValueError("The Excel file is empty.")
+        headers = [str(x).strip() if x is not None else "" for x in rows[0]]
+        expected = ["Station ID", "Station Name", "Location", "Type"]
+        if headers != expected:
+            raise ValueError("Invalid columns. Download the station Excel sample and use its column headings.")
+        db = get_db()
+        parsed = []
+        errors = []
+        seen_ids = set()
+        seen_names = set()
+        for row_no, row in enumerate(rows[1:], 2):
+            if not any(v not in (None, "") for v in row):
+                continue
+            vals = list(row) + [""] * (4 - len(row))
+            sid, name, location, station_type = vals[:4]
+            name = str(name).strip() if name is not None else ""
+            location = str(location).strip() if location is not None else ""
+            station_type = str(station_type).strip() if station_type is not None else ""
+            if not name:
+                errors.append(f"Row {row_no}: Station Name is required.")
+                continue
+            if not station_type:
+                errors.append(f"Row {row_no}: Type is required.")
+                continue
+            sid_int = None
+            if sid not in (None, ""):
+                try:
+                    sid_int = int(float(sid))
+                    if sid_int <= 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    errors.append(f"Row {row_no}: Station ID must be a positive number or blank.")
+                    continue
+                if sid_int in seen_ids:
+                    errors.append(f"Row {row_no}: duplicate Station ID {sid_int} in the file.")
+                    continue
+                seen_ids.add(sid_int)
+            name_key = name.casefold()
+            if name_key in seen_names:
+                errors.append(f"Row {row_no}: duplicate Station Name '{name}'.")
+                continue
+            seen_names.add(name_key)
+            parsed.append((sid_int, name, location, station_type, row_no))
+        if errors:
+            raise ValueError("Upload stopped. " + " ".join(errors[:12]) +
+                             (f" Showing first 12 of {len(errors)} errors." if len(errors) > 12 else ""))
+        with db:
+            for sid, name, location, station_type, row_no in parsed:
+                if sid is None:
+                    if db.execute("SELECT 1 FROM stations WHERE name=? COLLATE NOCASE", (name,)).fetchone():
+                        raise ValueError(f"Row {row_no}: station name '{name}' already exists.")
+                    db.execute("INSERT INTO stations(name, location, type) VALUES (?,?,?)",
+                               (name, location, station_type))
+                else:
+                    existing = db.execute("SELECT station_id FROM stations WHERE station_id=?", (sid,)).fetchone()
+                    if existing:
+                        conflict = db.execute("SELECT station_id FROM stations WHERE name=? COLLATE NOCASE AND station_id<>?",
+                                               (name, sid)).fetchone()
+                        if conflict:
+                            raise ValueError(f"Row {row_no}: station name '{name}' belongs to another station.")
+                        db.execute("UPDATE stations SET name=?, location=?, type=? WHERE station_id=?",
+                                   (name, location, station_type, sid))
+                    else:
+                        if db.execute("SELECT 1 FROM stations WHERE name=? COLLATE NOCASE", (name,)).fetchone():
+                            raise ValueError(f"Row {row_no}: station name '{name}' already exists.")
+                        db.execute("INSERT INTO stations(station_id, name, location, type) VALUES (?,?,?,?)",
+                                   (sid, name, location, station_type))
+        flash(f"{len(parsed)} station record(s) uploaded successfully.")
+    except ValueError as e:
+        flash(str(e), "error")
+    except Exception as e:
+        flash(f"Could not process the Excel file: {e}", "error")
+    return redirect(url_for("stations"))
+
+
 
 
 @app.route("/sensors/new", methods=["GET", "POST"])
@@ -710,6 +859,100 @@ def new_sensor():
         except (sqlite3.IntegrityError, ValueError) as e:
             flash(tr("Could not save sensor") + f": {e}", "error")
     return render_template("sensor_form.html", stations=stations_)
+
+
+@app.route("/sensors/bulk-sample")
+def sensor_bulk_sample():
+    data = _excel_workbook(
+        [
+            "Fill one sensor per row in the 'Sensors' sheet.",
+            "All columns are required except Manufacturer and Unit.",
+            "Station ID must already exist in the Station Details register.",
+            "Sensor ID and Serial Number must be unique.",
+            "Calibration Interval (days) is normally 365 for annual calibration.",
+            "Tolerance is the default allowed error used during calibration.",
+            "Do not change the column headings."
+        ],
+        "Sensors",
+        ["Sensor ID", "Station ID", "Sensor Type", "Manufacturer", "Serial Number",
+         "Calibration Interval (days)", "Tolerance", "Unit"],
+        [["TS-EXAMPLE", 1, "Temperature", "Example Manufacturer", "SN-EXAMPLE",
+          365, 0.5, "°C"]]
+    )
+    return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="sensor_bulk_upload_sample.xlsx"'})
+
+
+@app.route("/sensors/bulk-upload", methods=["POST"])
+def sensor_bulk_upload():
+    upload = request.files.get("file")
+    if not upload or not upload.filename.lower().endswith((".xlsx", ".xlsm")):
+        flash("Please choose an Excel .xlsx file.", "error")
+        return redirect(url_for("register"))
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(upload, read_only=True, data_only=True)
+        ws = wb["Sensors"] if "Sensors" in wb.sheetnames else wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            raise ValueError("The Excel file is empty.")
+        headers = [str(x).strip() if x is not None else "" for x in rows[0]]
+        expected = ["Sensor ID", "Station ID", "Sensor Type", "Manufacturer", "Serial Number",
+                    "Calibration Interval (days)", "Tolerance", "Unit"]
+        if headers != expected:
+            raise ValueError("Invalid columns. Download the sensor Excel sample and use its column headings.")
+        db = get_db()
+        parsed, errors = [], []
+        seen_ids, seen_serials = set(), set()
+        for row_no, row in enumerate(rows[1:], 2):
+            if not any(v not in (None, "") for v in row):
+                continue
+            vals = list(row) + [""] * (8 - len(row))
+            sensor_id, station_id, sensor_type, manufacturer, serial, interval, tolerance, unit = vals[:8]
+            sensor_id = str(sensor_id).strip().upper() if sensor_id is not None else ""
+            sensor_type = str(sensor_type).strip() if sensor_type is not None else ""
+            manufacturer = str(manufacturer).strip() if manufacturer is not None else ""
+            serial = str(serial).strip() if serial is not None else ""
+            unit = str(unit).strip() if unit is not None else ""
+            if not sensor_id or not sensor_type or not serial:
+                errors.append(f"Row {row_no}: Sensor ID, Sensor Type and Serial Number are required.")
+                continue
+            try:
+                station_id = int(float(station_id))
+                interval = int(float(interval))
+                tolerance = float(tolerance)
+                if station_id <= 0 or interval <= 0 or tolerance < 0 or not math.isfinite(tolerance):
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"Row {row_no}: Station ID, interval and tolerance must be valid positive numeric values (tolerance may be 0).")
+                continue
+            if sensor_id in seen_ids or serial.casefold() in seen_serials:
+                errors.append(f"Row {row_no}: duplicate Sensor ID or Serial Number in the file.")
+                continue
+            seen_ids.add(sensor_id)
+            seen_serials.add(serial.casefold())
+            if not db.execute("SELECT 1 FROM stations WHERE station_id=?", (station_id,)).fetchone():
+                errors.append(f"Row {row_no}: Station ID {station_id} does not exist.")
+                continue
+            if db.execute("SELECT 1 FROM sensors WHERE sensor_id=?", (sensor_id,)).fetchone():
+                errors.append(f"Row {row_no}: Sensor ID '{sensor_id}' already exists.")
+                continue
+            if db.execute("SELECT 1 FROM sensors WHERE serial_number=? COLLATE NOCASE", (serial,)).fetchone():
+                errors.append(f"Row {row_no}: Serial Number '{serial}' already exists.")
+                continue
+            parsed.append((sensor_id, station_id, sensor_type, manufacturer, serial, interval, tolerance, unit))
+        if errors:
+            raise ValueError("Upload stopped. " + " ".join(errors[:12]) +
+                             (f" Showing first 12 of {len(errors)} errors." if len(errors) > 12 else ""))
+        with db:
+            db.executemany("INSERT INTO sensors(sensor_id,station_id,sensor_type,manufacturer,serial_number,interval_days,tolerance,unit) VALUES (?,?,?,?,?,?,?,?)",
+                           parsed)
+        flash(f"{len(parsed)} sensor record(s) uploaded successfully.")
+    except ValueError as e:
+        flash(str(e), "error")
+    except Exception as e:
+        flash(f"Could not process the Excel file: {e}", "error")
+    return redirect(url_for("register"))
 
 
 @app.route("/sensors/<sensor_id>")
