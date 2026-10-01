@@ -966,6 +966,12 @@ def update_work_order_status(work_order_id):
     if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
     new_status = request.form.get("status", "").strip()
+    if row["status"] in ("COMPLETED", "CANCELLED"):
+        flash("This work order is already closed and cannot be changed.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+    if g.user["role"] != "admin" and row["status"] == "AWAITING REVIEW":
+        flash("A submitted work order can only be returned by an administrator reviewer.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
     allowed = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW") if g.user["role"] != "admin" else ("CANCELLED",)
     if new_status not in allowed:
         flash("Completed work orders must be finalized through calibration review approval.", "error")
