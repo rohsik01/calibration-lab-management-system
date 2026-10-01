@@ -3,7 +3,7 @@
 {% block content %}
 <div class="hero">
   <div><h1>{{ tr("Calibration requests") }}</h1><p class="sub">{{ tr("Register, review and track customer calibration work from receipt to completion.") }}</p></div>
-  <a class="btn" href="{{ url_for('new_calibration_request') }}">+ {{ tr("New calibration request") }}</a>
+  {% if g.user.role == 'general_user' %}<a class="btn" href="{{ url_for('new_calibration_request') }}">+ {{ tr("New calibration request") }}</a>{% endif %}
 </div>
 
 <div class="stats">
