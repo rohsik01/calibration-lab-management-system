@@ -863,6 +863,8 @@ def new_sensor():
 
 @app.route("/sensors/bulk-sample")
 def sensor_bulk_sample():
+    first_station = get_db().execute("SELECT station_id FROM stations ORDER BY station_id LIMIT 1").fetchone()
+    example_station_id = first_station["station_id"] if first_station else 1
     data = _excel_workbook(
         [
             "Fill one sensor per row in the 'Sensors' sheet.",
@@ -876,7 +878,7 @@ def sensor_bulk_sample():
         "Sensors",
         ["Sensor ID", "Station ID", "Sensor Type", "Manufacturer", "Serial Number",
          "Calibration Interval (days)", "Tolerance", "Unit"],
-        [["TS-EXAMPLE", 1, "Temperature", "Example Manufacturer", "SN-EXAMPLE",
+        [["TS-EXAMPLE", example_station_id, "Temperature", "Example Manufacturer", "SN-EXAMPLE",
           365, 0.5, "°C"]]
     )
     return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
