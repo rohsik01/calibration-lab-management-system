@@ -10,10 +10,10 @@
 <tr><th>{{ tr("Uncertainty") }}</th><td>{{ x.uncertainty or '—' }}</td></tr>
 <tr><th>{{ tr("Traceability") }}</th><td style="white-space:normal">{{ x.traceability or '—' }}</td></tr>
 <tr><th>{{ tr("Certificate") }}</th><td>{{ x.certificate_no or '—' }}</td></tr>
-<tr><th>{{ tr("Calibrated on") }}</th><td>{{ x.calibrated_on }}</td></tr>
-<tr><th>{{ tr("Valid until") }}</th><td>{{ x.valid_until }}</td></tr></table></div>
+<tr><th>{{ tr("Calibrated on") }}</th><td>{{ date_pair(x.calibrated_on) }}</td></tr>
+<tr><th>{{ tr("Valid until") }}</th><td>{{ date_pair(x.valid_until) }}</td></tr></table></div>
 <div class="card"><h2>{{ tr("Calibrations that used this standard") }}</h2>
 <div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
-{% for u in used %}<tr><td>{{ u.cal_date }}</td><td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td>
+{% for u in used %}<tr><td>{{ date_pair(u.cal_date) }}</td><td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td>
 <td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td><a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a></td></tr>
 {% else %}<tr><td colspan="4">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
