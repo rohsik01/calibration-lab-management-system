@@ -133,6 +133,23 @@ CREATE TABLE IF NOT EXISTS calibration_request_status_history (
     comments TEXT
 );
 
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(user_id),
+    action TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    old_value TEXT,
+    new_value TEXT,
+    details TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
+
 CREATE TABLE IF NOT EXISTS calibration_review_history (
     review_id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id),
@@ -156,6 +173,26 @@ LEFT JOIN calibrations c ON c.cal_id = (
 """
 
 
+def audit_event(action, entity_type=None, entity_id=None, old_value=None, new_value=None, details=None):
+    """Record an auditable user action without storing passwords, CSRF tokens, or secrets."""
+    db = get_db()
+    user_id = g.user["user_id"] if getattr(g, "user", None) else None
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if ip and "," in ip:
+        ip = ip.split(",", 1)[0].strip()
+    ua = request.headers.get("User-Agent", "")[:500]
+    db.execute(
+        """INSERT INTO audit_log
+           (user_id, action, entity_type, entity_id, old_value, new_value,
+            details, ip_address, user_agent, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (user_id, action, entity_type, str(entity_id) if entity_id is not None else None,
+         json.dumps(old_value, ensure_ascii=False, default=str) if old_value is not None else None,
+         json.dumps(new_value, ensure_ascii=False, default=str) if new_value is not None else None,
+         json.dumps(details, ensure_ascii=False, default=str) if details is not None else None,
+         ip, ua, datetime.now().isoformat(timespec="seconds"))
+    )
+
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB)
@@ -169,6 +206,29 @@ def close_db(_):
     db = g.pop("db", None)
     if db:
         db.close()
+
+@app.after_request
+def audit_mutating_request(response):
+    # Endpoint-level audit catches administrative and technician changes even
+    # when a route does not have a dedicated audit_event() call.
+    if getattr(g, "user", None) and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        try:
+            ignored = {"csrf", "password", "password2", "current_password",
+                       "totp_secret", "otp", "recovery_codes"}
+            safe_form = {k: request.form.getlist(k) for k in request.form.keys()
+                         if k not in ignored and "token" not in k.lower()}
+            db = get_db()
+            audit_event(
+                "HTTP " + request.method,
+                "route",
+                request.endpoint,
+                details={"path": request.path, "status_code": response.status_code,
+                         "form": safe_form}
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+    return response
 
 
 with sqlite3.connect(DB) as _c:
@@ -441,6 +501,12 @@ def transition_request_status(db, request_id, new_status, changed_by=None, comme
     now = datetime.now().isoformat(timespec="seconds")
     db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
                (new_status, now, request_id))
+    audit_event(
+        "STATUS_CHANGED", "calibration_request", request_id,
+        old_value={"status": current},
+        new_value={"status": new_status},
+        details={"comments": comments} if comments else None
+    )
     db.execute("""INSERT INTO calibration_request_status_history
                   (request_id, old_status, new_status, changed_by, changed_at, comments)
                   VALUES (?,?,?,?,?,?)""",
@@ -1322,6 +1388,14 @@ def decide_calibration_review(review_id):
                SET decision=?, comments=?, reviewed_by=?, reviewed_at=? WHERE review_id=?""",
             (decision, comments, g.user["user_id"], now, review_id)
         )
+        audit_event(
+            "CALIBRATION_REVIEW_" + decision,
+            "calibration_review", review_id,
+            old_value={"decision": "PENDING"},
+            new_value={"decision": decision},
+            details={"comments": comments, "work_order_id": review["work_order_id"],
+                     "cal_id": review["cal_id"]}
+        )
         if decision == "APPROVED":
             req = db.execute(
                 """SELECT r.* FROM calibration_requests r
@@ -1557,6 +1631,11 @@ def delete_calibration_request(request_id):
     if linked:
         flash(f"Request {row['request_no']} cannot be deleted because it is linked to {linked} calibration record(s).", "error")
         return redirect(url_for("calibration_request", request_id=request_id))
+    audit_event(
+        "REQUEST_DELETED", "calibration_request", request_id,
+        old_value={"request_no": row["request_no"]},
+        details={"reason": "Admin deleted request with no linked calibration records"}
+    )
     db.execute("DELETE FROM calibration_requests WHERE request_id=?", (request_id,))
     db.commit()
     flash(f"Request {row['request_no']} was deleted.")
