@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ w.work_order_no }} · {{ tr("Calibration Lab") }}{% endblock %}
 {% block content %}
-<div class="hero"><div><h1>{{ w.work_order_no }}</h1><p class="sub">{{ w.request_no }} · {{ w.client_name }} · {{ w.instrument_description }}</p></div><div class="actions"><a class="btn alt" href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ tr("Open request") }}</a>{% if w.sensor_id %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Start / record calibration") }}</a>{% endif %}</div></div>
+<div class="hero"><div><h1>{{ w.work_order_no }}</h1><p class="sub">{{ w.request_no }} · {{ w.client_name }} · {{ w.instrument_description }}</p></div><div class="actions"><a class="btn alt" href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ tr("Open request") }}</a>{% if w.sensor_id %}{% if g.user.role == 'technician' and w.assigned_technician_id == g.user.user_id and w.status not in ('AWAITING REVIEW','COMPLETED','CANCELLED') %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>{% endif %}{% endif %}</div></div>
 <div class="card"><h2>{{ tr("Work order details") }}</h2>
 <div class="grid">
 <div><label>{{ tr("Status") }}</label><span class="badge {{ 'green' if w.status == 'COMPLETED' else 'amber' if w.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ w.status }}</span></div>
@@ -26,7 +26,7 @@
 <div class="card"><h2>{{ tr("Calibration results") }}</h2>
 {% if calibration %}
 <div class="grid">
-<div><label>{{ tr("Certificate number") }}</label><div><a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a></div></div>
+<div><label>{{ tr("Certificate number") }}</label><div>{% if w.status == 'COMPLETED' %}<a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a>{% else %}{{ calibration.certificate_no }} <span class="badge amber">UNVERIFIED — technician preview only</span>{% endif %}</div></div>
 <div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
 <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
 <div><label>{{ tr("Performed by") }}</label><div>{{ calibration.performed_by or '—' }}</div></div>
