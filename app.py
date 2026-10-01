@@ -1765,6 +1765,13 @@ def calibrate(sensor_id):
             if req["sensor_id"] and req["sensor_id"] != sensor_id:
                 flash("The selected request belongs to a different sensor.", "error")
                 return redirect(url_for("calibrate", sensor_id=sensor_id))
+            work_order = db.execute(
+                "SELECT work_order_id, status FROM calibration_work_orders WHERE request_id=?",
+                (request_id,)
+            ).fetchone()
+            if work_order and work_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
+                flash("This work order is awaiting review or already closed. New measurements cannot be recorded until it is returned to the technician.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
         points = []
         for ref, meas, tol in zip(refs, meass, tols):
             err = round(meas - ref, 6)
