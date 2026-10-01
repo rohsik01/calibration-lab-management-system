@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}{{ tr("Two-factor verification") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card" style="max-width:420px;margin:20px auto"><h1>{{ tr("Two-factor verification") }}</h1>
+<p class="sub">{{ tr("Enter the six-digit code from your authenticator app, or use a recovery code.") }}</p>
+<form method="post">{{ csrf_input() }}
+<p><label>{{ tr("Verification code") }}</label><input name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required></p>
+<p><button class="btn" style="width:100%">{{ tr("Verify and sign in") }}</button></p>
+</form>
+<p class="hint">{{ tr("{n} recovery codes remaining").format(n=recovery_remaining) }}</p></div>{% endblock %}
