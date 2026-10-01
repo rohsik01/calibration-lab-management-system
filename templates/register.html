@@ -7,8 +7,19 @@
     <option value="soon">{{ tr("Due within 30 days") }}</option><option value="overdue">{{ tr("Overdue") }}</option>
     <option value="failed">{{ tr("Failed") }}</option><option value="never">{{ tr("Never calibrated") }}</option></select>
   <span id="count" class="hint"></span>
-  <span style="margin-left:auto;display:flex;gap:10px"><a class="btn" href="{{ url_for('new_sensor') }}">+ {{ tr("Add sensor") }}</a>
-  <a class="btn alt" href="{{ url_for('export_csv') }}">{{ tr("Export") }}</a></span>
+  <span style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+  <a class="btn" href="{{ url_for('new_sensor') }}">+ {{ tr("Add sensor") }}</a>
+  <a class="btn alt" href="{{ url_for('sensor_bulk_sample') }}">{{ tr("Download sensor Excel sample") }}</a>
+  <a class="btn alt" href="{{ url_for('export_csv') }}">{{ tr("Export") }}</a>
+</span>
+</div>
+<div class="card" style="background:#f8fafd">
+<h2>{{ tr("Bulk upload sensors") }}</h2>
+<p class="sub">{{ tr("Use the Excel sample to prepare sensor records, then upload the completed .xlsx file. Station IDs must already exist.") }}</p>
+<form method="post" action="{{ url_for('sensor_bulk_upload') }}" enctype="multipart/form-data" class="actions">
+{{ csrf_input() }}<input type="file" name="file" accept=".xlsx,.xlsm" required>
+<button class="btn">{{ tr("Upload sensor Excel") }}</button>
+</form>
 </div>
 {% include "_table.html" %}</div>
 <script>
