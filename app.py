@@ -267,6 +267,18 @@ with sqlite3.connect(DB) as _c:
     for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT"), ("request_id", "INTEGER")):
         if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
             _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+    # Upgrade older databases: seed status-history snapshots.
+    _c.execute("""INSERT INTO calibration_request_status_history
+        (request_id, old_status, new_status, changed_by, changed_at, comments)
+        SELECT r.request_id, NULL, r.status, u.user_id,
+               COALESCE(r.created_at, CURRENT_TIMESTAMP),
+               'Initial workflow history snapshot'
+        FROM calibration_requests r
+        LEFT JOIN users u ON u.full_name = r.created_by
+        WHERE NOT EXISTS (
+            SELECT 1 FROM calibration_request_status_history h
+            WHERE h.request_id = r.request_id
+        )""")
 
 
 def status(row):
