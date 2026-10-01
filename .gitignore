@@ -8,6 +8,11 @@ env/
 __pycache__/
 *.py[cod]
 
+
+# Flask secret key
+secret.key
+
+
 # Environment variables and secrets
 .env
 .env.*
