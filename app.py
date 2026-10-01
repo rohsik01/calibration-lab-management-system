@@ -1510,16 +1510,29 @@ def calibration_request(request_id):
 @admin_required
 def update_calibration_request_status(request_id):
     new_status = request.form.get("status", "").strip()
-    if new_status not in REQUEST_STATUSES:
-        flash("Invalid calibration request status.", "error")
-        return redirect(url_for("calibration_request", request_id=request_id))
     db = get_db()
-    row = db.execute("SELECT request_no FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
+    row = db.execute("SELECT request_no, status FROM calibration_requests WHERE request_id=?",
+                     (request_id,)).fetchone()
     if not row:
         abort(404)
-    db.execute("UPDATE calibration_requests SET status=?, updated_at=? WHERE request_id=?",
-               (new_status, datetime.now().isoformat(timespec="seconds"), request_id))
-    db.commit()
+    allowed = {
+        "RECEIVED": {"REVIEWED", "CANCELLED"},
+        "REVIEWED": {"CANCELLED"},
+        "ASSIGNED": {"CANCELLED"},
+        "IN CALIBRATION": {"CANCELLED"},
+    }
+    if new_status not in allowed.get(row["status"], set()):
+        flash("Invalid calibration request status transition.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    try:
+        with db:
+            transition_request_status(
+                db, request_id, new_status, g.user["user_id"],
+                request.form.get("comments", "").strip() or None
+            )
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
     flash(f"Request {row['request_no']} status changed to {new_status}.")
     return redirect(url_for("calibration_request", request_id=request_id))
 
