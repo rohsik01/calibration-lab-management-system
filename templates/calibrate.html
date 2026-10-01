@@ -4,7 +4,7 @@
 {{ tr("The sensor passes only if all points pass. Error, Pass/Fail, certificate number and next due date are worked out for you.") }}</p>
 <form method="post">{{ csrf_input() }}
 <div class="grid">
-<div><label>{{ tr("Calibration date") }}</label><input type="date" name="cal_date" value="{{ today }}" required></div>
+<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} {{ date_pair(today) }}</small></div>
 <div><label>{{ tr("Reference standard") }}</label>
   <select name="standard_id" id="std">
     <option value="">{{ tr("Other — not in the register") }}</option>
