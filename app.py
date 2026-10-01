@@ -2666,7 +2666,6 @@ def sync_notifications(db, items):
 
 
 @app.route("/alerts")
-@login_required
 def alerts():
     """Central operational alert center and notification history."""
     db = get_db()
