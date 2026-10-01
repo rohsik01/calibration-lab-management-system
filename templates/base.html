@@ -105,8 +105,8 @@
       {% if g.user.role != 'general_user' %}
       <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
       <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
-      <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Alerts") }}
-        {% if operational_alerts %}<span class="pill">{{ operational_alerts }}</span>{% endif %}</a>
+      <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Notifications") }}
+        {% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}
         {% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
       <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}
