@@ -8,7 +8,7 @@
 </div>
 <div class="card" id="pending"><h2>{{ tr("Pending calibration reviews") }}</h2>
 {% if pending %}<div class="scroll"><table class="js-table"><thead><tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Calibration date") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Submitted") }}</th><th></th></tr></thead><tbody>
-{% for r in pending %}<tr><td><a href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ r.work_order_no }}</a></td><td>{{ r.request_no }}</td><td>{{ r.client_name }}</td><td>{{ r.instrument_description }}</td><td>{{ r.technician_name }}</td><td>{{ r.certificate_no }} <span class="badge amber">UNVERIFIED</span></td><td>{{ date_pair(r.cal_date) }}</td><td><button type="button" class="badge {{ 'green' if r.result == 'PASS' else 'red' }} result-btn" data-review-id="{{ r.review_id }}">{{ r.result }}</button></td><td>{{ r.submitted_at }}</td><td><a class="btn" href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ tr("Review") }}</a></td></tr>{% endfor %}
+{% for r in pending %}<tr><td><a href="{{ url_for('work_order_detail', work_order_id=r.work_order_id) }}">{{ r.work_order_no }}</a></td><td>{{ r.request_no }}</td><td>{{ r.client_name }}</td><td>{{ r.instrument_description }}</td><td>{{ r.technician_name }}</td><td>{{ r.certificate_no }} <span class="badge amber">UNVERIFIED</span></td><td>{{ date_pair(r.cal_date) }}</td><td><span class="badge {{ 'green' if r.result == 'PASS' else 'red' }}">{{ r.result }}</span></td><td>{{ r.submitted_at }}</td><td><button type="button" class="btn review-btn" data-review-id="{{ r.review_id }}">{{ tr("Review") }}</button></td></tr>{% endfor %}
 </tbody></table></div>{% else %}<div class="empty">{{ tr("There are no calibrations waiting for review.") }}</div>{% endif %}
 </div>
 <div class="card" id="recent"><h2>{{ tr("Recent review decisions") }}</h2>
@@ -17,54 +17,117 @@
 </tbody></table></div>{% else %}<div class="empty">{{ tr("No completed review decisions yet.") }}</div>{% endif %}
 </div>
 
-<div id="calibrationResultModal" class="modal" aria-hidden="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;padding:24px;overflow:auto">
-  <div class="card" style="max-width:900px;margin:5vh auto;position:relative">
-    <button type="button" id="closeCalibrationResult" class="btn alt" style="position:absolute;right:16px;top:16px">×</button>
-    <h2>{{ tr("Calibration result") }}</h2>
-    <div id="calibrationResultBody">{{ tr("Loading calibration details...") }}</div>
+<div id="calibrationReviewModal" aria-hidden="true"
+     style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.65);z-index:1000;padding:20px;overflow:auto">
+  <div class="card" style="max-width:1100px;margin:2vh auto;position:relative;max-height:96vh;overflow:auto">
+    <button type="button" id="closeCalibrationReview" class="btn alt"
+            style="position:absolute;right:16px;top:16px;font-size:20px;padding:4px 12px">×</button>
+    <h2 style="padding-right:50px">{{ tr("Calibration review") }}</h2>
+    <div id="calibrationReviewBody">{{ tr("Loading calibration details...") }}</div>
+    <div id="calibrationReviewActions" style="display:none;border-top:1px solid var(--line);margin-top:20px;padding-top:18px">
+      <label>{{ tr("Review comments") }}</label>
+      <textarea id="reviewComments" rows="3" placeholder="{{ tr('Required when returning for correction') }}"></textarea>
+      <div class="actions" style="margin-top:12px">
+        <form id="approveReviewForm" method="post">
+          {{ csrf_input() }}
+          <input type="hidden" name="decision" value="APPROVED">
+          <input type="hidden" name="comments" id="approveComments">
+          <button class="btn green" type="submit">{{ tr("Approve calibration") }}</button>
+        </form>
+        <form id="returnReviewForm" method="post">
+          {{ csrf_input() }}
+          <input type="hidden" name="decision" value="RETURNED">
+          <input type="hidden" name="comments" id="returnComments">
+          <button class="btn red" type="submit">{{ tr("Return for correction") }}</button>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 <script>
 (function () {
-  const modal = document.getElementById("calibrationResultModal");
-  const body = document.getElementById("calibrationResultBody");
-  const close = () => { modal.style.display = "none"; modal.setAttribute("aria-hidden", "true"); };
-  document.getElementById("closeCalibrationResult").addEventListener("click", close);
+  const modal = document.getElementById("calibrationReviewModal");
+  const body = document.getElementById("calibrationReviewBody");
+  const actions = document.getElementById("calibrationReviewActions");
+  const comments = document.getElementById("reviewComments");
+  const approveForm = document.getElementById("approveReviewForm");
+  const returnForm = document.getElementById("returnReviewForm");
+  const approveComments = document.getElementById("approveComments");
+  const returnComments = document.getElementById("returnComments");
+
+  const esc = value => String(value ?? "—").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
+
+  const close = () => {
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+  };
+  document.getElementById("closeCalibrationReview").addEventListener("click", close);
   modal.addEventListener("click", e => { if (e.target === modal) close(); });
 
-  document.querySelectorAll(".result-btn").forEach(btn => {
+  document.querySelectorAll(".review-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
+      const id = btn.dataset.reviewId;
       modal.style.display = "block";
       modal.setAttribute("aria-hidden", "false");
-      body.innerHTML = "{{ tr('Loading calibration details...') }}";
+      actions.style.display = "none";
+      comments.value = "";
+      body.innerHTML = "<p>{{ tr('Loading calibration details...') }}</p>";
       try {
-        const response = await fetch("{{ url_for('review_calibration_details', review_id=0) }}".replace("/0", "/" + btn.dataset.reviewId));
+        const response = await fetch("{{ url_for('review_calibration_details', review_id=0) }}".replace("/0", "/" + id));
         if (!response.ok) throw new Error("Request failed");
         const d = await response.json();
+
         const points = d.points.map(p =>
-          "<tr><td>" + p.point_no + "</td><td>" + p.reference_value + "</td><td>" +
-          p.measured_value + "</td><td>" + (Number(p.error) >= 0 ? "+" : "") + p.error +
-          "</td><td>" + p.tolerance + "</td><td><span class='badge " +
-          (p.result === "PASS" ? "green" : "red") + "'>" + p.result + "</span></td></tr>"
+          "<tr><td>" + esc(p.point_no) + "</td><td>" + esc(p.reference_value) +
+          "</td><td>" + esc(p.measured_value) + "</td><td>" +
+          (Number(p.error) >= 0 ? "+" : "") + esc(p.error) + "</td><td>" +
+          esc(p.tolerance) + "</td><td><span class='badge " +
+          (p.result === "PASS" ? "green" : "red") + "'>" + esc(p.result) +
+          "</span></td></tr>"
         ).join("");
+
         body.innerHTML =
           "<div class='grid'>" +
-          "<p><strong>Certificate:</strong> " + d.certificate_no + "</p>" +
-          "<p><strong>Calibration date:</strong> " + d.cal_date + "</p>" +
-          "<p><strong>Sensor:</strong> " + (d.sensor_type || "—") + "</p>" +
-          "<p><strong>Serial number:</strong> " + (d.serial_number || "—") + "</p>" +
-          "<p><strong>Station:</strong> " + (d.station || "—") + "</p>" +
-          "<p><strong>Prepared by:</strong> " + (d.performed_by || "—") + "</p>" +
-          "<p><strong>Reference standard:</strong> " + (d.reference_standard || "—") + "</p>" +
-          "<p><strong>Overall result:</strong> <span class='badge " + (d.overall_result === "PASS" ? "green" : "red") + "'>" + d.overall_result + "</span></p>" +
+          "<div><strong>Certificate:</strong><br>" + esc(d.certificate_no) + "</div>" +
+          "<div><strong>Calibration date:</strong><br>" + esc(d.cal_date) + "</div>" +
+          "<div><strong>Sensor:</strong><br>" + esc(d.sensor_type) + "</div>" +
+          "<div><strong>Manufacturer:</strong><br>" + esc(d.manufacturer) + "</div>" +
+          "<div><strong>Serial number:</strong><br>" + esc(d.serial_number) + "</div>" +
+          "<div><strong>Station:</strong><br>" + esc(d.station) + "</div>" +
+          "<div><strong>Reference standard:</strong><br>" + esc(d.reference_standard) + "</div>" +
+          "<div><strong>Prepared by:</strong><br>" + esc(d.performed_by) + "</div>" +
+          "<div><strong>Overall result:</strong><br><span class='badge " +
+          (d.overall_result === "PASS" ? "green" : "red") + "'>" +
+          esc(d.overall_result) + "</span></div>" +
+          "<div><strong>Maximum error:</strong><br>" + esc(d.max_error) + " " + esc(d.unit) + "</div>" +
           "</div>" +
-          "<h3>Measurement points</h3>" +
-          "<div class='scroll'><table><thead><tr><th>No.</th><th>Reference</th><th>Reading</th><th>Error</th><th>Tolerance</th><th>Result</th></tr></thead><tbody>" +
-          points + "</tbody></table></div>";
+          "<h3 style='margin-top:20px'>{{ tr('Measurement results') }}</h3>" +
+          "<div class='scroll'><table><thead><tr><th>No.</th><th>Reference</th><th>Reading</th><th>Error</th><th>Tolerance</th><th>Result</th></tr></thead>" +
+          "<tbody>" + points + "</tbody></table></div>";
+
+        const actionUrl = "{{ url_for('decide_calibration_review', review_id=0) }}".replace("/0", "/" + id);
+        approveForm.action = actionUrl;
+        returnForm.action = actionUrl;
+        actions.style.display = "block";
       } catch (err) {
-        body.innerHTML = "<p class='error'>Could not load the calibration details. Please try again.</p>";
+        body.innerHTML = "<p class='flash error'>{{ tr('Could not load the calibration details. Please try again.') }}</p>";
       }
     });
+  });
+
+  approveForm.addEventListener("submit", () => {
+    approveComments.value = comments.value;
+  });
+  returnForm.addEventListener("submit", e => {
+    if (!comments.value.trim()) {
+      e.preventDefault();
+      comments.focus();
+      alert("{{ tr('Enter review comments when returning a calibration for correction.') }}");
+      return;
+    }
+    returnComments.value = comments.value;
   });
 })();
 </script>
