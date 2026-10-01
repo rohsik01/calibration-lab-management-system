@@ -1393,6 +1393,19 @@ def calibrate(sensor_id):
             if not ref_text:
                 flash("Could not save: choose a reference standard or type its name.")
                 return redirect(url_for("calibrate", sensor_id=sensor_id))
+        request_id = None
+        if f.get("request_id", "").isdigit():
+            request_id = int(f["request_id"])
+            req = db.execute(
+                "SELECT request_id, sensor_id, status FROM calibration_requests WHERE request_id=?",
+                (request_id,)
+            ).fetchone()
+            if not req:
+                flash("Could not link the selected calibration request.", "error")
+                return redirect(url_for("calibrate", sensor_id=sensor_id))
+            if req["sensor_id"] and req["sensor_id"] != sensor_id:
+                flash("The selected request belongs to a different sensor.", "error")
+                return redirect(url_for("calibrate", sensor_id=sensor_id))
         points = []
         for ref, meas, tol in zip(refs, meass, tols):
             err = round(meas - ref, 6)
@@ -1406,8 +1419,7 @@ def calibrate(sensor_id):
             "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
             "standard_id,standard_details,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
-             result, cert, due, g.user["full_name"], len(points), std_id, std_details,
-             int(f["request_id"]) if f.get("request_id","").isdigit() else None))
+             result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
