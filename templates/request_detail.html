@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ r.request_no }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero">
+<div><h1>{{ r.request_no }}</h1><p class="sub">{{ r.client_name }} · {{ r.instrument_description }}</p></div>
+<div class="actions">
+{% if r.sensor_id %}<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Open instrument record") }}</a>{% endif %}
+{% if g.user.role == 'admin' %}<form method="post" action="{{ url_for('delete_calibration_request', request_id=r.request_id) }}" onsubmit="return confirm('{{ tr("Delete this request? This cannot be undone.") }}')">{{ csrf_input() }}<button class="btn alt">{{ tr("Delete request") }}</button></form>{% endif %}
+</div>
+</div>
+
+<div class="card">
+<h2>{{ tr("Request status") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Current status") }}</label><span class="badge {{ 'green' if r.status == 'COMPLETED' else 'red' if r.status == 'CANCELLED' else 'amber' if r.status in ('IN CALIBRATION','UNDER REVIEW') else 'grey' }}">{{ r.status }}</span></div>
+<div><label>{{ tr("Priority") }}</label><span class="badge {{ 'red' if r.priority == 'Urgent' else 'amber' if r.priority == 'High' else 'grey' }}">{{ r.priority }}</span></div>
+<div><label>{{ tr("Created by") }}</label><div>{{ r.created_by or '—' }}</div></div>
+<div><label>{{ tr("Last updated") }}</label><div>{{ r.updated_at }}</div></div>
+</div>
+{% if g.user.role == 'admin' %}
+<form method="post" action="{{ url_for('update_calibration_request_status', request_id=r.request_id) }}" class="actions" style="margin-top:16px">
+{{ csrf_input() }}<select name="status" style="max-width:260px">{% for st in statuses %}<option {{ 'selected' if r.status == st }}>{{ st }}</option>{% endfor %}</select>
+<button class="btn">{{ tr("Update status") }}</button>
+</form>
+{% endif %}
+</div>
+
+<div class="card">
+<h2>{{ tr("Customer and instrument") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Client / organization") }}</label><div>{{ r.client_name }}</div></div>
+<div><label>{{ tr("Contact person") }}</label><div>{{ r.contact_person or '—' }}</div></div>
+<div><label>{{ tr("Phone") }}</label><div>{{ r.contact_phone or '—' }}</div></div>
+<div><label>{{ tr("Email") }}</label><div>{{ r.contact_email or '—' }}</div></div>
+<div><label>{{ tr("Instrument") }}</label><div>{{ r.instrument_description }}</div></div>
+<div><label>{{ tr("Registered sensor") }}</label><div>{{ r.sensor_id or '—' }}</div></div>
+<div><label>{{ tr("Manufacturer") }}</label><div>{{ r.manufacturer or '—' }}</div></div>
+<div><label>{{ tr("Serial number") }}</label><div>{{ r.serial_number or '—' }}</div></div>
+<div><label>{{ tr("Station") }}</label><div>{{ r.station or '—' }}</div></div>
+<div><label>{{ tr("Requested service") }}</label><div>{{ r.requested_service }}</div></div>
+<div><label>{{ tr("Requested range / points") }}</label><div>{{ r.requested_range or '—' }}</div></div>
+<div><label>{{ tr("Received date") }}</label><div>{{ date_pair(r.received_date) }}</div></div>
+<div><label>{{ tr("Requested completion") }}</label><div>{{ date_pair(r.requested_due_date) }}</div></div>
+<div><label>{{ tr("Condition received") }}</label><div>{{ r.condition_received or '—' }}</div></div>
+</div>
+{% if r.remarks %}<div style="margin-top:14px"><label>{{ tr("Remarks") }}</label><div class="preview">{{ r.remarks }}</div></div>{% endif %}
+</div>
+
+<div class="card">
+<h2>{{ tr("Linked calibration records") }}</h2>
+{% if r.sensor_id and r.status not in ('COMPLETED','CANCELLED') %}
+<a class="btn" href="{{ url_for('calibrate', sensor_id=r.sensor_id) }}">{{ tr("Start / record calibration") }}</a>
+{% endif %}
+<div class="scroll" style="margin-top:14px"><table>
+<tr><th>{{ tr("Certificate") }}</th><th>{{ tr("Date") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Performed by") }}</th><th>{{ tr("Next due") }}</th></tr>
+{% for c in calibrations %}<tr><td><a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a></td><td>{{ date_pair(c.cal_date) }}</td><td><span class="badge {{ 'green' if c.result == 'PASS' else 'red' }}">{{ c.result }}</span></td><td>{{ c.performed_by or '—' }}</td><td>{{ date_pair(c.next_due) }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">{{ tr("No calibration record linked yet.") }}</td></tr>{% endfor %}
+</table></div>
+</div>
+{% endblock %}
