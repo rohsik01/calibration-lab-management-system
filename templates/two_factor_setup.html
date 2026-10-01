@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}{{ tr("Set up two-factor authentication") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card" style="max-width:560px"><h1>{{ tr("Set up two-factor authentication") }}</h1>
+<p class="sub">{{ tr("Scan this QR code with your authenticator app, then enter the six-digit code it generates to confirm setup.") }}</p>
+<div style="text-align:center;margin:20px"><img src="{{ qr }}" alt="{{ tr("Two-factor QR code") }}" width="220" height="220"></div>
+<p><label>{{ tr("Manual setup key") }}</label><input value="{{ secret }}" readonly onclick="this.select()"></p>
+<form method="post">{{ csrf_input() }}
+<p><label>{{ tr("Authenticator code") }}</label><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></p>
+<p><button class="btn">{{ tr("Enable two-factor authentication") }}</button> <a class="btn alt" href="{{ url_for('account') }}">{{ tr("Cancel") }}</a></p>
+</form></div>{% endblock %}
