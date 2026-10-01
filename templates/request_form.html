@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("New calibration request") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="card">
+<h1>{{ tr("New calibration request") }}</h1>
+<p class="sub">{{ tr("Record the customer requirement and condition of the instrument before calibration work begins.") }}</p>
+<form method="post">{{ csrf_input() }}
+<h2>{{ tr("Customer / requester") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Client / organization") }}</label><input name="client_name" value="{{ request.form.get('client_name','') }}" required></div>
+<div><label>{{ tr("Contact person") }}</label><input name="contact_person" value="{{ request.form.get('contact_person','') }}"></div>
+<div><label>{{ tr("Contact phone") }}</label><input name="contact_phone" value="{{ request.form.get('contact_phone','') }}"></div>
+<div><label>{{ tr("Contact email") }}</label><input type="email" name="contact_email" value="{{ request.form.get('contact_email','') }}"></div>
+</div>
+
+<h2 style="margin-top:22px">{{ tr("Instrument / service") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Registered sensor / instrument") }}</label>
+<select name="sensor_id">
+<option value="">{{ tr("Not registered yet") }}</option>
+{% for s in sensors %}<option value="{{ s.sensor_id }}" {{ 'selected' if request.form.get('sensor_id') == s.sensor_id }}>{{ s.sensor_id }} — {{ s.sensor_type }} — S/N {{ s.serial_number }} — {{ s.station }}</option>{% endfor %}
+</select>
+<small class="hint">{{ tr("If the item is not yet registered, leave this blank and enter its details below.") }}</small></div>
+<div><label>{{ tr("Instrument description") }}</label><input name="instrument_description" value="{{ request.form.get('instrument_description','') }}" placeholder="{{ tr('e.g. Digital barometer / temperature sensor') }}" required></div>
+<div><label>{{ tr("Requested calibration/service") }}</label><input name="requested_service" value="{{ request.form.get('requested_service','') }}" placeholder="{{ tr('e.g. Pressure calibration') }}" required></div>
+<div><label>{{ tr("Requested range / points") }}</label><input name="requested_range" value="{{ request.form.get('requested_range','') }}" placeholder="{{ tr('e.g. 800–1100 hPa') }}"></div>
+</div>
+
+<h2 style="margin-top:22px">{{ tr("Receipt and requirements") }}</h2>
+<div class="grid">
+<div><label>{{ tr("Received date (AD)") }}</label><input type="date" name="received_date" value="{{ request.form.get('received_date', today) }}" required><small class="hint">{{ tr("BS:") }} <span>{{ date_pair(request.form.get('received_date', today)) }}</span></small></div>
+<div><label>{{ tr("Requested completion date") }}</label><input type="date" name="requested_due_date" value="{{ request.form.get('requested_due_date','') }}"></div>
+<div><label>{{ tr("Priority") }}</label><select name="priority">{% for p in ('Low','Normal','High','Urgent') %}<option {{ 'selected' if request.form.get('priority','Normal') == p }}>{{ p }}</option>{% endfor %}</select></div>
+<div><label>{{ tr("Condition received") }}</label><input name="condition_received" value="{{ request.form.get('condition_received','') }}" placeholder="{{ tr('Good / damaged / requires adjustment') }}"></div>
+</div>
+<div style="margin-top:14px"><label>{{ tr("Remarks / customer requirements") }}</label><textarea name="remarks" rows="4">{{ request.form.get('remarks','') }}</textarea></div>
+
+<div class="actions" style="margin-top:18px">
+<button class="btn">{{ tr("Create request") }}</button>
+<a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Cancel") }}</a>
+</div>
+</form>
+</div>
+{% endblock %}
