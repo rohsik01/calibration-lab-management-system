@@ -1,6 +1,7 @@
 """Calibration Laboratory Management System - Flask web app (local server).
 Run:  python app.py   then open http://127.0.0.1:5000
 """
+import base64
 import csv
 import hmac
 import io
@@ -14,6 +15,8 @@ import time
 from datetime import date, datetime, timedelta
 from functools import wraps
 from waitress import serve
+import pyotp
+import qrcode
 
 from flask import (Flask, Response, abort, flash, g, redirect, render_template,
                    request, session, url_for)
@@ -61,7 +64,10 @@ CREATE TABLE IF NOT EXISTS users (
     full_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('admin','technician')),
-    active INTEGER NOT NULL DEFAULT 1);
+    active INTEGER NOT NULL DEFAULT 1,
+    two_factor_enabled INTEGER NOT NULL DEFAULT 0,
+    totp_secret TEXT,
+    recovery_codes TEXT);
 CREATE TABLE IF NOT EXISTS reference_standards (
     standard_id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT UNIQUE NOT NULL COLLATE NOCASE, name TEXT NOT NULL,
@@ -103,6 +109,14 @@ def close_db(_):
 
 with sqlite3.connect(DB) as _c:
     _c.executescript(SCHEMA)
+    # upgrade older databases: optional TOTP two-factor authentication
+    _cols = [r[1] for r in _c.execute("PRAGMA table_info(users)")]
+    if "two_factor_enabled" not in _cols:
+        _c.execute("ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER NOT NULL DEFAULT 0")
+    if "totp_secret" not in _cols:
+        _c.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+    if "recovery_codes" not in _cols:
+        _c.execute("ALTER TABLE users ADD COLUMN recovery_codes TEXT")
     # upgrade older databases: record who performed each calibration
     if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
@@ -228,7 +242,7 @@ def next_certificate(db, cal_date):
 
 
 # ------------------------------- authentication -------------------------------
-OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang"}
+OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor"}
 FAILS = {}   # (username, ip) -> (failed count, locked-until timestamp)
 
 
@@ -244,6 +258,28 @@ app.jinja_env.globals["csrf_input"] = csrf_input
 def safe_next(target):
     return target if target and target.startswith("/") and not target.startswith("//") \
         else url_for("index")
+
+def _complete_login(user_id, next_target=None):
+    """Create the authenticated session after password + optional 2FA verification."""
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user_id
+    return redirect(safe_next(next_target))
+
+
+def _recovery_codes():
+    """Create one-time recovery codes and return (plain_codes, stored_hashes)."""
+    plain = [secrets.token_hex(5).upper() for _ in range(10)]
+    return plain, json.dumps([generate_password_hash(x) for x in plain])
+
+
+def _qr_data_uri(uri):
+    """Generate a self-contained QR image for offline/local installations."""
+    img = qrcode.make(uri)
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
 
 
 @app.before_request
@@ -330,14 +366,100 @@ def login():
                                  (name,)).fetchone()
             if u and check_password_hash(u["password_hash"], request.form["password"]):
                 FAILS.pop(key, None)
-                session.clear()
-                session.permanent = True
-                session["user_id"] = u["user_id"]
-                return redirect(safe_next(request.args.get("next")))
+                if u["two_factor_enabled"]:
+                    session.clear()
+                    session["pending_2fa_user_id"] = u["user_id"]
+                    session["pending_2fa_next"] = safe_next(request.args.get("next"))
+                    return redirect(url_for("two_factor"))
+                return _complete_login(u["user_id"], request.args.get("next"))
             count = FAILS.get(key, (0, 0))[0] + 1
             FAILS[key] = (0, time.time() + 300) if count >= 5 else (count, 0)
             flash("Invalid username or password.")
     return render_template("login.html")
+
+
+@app.route("/2fa", methods=["GET", "POST"])
+def two_factor():
+    """Verify a TOTP code or a one-time recovery code after password authentication."""
+    if g.user:
+        return redirect(url_for("index"))
+    uid = session.get("pending_2fa_user_id")
+    if not uid:
+        return redirect(url_for("login"))
+    u = get_db().execute("SELECT * FROM users WHERE user_id=? AND active=1", (uid,)).fetchone()
+    if not u or not u["two_factor_enabled"] or not u["totp_secret"]:
+        session.clear()
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        code = re.sub(r"\s+", "", request.form.get("code", "")).upper()
+        ok = bool(re.fullmatch(r"\d{6}", code) and
+                  pyotp.TOTP(u["totp_secret"]).verify(code, valid_window=1))
+        recovery_used = False
+        if not ok and u["recovery_codes"]:
+            stored = json.loads(u["recovery_codes"])
+            for i, hashed in enumerate(stored):
+                if check_password_hash(hashed, code):
+                    stored.pop(i)
+                    get_db().execute("UPDATE users SET recovery_codes=? WHERE user_id=?",
+                                     (json.dumps(stored), uid))
+                    get_db().commit()
+                    ok = recovery_used = True
+                    break
+        if ok:
+            next_target = session.get("pending_2fa_next")
+            return _complete_login(uid, next_target)
+        flash("Invalid verification code. Please try again.", "error")
+    remaining = len(json.loads(u["recovery_codes"] or "[]"))
+    return render_template("two_factor.html", recovery_remaining=remaining)
+
+
+@app.route("/account/2fa/setup", methods=["GET", "POST"])
+def setup_2fa():
+    if g.user["two_factor_enabled"]:
+        return redirect(url_for("account"))
+    secret = session.get("pending_totp_secret")
+    if not secret:
+        secret = pyotp.random_base32()
+        session["pending_totp_secret"] = secret
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(name=g.user["username"], issuer_name="Calibration Lab Management System")
+    qr = _qr_data_uri(uri)
+    if request.method == "POST":
+        code = re.sub(r"\s+", "", request.form.get("code", ""))
+        if re.fullmatch(r"\d{6}", code) and totp.verify(code, valid_window=1):
+            plain, stored = _recovery_codes()
+            db = get_db()
+            db.execute("UPDATE users SET two_factor_enabled=1, totp_secret=?, recovery_codes=? WHERE user_id=?",
+                       (secret, stored, g.user["user_id"]))
+            db.commit()
+            session.pop("pending_totp_secret", None)
+            session["show_recovery_codes"] = plain
+            return redirect(url_for("account"))
+        flash("Invalid verification code. Scan the QR code and enter the current 6-digit code.", "error")
+    return render_template("two_factor_setup.html", qr=qr, secret=secret)
+
+
+@app.route("/account/2fa/disable", methods=["POST"])
+def disable_2fa():
+    if not g.user["two_factor_enabled"]:
+        return redirect(url_for("account"))
+    password = request.form.get("current_password", "")
+    code = re.sub(r"\s+", "", request.form.get("code", "")).upper()
+    if not check_password_hash(g.user["password_hash"], password):
+        flash("Current password is incorrect.", "error")
+        return redirect(url_for("account"))
+    valid = bool(re.fullmatch(r"\d{6}", code) and
+                 pyotp.TOTP(g.user["totp_secret"]).verify(code, valid_window=1))
+    if not valid:
+        flash("Enter a valid authenticator code to disable two-factor authentication.", "error")
+        return redirect(url_for("account"))
+    db = get_db()
+    db.execute("UPDATE users SET two_factor_enabled=0, totp_secret=NULL, recovery_codes=NULL WHERE user_id=?",
+               (g.user["user_id"],))
+    db.commit()
+    flash("Two-factor authentication has been disabled.")
+    return redirect(url_for("account"))
 
 
 @app.route("/logout", methods=["POST"])
@@ -362,7 +484,8 @@ def account():
             db.commit()
             flash("Password changed.")
             return redirect(url_for("index"))
-    return render_template("account.html")
+    recovery_codes = session.pop("show_recovery_codes", None)
+    return render_template("account.html", recovery_codes=recovery_codes)
 
 
 @app.route("/users", methods=["GET", "POST"])
@@ -417,6 +540,71 @@ def reset_password(uid):
     return redirect(url_for("users"))
 
 
+
+# ------------------------------ Nepali calendar ------------------------------
+def bs_date_label(ad_date, nepali=False):
+    """Return a readable Bikram Sambat date for a Gregorian date."""
+    from nepali_datetime import date as bs_date
+    b = bs_date.from_datetime_date(ad_date)
+    fmt = "%K %N %D" if nepali else "%Y %B %d"
+    return b.strftime(fmt)
+
+
+def bs_month_grid(year, month):
+    """Return a Sunday-first BS month grid using the library's BS calendar data."""
+    from nepali_datetime import date as bs_date
+    first = bs_date(year, month, 1)
+    days = 0
+    cur = first
+    while cur.month == month:
+        days += 1
+        cur = cur + timedelta(days=1)
+    first_weekday = first.to_datetime_date().weekday()  # Mon=0 ... Sun=6
+    sunday_index = (first_weekday + 1) % 7
+    weeks = []
+    week = [None] * sunday_index
+    for day in range(1, days + 1):
+        cell = bs_date(year, month, day)
+        week.append({
+            "day": day,
+            "bs": cell,
+            "ad": cell.to_datetime_date(),
+        })
+        if len(week) == 7:
+            weeks.append(week)
+            week = []
+    if week:
+        weeks.append(week + [None] * (7 - len(week)))
+    return weeks
+
+
+@app.route("/calendar")
+def calendar_view():
+    from nepali_datetime import date as bs_date
+    today_bs = bs_date.today()
+    try:
+        year = request.args.get("year", type=int) or today_bs.year
+        month = request.args.get("month", type=int) or today_bs.month
+        if not 1 <= month <= 12 or not 1901 <= year <= 2199:
+            raise ValueError
+        current = bs_date(year, month, 1)
+    except ValueError:
+        year, month = today_bs.year, today_bs.month
+        current = bs_date(year, month, 1)
+    prev = current - timedelta(days=1)
+    # Find the first day of the next month, then step back one day.
+    if month == 12:
+        nxt = bs_date(year + 1, 1, 1)
+    else:
+        nxt = bs_date(year, month + 1, 1)
+    last = nxt - timedelta(days=1)
+    return render_template("calendar.html", year=year, month=month, weeks=bs_month_grid(year, month),
+                           month_name=current.strftime("%B"), month_name_ne=current.strftime("%N"),
+                           prev_year=prev.year, prev_month=prev.month,
+                           next_year=nxt.year, next_month=nxt.month,
+                           today_bs=today_bs, today_ad=date.today(), current=current, last=last)
+
+
 @app.route("/")
 def index():
     """Home page: summary, items needing attention, recent activity."""
@@ -439,6 +627,7 @@ def index():
         "SELECT st.station_id, st.name, COUNT(s.sensor_id) AS n FROM stations st "
         "LEFT JOIN sensors s USING(station_id) GROUP BY st.station_id ORDER BY st.name").fetchall()
     now = datetime.now()
+    bs_today = bs_date_label(date.today())
     greeting = tr("Good morning" if now.hour < 12 else "Good afternoon" if now.hour < 18
                   else "Good evening")
     if g.lang == "ne":
@@ -451,7 +640,7 @@ def index():
     return render_template("home.html", counts=counts, attention=attention[:8],
                            attention_total=len(attention), recent=recent, stations=stations_,
                            sensors=[r["sensor_id"] for r in rows], greeting=greeting,
-                           today=today, std_issues=std_issues)
+                           today=today, bs_today=bs_today, std_issues=std_issues)
 
 
 @app.route("/register")
