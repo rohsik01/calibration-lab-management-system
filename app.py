@@ -1033,9 +1033,13 @@ def bulk_assign_calibration_requests():
     with db:
         for rid in ids:
             req=db.execute("SELECT * FROM calibration_requests WHERE request_id=?",(rid,)).fetchone()
-            if not req or req["status"] in ("COMPLETED","CANCELLED","UNDER REVIEW"):
+            if not req or req["status"] in ("COMPLETED","CANCELLED","UNDER REVIEW","IN CALIBRATION"):
                 skipped+=1; continue
             existing=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(rid,)).fetchone()
+            if not existing and req["status"] != "REVIEWED":
+                skipped+=1; continue
+            if existing and existing["status"] != "ASSIGNED":
+                skipped+=1; continue
             target_use=target or req["requested_due_date"]
             if existing:
                 db.execute("""UPDATE calibration_work_orders SET assigned_technician_id=?,assigned_by=?,assigned_at=?,
@@ -1052,7 +1056,8 @@ def bulk_assign_calibration_requests():
                     VALUES (?,?,?,?,?,?,?,?,?,'ASSIGNED',?,?)""",
                     (wo,rid,tech["user_id"],g.user["user_id"],now,target_use,method,standard_id,
                      request.form.get("instructions","").strip(),now,now))
-            db.execute("UPDATE calibration_requests SET status='ASSIGNED',updated_at=? WHERE request_id=?",(now,rid))
+            if req["status"] == "REVIEWED":
+                transition_request_status(db, rid, "ASSIGNED", g.user["user_id"], "Technician assigned")
             assigned+=1
     flash(f"{assigned} request(s) assigned to {tech['full_name']}."+(f" Skipped {skipped} ineligible request(s)." if skipped else ""))
     return redirect(url_for("calibration_requests"))
@@ -1064,8 +1069,15 @@ def assign_calibration_request(request_id):
     req = db.execute("SELECT * FROM calibration_requests WHERE request_id=?", (request_id,)).fetchone()
     if not req:
         abort(404)
-    if req["status"] in ("COMPLETED", "CANCELLED"):
-        flash("Completed or cancelled requests cannot be assigned.", "error")
+    existing = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (request_id,)).fetchone()
+    if req["status"] in ("COMPLETED", "CANCELLED", "IN CALIBRATION", "UNDER REVIEW"):
+        flash("This request is not available for assignment or reassignment in its current state.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    if existing and existing["status"] != "ASSIGNED":
+        flash("A work order can only be reassigned while it is in ASSIGNED status.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    if not existing and req["status"] != "REVIEWED":
+        flash("The request must be marked REVIEWED before a technician can be assigned.", "error")
         return redirect(url_for("calibration_request", request_id=request_id))
     technician_text = request.form.get("technician_id", "").strip()
     technician = db.execute(
@@ -1095,7 +1107,6 @@ def assign_calibration_request(request_id):
             return redirect(url_for("calibration_request", request_id=request_id))
         standard_id = standard["standard_id"]
     now = datetime.now().isoformat(timespec="seconds")
-    existing = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (request_id,)).fetchone()
     with db:
         if existing:
             db.execute(
@@ -1118,8 +1129,8 @@ def assign_calibration_request(request_id):
                 (work_order_no, request_id, technician["user_id"], g.user["user_id"], now,
                  target, method, standard_id, request.form.get("instructions", "").strip(), now, now)
             )
-        db.execute("UPDATE calibration_requests SET status='ASSIGNED', updated_at=? WHERE request_id=?",
-                   (now, request_id))
+        if req["status"] == "REVIEWED":
+            transition_request_status(db, request_id, "ASSIGNED", g.user["user_id"], "Technician assigned")
     flash(f"Work order {work_order_no} assigned to {technician['full_name']}.")
     work_order = db.execute("SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
                             (request_id,)).fetchone()
