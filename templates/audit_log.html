@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ tr("Audit Log") }}</h1>
+    <p class="muted">{{ tr("Trace user actions and changes across the calibration laboratory system.") }}</p>
+  </div>
+</div>
+<div class="card">
+  <form method="get" class="filters">
+    <input name="q" value="{{ filters.q }}" placeholder="{{ tr('Search request, record or details') }}">
+    <select name="action"><option value="">{{ tr("All actions") }}</option>{% for a in actions %}<option value="{{ a.action }}" {{ 'selected' if filters.action == a.action }}>{{ a.action }}</option>{% endfor %}</select>
+    <select name="user_id"><option value="">{{ tr("All users") }}</option>{% for u in users %}<option value="{{ u.user_id }}" {{ 'selected' if filters.user_id == (u.user_id|string) }}>{{ u.full_name }} ({{ u.username }})</option>{% endfor %}</select>
+    <select name="entity_type"><option value="">{{ tr("All records") }}</option>{% for e in entities %}<option value="{{ e.entity_type }}" {{ 'selected' if filters.entity_type == e.entity_type }}>{{ e.entity_type }}</option>{% endfor %}</select>
+    <button class="btn">{{ tr("Filter") }}</button>
+    <a class="btn alt" href="{{ url_for('audit_log') }}">{{ tr("Clear") }}</a>
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>{{ tr("Date / time") }}</th><th>{{ tr("User") }}</th><th>{{ tr("Action") }}</th><th>{{ tr("Record") }}</th><th>{{ tr("Change") }}</th><th>{{ tr("Details") }}</th><th>{{ tr("IP") }}</th></tr></thead>
+    <tbody>
+    {% for a in rows %}
+      <tr>
+        <td>{{ a.created_at }}</td>
+        <td>{{ a.full_name or 'System' }}{% if a.role %}<br><small class="muted">{{ a.role }}</small>{% endif %}</td>
+        <td><span class="badge">{{ a.action }}</span></td>
+        <td>{{ a.entity_type or '—' }}{% if a.entity_id %}<br><small>#{{ a.entity_id }}</small>{% endif %}</td>
+        <td>{% if a.old_value or a.new_value %}<details><summary>{{ tr("View change") }}</summary>{% if a.old_value %}<div><strong>{{ tr("Old") }}:</strong><pre>{{ a.old_value }}</pre></div>{% endif %}{% if a.new_value %}<div><strong>{{ tr("New") }}:</strong><pre>{{ a.new_value }}</pre></div>{% endif %}</details>{% else %}—{% endif %}</td>
+        <td>{% if a.details %}<details><summary>{{ tr("View details") }}</summary><pre>{{ a.details }}</pre></details>{% else %}—{% endif %}</td>
+        <td><small>{{ a.ip_address or '—' }}</small></td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="empty">{{ tr("No audit records found.") }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin-top:12px">{{ tr("Showing up to 500 most recent records.") }}</p>
+</div>
+<style>.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.filters input{min-width:260px}.filters select{min-width:170px}details pre{white-space:pre-wrap;max-width:420px;overflow:auto;font-size:11px}@media(max-width:800px){.filters input,.filters select{min-width:100%;width:100%}}</style>
+{% endblock %}
