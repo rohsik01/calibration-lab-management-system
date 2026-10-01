@@ -13,6 +13,19 @@ S/N: {{ req.pending_serial_number }} ·
 <br><small>{{ tr("The sensor will be added to the official sensor register only when an administrator approves this calibration.") }}</small>
 </div>
 <form method="post">{{ csrf_input() }}
+<h2>{{ tr("Sensor details") }}</h2>
+<p class="sub">{{ tr("This sensor is not yet registered. Complete these details before recording the calibration. The official sensor register will be updated only after administrator approval.") }}</p>
+<div class="grid">
+<div><label>{{ tr("Sensor type") }}</label><input name="sensor_type" value="{{ req.pending_sensor_type or '' }}" placeholder="{{ tr('e.g. Rain Gauge') }}" required></div>
+<div><label>{{ tr("Manufacturer") }}</label><input name="manufacturer" value="{{ req.pending_manufacturer or '' }}"></div>
+<div><label>{{ tr("Serial number") }}</label><input name="serial_number" value="{{ req.pending_serial_number or '' }}" required></div>
+<div><label>{{ tr("Station name") }}</label><input name="station_name" value="{{ req.pending_station_name or '' }}" required></div>
+<div><label>{{ tr("Station location") }}</label><input name="station_location" value="{{ req.pending_station_location or '' }}"></div>
+<div><label>{{ tr("Calibration interval (days)") }}</label><input type="number" min="1" name="interval_days" value="{{ req.pending_interval_days or 365 }}" required></div>
+<div><label>{{ tr("Sensor tolerance (±)") }}</label><input type="number" min="0" step="any" name="sensor_tolerance" value="{{ req.pending_tolerance if req.pending_tolerance is not none else 0.5 }}" required></div>
+<div><label>{{ tr("Unit") }}</label><input name="unit" value="{{ req.pending_unit or '' }}" placeholder="{{ tr('e.g. mm, °C, hPa') }}"></div>
+</div>
+<h2 style="margin-top:22px">{{ tr("Calibration details") }}</h2>
 <div class="grid">
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required></div>
 <div><label>{{ tr("Reference standard") }}</label>
