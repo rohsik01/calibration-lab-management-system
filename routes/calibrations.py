@@ -220,6 +220,14 @@ def calibrate_pending_request(request_id):
             if not refs or len(refs)!=len(meass) or len(refs)!=len(tols): raise ValueError("Enter complete measurement points.")
             pts=[(r,m,round(m-r,6),"PASS" if abs(m-r)<=t else "FAIL",t) for r,m,t in zip(refs,meass,tols)]
             worst=max(pts,key=lambda p:abs(p[2])); result="FAIL" if any(p[3]=="FAIL" for p in pts) else "PASS"
+            mean_error=round(sum(p[2] for p in pts)/len(pts),6)
+            max_error=round(max(abs(p[2]) for p in pts),6)
+            adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
+            if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"): adjustment_status="NOT REQUIRED"
+            adjustment_notes=request.form.get("adjustment_notes","").strip()
+            technician_remarks=request.form.get("technician_remarks","").strip()
+            if adjustment_status=="PERFORMED" and not adjustment_notes:
+                raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
             std_sel=request.form.get("standard_id","").strip(); std_text=request.form.get("reference_standard","").strip(); std_id=None; std_details=None
             if std_sel:
                 std=db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",(int(std_sel),)).fetchone()
@@ -242,9 +250,11 @@ def calibrate_pending_request(request_id):
             due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
                 (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
-                 next_due,performed_by,n_points,standard_id,standard_details,request_id)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,request_id))
+                 next_due,performed_by,n_points,standard_id,standard_details,request_id,mean_error,max_error,
+                 adjustment_status,adjustment_notes,technician_remarks)
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
+                 request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks))
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
                 VALUES (?,?,?,?,?,?,?)""",[(cur.lastrowid,i,*p) for i,p in enumerate(pts,1)])
