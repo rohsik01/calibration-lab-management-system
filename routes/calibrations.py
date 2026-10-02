@@ -260,7 +260,7 @@ def calibrate(sensor_id):
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,error,result,tolerance,"
             "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             [(cur.lastrowid, i, p[0], final_errors[i-1],
               "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
               p[1], p[2], p[3],
@@ -491,7 +491,7 @@ def calibrate_pending_request(request_id):
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [(cur.lastrowid,i,p[0],final_errors[i-1],
                    "PASS" if abs(final_errors[i-1])<=p[4] else "FAIL",p[4],
                    p[1],p[2],p[3],
@@ -673,7 +673,7 @@ def edit_calibration(cal_id):
                 db.executemany("""INSERT INTO calibration_points
                     (cal_id,point_no,reference_value,error,result,tolerance,
                      as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                     [(cal_id, i, p[0], final_errors[i-1],
                       "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
                       p[1], p[2], p[3],
