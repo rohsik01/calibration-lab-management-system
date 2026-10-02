@@ -1,94 +1,111 @@
-{% extends "base.html" %}{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no }}{% endblock %}
+{% extends "base.html" %}
+{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no or "PREVIEW" }}{% endblock %}
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  .certificate-page{width:100%;max-width:190mm;margin:0 auto;background:#fff;padding:10mm 11mm;overflow:hidden}
-  .certificate-page table{table-layout:fixed;width:100%;font-size:11px}
-  .certificate-page th,.certificate-page td{padding:5px 6px;white-space:normal;overflow-wrap:anywhere;vertical-align:top}
-  .certificate-page .details th{width:30%}
-  .certificate-page .measurement{font-size:9.5px}
-  .certificate-page .measurement th,.certificate-page .measurement td{text-align:center;padding:4px 3px}
-  .certificate-page .signature{display:grid;grid-template-columns:1fr 1fr;gap:35mm;margin-top:20mm}
-  .certificate-page .signature>div{border-top:1px solid #333;padding-top:6px;min-width:0}
-  @page{size:A4 portrait;margin:10mm}
-  @media print{
-    main{max-width:none!important;padding:0!important}
-    .certificate-page{max-width:none;width:100%;padding:0;box-shadow:none}
-    .certificate-page h1{font-size:20px}
-    .certificate-page h2{font-size:14px;margin-top:10px}
-    .certificate-page table{font-size:9.5px}
-    .certificate-page th,.certificate-page td{padding:3px 4px}
-    .certificate-page .measurement{font-size:8.5px}
-    .certificate-page .measurement th,.certificate-page .measurement td{padding:3px 2px}
-    .certificate-page .signature{margin-top:12mm}
-    .certificate-page .noprint{display:none!important}
-    .certificate-page .print-banner{display:block!important}
+  @page { size: A6 portrait; margin: 0; }
+  .certificate-page {
+    width: 105mm; min-height: 148mm; max-width: 105mm; margin: 8mm auto;
+    padding: 5mm; background: #fff; color: #16263e; border: .35mm solid #24466c;
+    box-shadow: 0 3px 16px rgba(20,45,80,.12); overflow: hidden; position: relative;
+    font: 8pt/1.28 Arial, "Segoe UI", sans-serif;
+  }
+  .certificate-page * { box-sizing: border-box; }
+  .certificate-page .brandline { display:flex; align-items:center; justify-content:space-between; gap:2mm; border-bottom:.5mm solid #1e4775; padding-bottom:2mm; }
+  .certificate-page .brandname { font-size:11pt; font-weight:800; color:#174b7b; letter-spacing:.04em; }
+  .certificate-page .branddesc { font-size:6.5pt; text-align:right; max-width:34mm; }
+  .certificate-page .banner { font-size:6.5pt; line-height:1.15; padding:0 0 1.5mm; margin:0 0 1.5mm; border-bottom:.25mm solid #d9e2ed; text-align:center; }
+  .certificate-page .banner .b1,.certificate-page .banner .b2,.certificate-page .banner .b3,.certificate-page .banner .b4 { font-size:inherit; color:#233f60; margin:0; }
+  .certificate-page .certificate-title { text-align:center; font-size:12pt; line-height:1.1; margin:2.2mm 0 .8mm; font-weight:800; letter-spacing:.035em; }
+  .certificate-page .certno { text-align:center; color:#405a76; font-size:7pt; margin:0 0 2.5mm; }
+  .certificate-page .main-grid { display:grid; grid-template-columns:minmax(0,1fr) 25mm; gap:2.5mm; align-items:start; }
+  .certificate-page .info { margin:0; display:grid; grid-template-columns:23mm minmax(0,1fr); gap:1.5mm 1.5mm; }
+  .certificate-page .info dt { color:#52657b; margin:0; }
+  .certificate-page .info dd { margin:0; font-weight:600; overflow-wrap:anywhere; }
+  .certificate-page .qrbox { text-align:center; border:.25mm solid #d7e1ec; border-radius:1.5mm; padding:1.5mm 1mm; }
+  .certificate-page .qrbox img { width:21mm; height:21mm; display:block; margin:0 auto 1mm; image-rendering:pixelated; }
+  .certificate-page .qrbox .qrlabel { font-size:6pt; font-weight:700; color:#174b7b; }
+  .certificate-page .resultbar { display:flex; align-items:center; justify-content:space-between; gap:2mm; margin-top:3mm; padding:2mm 3mm; border-radius:1.5mm; background:#e8f7ee; border:.25mm solid #b8e0c6; }
+  .certificate-page .resultbar.fail { background:#fff0ef; border-color:#efc3c0; }
+  .certificate-page .result-label { font-size:7pt; color:#34566f; }
+  .certificate-page .result-value { font-size:15pt; line-height:1; font-weight:900; color:#087443; letter-spacing:.04em; }
+  .certificate-page .fail .result-value { color:#b42318; }
+  .certificate-page .summary { display:grid; grid-template-columns:1fr 1fr 1fr; border: .25mm solid #d7e1ec; border-radius:1.2mm; margin-top:2mm; }
+  .certificate-page .summary>div { padding:1.4mm 1mm; text-align:center; min-width:0; }
+  .certificate-page .summary>div+div { border-left:.25mm solid #d7e1ec; }
+  .certificate-page .summary span { display:block; color:#65768b; font-size:6pt; }
+  .certificate-page .summary strong { display:block; font-size:7.5pt; margin-top:.4mm; overflow-wrap:anywhere; }
+  .certificate-page .bottom { display:grid; grid-template-columns:1fr 1.15fr; gap:3mm; align-items:end; margin-top:4mm; }
+  .certificate-page .signature { border-top:.25mm solid #52657b; padding-top:1.5mm; min-height:9mm; }
+  .certificate-page .signature strong { font-size:7pt; }
+  .certificate-page .signature small { display:block; font-size:6.2pt; color:#52657b; }
+  .certificate-page .validity { text-align:right; font-size:6.2pt; color:#52657b; }
+  .certificate-page .footer { border-top:.5mm solid #174b7b; margin-top:3mm; padding-top:1.2mm; text-align:center; font-size:5.8pt; letter-spacing:.08em; color:#52657b; }
+  .certificate-page .preview-watermark { position:absolute; left:2mm; right:2mm; top:48%; text-align:center; transform:rotate(-28deg); font-size:20pt; font-weight:900; color:rgba(180,35,24,.12); pointer-events:none; }
+  .certificate-page .preview-note { margin:0 0 3mm; padding:1.5mm; border:.3mm solid #b42318; color:#b42318; text-align:center; font-weight:700; font-size:7pt; }
+  @media screen and (max-width:560px) { .certificate-page { width:100%; max-width:105mm; margin:4mm auto; } }
+  @media print {
+    html,body { width:105mm!important; min-width:0!important; margin:0!important; padding:0!important; background:#fff!important; }
+    main { width:105mm!important; max-width:none!important; margin:0!important; padding:0!important; }
+    .certificate-page { width:105mm!important; min-height:148mm!important; max-width:none!important; margin:0!important; padding:5mm!important; border:0!important; box-shadow:none!important; }
+    .certificate-page .noprint { display:none!important; }
+    .side,.topbar,.langbar,.flash { display:none!important; }
   }
 </style>
-{% if preview %}<div class="card" style="max-width:780px;margin:0 auto 16px;border:2px solid #b91c1c;color:#b91c1c;text-align:center"><h2 style="margin:0">UNVERIFIED — PREVIEW ONLY</h2><p style="margin:4px 0">This calibration record has not been verified by an administrator. No official certificate number has been issued.</p></div>{% endif %}
-<div class="certificate-page"><div class="card" style="max-width:none;margin:0;position:relative;overflow:hidden;padding:0;border:0;border-radius:0">
-{% if preview %}<div aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;overflow:hidden"><div style="transform:rotate(-32deg);font-size:clamp(36px,8vw,76px);font-weight:900;color:rgba(185,28,28,.16);white-space:nowrap">UNVERIFIED</div></div>{% endif %}
-{% include "_banner.html" %}
-<h1 style="text-align:center;margin-top:14px">{{ tr("Calibration Certificate") }}</h1>
-<p style="text-align:center;color:var(--mute)">{% if r.certificate_no %}{{ r.certificate_no }}{% endif %}{% if preview %}PREVIEW — UNVERIFIED{% endif %}</p>
-<table class="details">
-<tr><th>{{ tr("Sensor ID") }}</th><td>{{ r.sensor_id }}</td></tr>
-<tr><th>{{ tr("Station") }}</th><td>{{ r.station }}</td></tr>
-<tr><th>{{ tr("Type") }}</th><td>{{ r.sensor_type }}</td></tr>
-<tr><th>{{ tr("Manufacturer") }}</th><td>{{ r.manufacturer }}</td></tr>
-<tr><th>{{ tr("Serial number") }}</th><td>{{ r.serial_number }}</td></tr>
-<tr><th>{{ tr("Calibration date") }}</th><td>{{ date_pair(r.cal_date) }}</td></tr>
-<tr><th>{{ tr("Calibration procedure") }}</th><td>{% if r.procedure_code %}<b>{{ r.procedure_code }}</b> — {{ r.procedure_title }} ({{ tr("Rev.") }} {{ r.procedure_revision }}){% else %}—{% endif %}</td></tr>
-<tr><th>{{ tr("Reference standard") }}</th><td>{{ r.reference_standard }}</td></tr>
-{% if det %}
-{% if standard %}<tr><th>{{ tr("Reference standard code") }}</th><td><a href="{{ url_for('standard', sid=standard.standard_id) }}">{{ standard.code }}</a>{% if standard.name %} — {{ standard.name }}{% endif %}</td></tr>{% endif %}
-{% if det.serial %}<tr><th>{{ tr("Standard serial number") }}</th><td>{{ det.serial }}</td></tr>{% endif %}
-{% if det.traceability %}<tr><th>{{ tr("Traceability") }}</th><td style="white-space:normal">{{ det.traceability }}</td></tr>{% endif %}
-{% if det.certificate %}<tr><th>{{ tr("Standard's certificate") }}</th><td>{{ det.certificate }}</td></tr>{% endif %}
-<tr><th>{{ tr("Standard valid until") }}</th><td>{{ date_pair(det.valid_until) }}</td></tr>
-{% if det.uncertainty %}<tr><th>{{ tr("Standard uncertainty") }}</th><td>{{ det.uncertainty }}</td></tr>{% endif %}
+{% if preview %}
+<div class="preview-note noprint">UNVERIFIED PREVIEW — NOT AN OFFICIAL CERTIFICATE</div>
 {% endif %}
-<tr><th>{{ tr("Points measured") }}</th><td>{{ pts|length }}</td></tr>
-<tr><th>{{ tr("Maximum error") }}</th><td>{{ '%+g'|format(r.max_error if r.max_error is not none else r.error) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Worst measurement point") }}</th><td>{% set ns = namespace(first=true) %}{% for p in pts %}{% if p.error is not none and (p.error|abs) == (r.max_error if r.max_error is not none else (r.error|abs)) %}{% if not ns.first %}, {% endif %}{{ p.point_no }}{% set ns.first = false %}{% endif %}{% endfor %}</td></tr>
-<tr><th>{{ tr("Mean error") }}</th><td>{{ '%+g'|format(r.mean_error if r.mean_error is not none else r.error) }} {{ r.unit }}</td></tr>
-{% if r.expanded_uncertainty is not none %}
-<tr><th>{{ tr("Uncertainty method") }}</th><td>{{ r.uncertainty_method or 'RSS' }}</td></tr>
-<tr><th>{{ tr("Standard uncertainty component") }}</th><td>{{ '%.6g'|format(r.standard_uncertainty or 0) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Resolution component") }}</th><td>{{ '%.6g'|format(r.resolution or 0) }} {{ r.unit }} (rectangular distribution)</td></tr>
-<tr><th>{{ tr("Repeatability component") }}</th><td>{{ '%.6g'|format(r.repeatability or 0) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Environmental component") }}</th><td>{{ '%.6g'|format(r.environmental_uncertainty or 0) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Other component") }}</th><td>{{ '%.6g'|format(r.other_uncertainty or 0) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Combined standard uncertainty") }}</th><td>{{ '%.6g'|format(r.combined_standard_uncertainty or 0) }} {{ r.unit }}</td></tr>
-<tr><th>{{ tr("Coverage factor") }}</th><td>k = {{ '%.4g'|format(r.coverage_factor or 2) }}</td></tr>
-<tr><th>{{ tr("Expanded uncertainty") }}</th><td><strong>U = {{ '%.6g'|format(r.expanded_uncertainty) }} {{ r.unit }}</strong></td></tr>
-{% endif %}
-{% if r.environment_temperature is not none %}<tr><th>{{ tr("Ambient temperature") }}</th><td>{{ r.environment_temperature }} °C</td></tr>{% endif %}
-{% if r.environment_humidity is not none %}<tr><th>{{ tr("Relative humidity") }}</th><td>{{ r.environment_humidity }} %</td></tr>{% endif %}
-<tr><th>{{ tr("Adjustment status") }}</th><td>{{ tr(r.adjustment_status or "NOT REQUIRED") }}</td></tr>
-{% if r.adjustment_notes %}<tr><th>{{ tr("Adjustment notes") }}</th><td>{{ r.adjustment_notes }}</td></tr>{% endif %}
-{% if r.technician_remarks %}<tr><th>{{ tr("Technician remarks") }}</th><td>{{ r.technician_remarks }}</td></tr>{% endif %}
-<tr><th>{{ tr("Overall result") }}</th><td><span class="badge {{ 'green' if r.result=='PASS' else 'red' }}">{{ tr(r.result) }}</span></td></tr>
-<tr><th>{{ tr("Calibrated by") }}</th><td>{{ r.performed_by or '—' }}</td></tr>
-{% if not preview %}
-<tr><th>Approved by</th><td>{{ r.approved_by or '—' }}</td></tr>
-<tr><th>Approval date</th><td>{{ date_pair(r.approved_at[:10]) if r.approved_at else '—' }}</td></tr>
-<tr><th>Approved revision</th><td>Revision {{ r.approved_revision or '—' }}</td></tr>
-<tr><th>Certificate issued by</th><td>{{ r.certificate_issued_by_name or '—' }}</td></tr>
-<tr><th>Certificate issue date</th><td>{{ date_pair(r.certificate_issued_at[:10]) if r.certificate_issued_at else '—' }}</td></tr>
-{% endif %}
-<tr><th>{{ tr("Next due") }}</th><td>{{ date_pair(r.next_due) }}</td></tr></table>
-<h2 style="margin-top:24px">{{ tr("Measurement points") }}</h2>
-<table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("As-Found") }} ({{ r.unit }})</th><th>{{ tr("As-Found error") }} ({{ r.unit }})</th><th>{{ tr("As-Left") }} ({{ r.unit }})</th><th>{{ tr("As-Left error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
-{% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}</td><td>{{ '%+g'|format(p.as_found_error if p.as_found_error is not none else p.error) }}</td><td>{{ p.as_left_value if p.as_left_value is not none else '—' }}</td><td>{% if p.as_left_error is not none %}{{ '%+g'|format(p.as_left_error) }}{% else %}—{% endif %}</td><td>{{ p.tolerance }}</td>
-<td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
-<div class="signature">
-  <div style="border-top:1px solid #333;padding-top:8px">
-    <strong>{{ tr("Prepared by") }}</strong><br>{{ r.performed_by or '—' }}
+<div class="certificate-page">
+  {% if preview %}<div class="preview-watermark" aria-hidden="true">UNVERIFIED PREVIEW</div>{% endif %}
+  <div class="brandline">
+    <div><div class="brandname">{{ banner[2] or "DHM" }}</div><div>{{ banner[3] or "Calibration Laboratory" }}</div></div>
+    <div class="branddesc">{{ banner[0] }}<br>{{ banner[1] }}</div>
   </div>
-  <div style="border-top:1px solid #333;padding-top:8px">
-    <strong>{{ tr("Approved by") }}</strong><br>{{ r.approved_by or '—' }}
+  <h1 class="certificate-title">{{ tr("Calibration Certificate") }}</h1>
+  <p class="certno">{{ tr("Certificate No.") }}: <strong>{{ r.certificate_no or "NOT ISSUED" }}</strong></p>
+
+  <div class="main-grid">
+    <dl class="info">
+      <dt>{{ tr("Instrument") }}</dt><dd>{{ r.sensor_type or "—" }}</dd>
+      <dt>{{ tr("Serial number") }}</dt><dd>{{ r.serial_number or "—" }}</dd>
+      <dt>{{ tr("Station") }}</dt><dd>{{ r.station or "—" }}</dd>
+      <dt>{{ tr("Calibration date") }}</dt><dd>{{ r.cal_date or "—" }}</dd>
+      <dt>{{ tr("Next due") }}</dt><dd>{{ r.next_due or "—" }}</dd>
+      <dt>{{ tr("Reference standard") }}</dt><dd>{{ (standard.code ~ " — " ~ standard.name) if standard else (r.reference_standard or "—") }}</dd>
+    </dl>
+    <div class="qrbox">
+      {% if qr_code and not preview %}
+      <img src="{{ qr_code }}" alt="QR code to verify the full calibration certificate">
+      <div class="qrlabel">SCAN FOR<br>FULL REPORT</div>
+      {% else %}
+      <div style="height:21mm;display:flex;align-items:center;justify-content:center;font-size:6pt;color:#8b98a9">QR available<br>after approval</div>
+      <div class="qrlabel">FULL REPORT</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="resultbar {{ 'fail' if r.result == 'FAIL' else '' }}">
+    <div><div class="result-label">{{ tr("Overall calibration result") }}</div><div style="font-size:6.5pt;color:#52657b">{{ tr("Approved certificate status") if not preview else "Preview only" }}</div></div>
+    <div class="result-value">{{ tr(r.result) }}</div>
+  </div>
+
+  <div class="summary">
+    <div><span>{{ tr("Measurement points") }}</span><strong>{{ pts|length }}</strong></div>
+    <div><span>{{ tr("Maximum absolute error") }}</span><strong>{{ '%+.5g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</strong></div>
+    <div><span>{{ tr("Adjustment") }}</span><strong>{{ tr(r.adjustment_status or "NOT REQUIRED") }}</strong></div>
+  </div>
+
+  <div class="bottom">
+    <div class="signature"><strong>{{ tr("Approved by") }}</strong><small>{{ r.approved_by or "—" }}</small><small>{{ r.approved_at[:10] if r.approved_at else "" }}</small></div>
+    <div class="validity">
+      {% if r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}<br>{% endif %}
+      This certificate applies only to the instrument identified above.<br>
+      Scan the QR code to view measurement data, uncertainty, procedure and traceability.
+    </div>
+  </div>
+  <div class="footer">DHM CALIBRATION LABORATORY · ACCURACY · TRACEABILITY · TRUST</div>
+  <div class="noprint" style="margin-top:4mm;text-align:center">
+    {% if not preview %}<button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>{% else %}<span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>{% endif %}
   </div>
 </div>
-{% if not preview %}<p class="noprint"><button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
-<a class="btn alt" href="{{ url_for('sensor', sensor_id=r.sensor_id) }}">{{ tr("Back to sensor") }}</a></p>{% else %}<p style="color:#b91c1c;font-weight:700;text-align:center">UNVERIFIED PREVIEW — NOT VALID AS A CERTIFICATE</p><p class="noprint"><a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Back to requests") }}</a></p>{% endif %}</div></div>{% endblock %}
+{% endblock %}

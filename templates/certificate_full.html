@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="{{ 'ne' if g.lang == 'ne' else 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate Verification — {{ r.certificate_no }}</title>
+<style>
+:root{--navy:#174b7b;--ink:#172b43;--muted:#607187;--line:#d8e3ef;--green:#087443;--red:#b42318}
+*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+.page{max-width:1000px;margin:28px auto;padding:0 18px 30px}
+.masthead{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px 26px 16px;display:flex;justify-content:space-between;gap:20px;align-items:center}
+.brand{color:var(--navy);font-weight:800;font-size:22px;line-height:1.15}.brand small{display:block;font-weight:500;font-size:13px;color:var(--muted);margin-top:5px}
+.right-title{text-align:right;color:var(--navy);font-weight:700}.right-title small{display:block;color:var(--muted);font-weight:400}
+.verified{margin-top:14px;border:1px solid #b7e1c6;background:#e9f8ef;border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px}
+.check{width:32px;height:32px;flex:0 0 32px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:white;font-size:20px;font-weight:800}
+.verified strong{display:block;color:var(--green);font-size:17px}.verified small{display:block;color:#2c6547}.status{margin-left:auto;background:var(--green);color:white;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:800}
+.section{margin-top:14px;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.section h2{margin:0;padding:10px 15px;background:#edf4fb;color:var(--navy);font-size:14px;border-bottom:1px solid var(--line)}
+.body{padding:13px 16px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 26px}
+.field{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1.2fr);gap:10px;border-bottom:1px solid #eef2f6;padding-bottom:5px;min-width:0}
+.label{color:var(--muted)}.value{font-weight:600;overflow-wrap:anywhere}
+.pill{display:inline-block;padding:2px 10px;border-radius:20px;background:#e5f7ec;color:var(--green);font-size:12px;font-weight:800}.pill.fail{background:#fff0ef;color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:center;border:1px solid var(--line);padding:7px 6px}th{background:#f3f7fb;color:#425a73;font-weight:700}td:first-child,th:first-child{text-align:left}
+.note{font-size:12px;color:var(--muted)}.footer{margin-top:16px;padding:12px 0;text-align:center;color:var(--muted);font-size:12px;border-top:2px solid var(--navy)}
+@media(max-width:680px){.page{margin:10px auto;padding:0 10px 20px}.masthead{padding:16px;align-items:flex-start}.brand{font-size:18px}.right-title{font-size:12px}.fields{grid-template-columns:1fr}.field{grid-template-columns:minmax(115px,.8fr) minmax(0,1.2fr)}.verified{align-items:flex-start}.status{margin-left:auto}}
+@media print{body{background:white}.page{max-width:none;margin:0;padding:0}.masthead,.verified,.section{break-inside:avoid}.footer{margin-top:10px}}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead"><div><div class="brand">{{ banner[2] or "DHM" }}</div><div>{{ banner[3] or "Calibration Laboratory" }}</div><div class="note">{{ banner[0] }} · {{ banner[1] }}</div></div><div class="right-title">CERTIFICATE VERIFICATION<small>Trusted · Accurate · Traceable</small></div></header>
+<div class="verified"><div class="check">✓</div><div><strong>Certificate Verified</strong><small>This certificate is recorded as officially approved by the DHM Calibration Laboratory.</small></div><span class="status">VALID · APPROVED</span></div>
+
+<section class="section"><h2>Certificate Information</h2><div class="body fields">
+<div class="field"><span class="label">Certificate No.</span><span class="value">{{ r.certificate_no }}</span></div><div class="field"><span class="label">Lifecycle status</span><span class="value">Approved</span></div>
+<div class="field"><span class="label">Calibration date</span><span class="value">{{ r.cal_date }}</span></div><div class="field"><span class="label">Next due date</span><span class="value">{{ r.next_due }}</span></div>
+<div class="field"><span class="label">Certificate issue date</span><span class="value">{{ r.certificate_issued_at[:10] if r.certificate_issued_at else "—" }}</span></div><div class="field"><span class="label">Approved revision</span><span class="value">{{ r.approved_revision or "—" }}</span></div>
+<div class="field"><span class="label">Approved by</span><span class="value">{{ r.approved_by or "—" }}</span></div><div class="field"><span class="label">Issued by</span><span class="value">{{ r.certificate_issued_by_name or "—" }}</span></div>
+</div></section>
+
+<section class="section"><h2>Instrument Information</h2><div class="body fields">
+<div class="field"><span class="label">Instrument type</span><span class="value">{{ r.sensor_type or "—" }}</span></div><div class="field"><span class="label">Serial number</span><span class="value">{{ r.serial_number or "—" }}</span></div>
+<div class="field"><span class="label">Sensor ID</span><span class="value">{{ r.sensor_id or "Pending registration" }}</span></div><div class="field"><span class="label">Manufacturer</span><span class="value">{{ r.manufacturer or "—" }}</span></div>
+<div class="field"><span class="label">Station</span><span class="value">{{ r.station or "—" }}</span></div><div class="field"><span class="label">Measurement unit</span><span class="value">{{ r.unit or "—" }}</span></div>
+<div class="field"><span class="label">Instrument tolerance</span><span class="value">{{ r.tolerance if r.tolerance is not none else "—" }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Calibrated by</span><span class="value">{{ r.performed_by or "—" }}</span></div>
+</div></section>
+
+<section class="section"><h2>Reference Standard and Traceability</h2><div class="body fields">
+<div class="field"><span class="label">Reference standard</span><span class="value">{{ r.reference_standard or "—" }}</span></div><div class="field"><span class="label">Standard code / name</span><span class="value">{{ (standard.code ~ " — " ~ standard.name) if standard else "—" }}</span></div>
+<div class="field"><span class="label">Standard serial number</span><span class="value">{{ (det.serial if det and det.serial else (standard.serial_number if standard else "—")) }}</span></div><div class="field"><span class="label">Standard certificate</span><span class="value">{{ (det.certificate if det and det.certificate else (standard.certificate_no if standard else "—")) }}</span></div>
+<div class="field"><span class="label">Traceability</span><span class="value">{{ (det.traceability if det and det.traceability else (standard.traceability if standard else "—")) }}</span></div><div class="field"><span class="label">Standard valid until</span><span class="value">{{ (det.valid_until if det and det.valid_until else (standard.valid_until if standard else "—")) }}</span></div>
+<div class="field"><span class="label">Standard calibrated on</span><span class="value">{{ standard.calibrated_on if standard else "—" }}</span></div><div class="field"><span class="label">Standard uncertainty</span><span class="value">{{ (det.uncertainty if det and det.uncertainty else (standard.uncertainty if standard else "—")) }}</span></div>
+</div></section>
+
+<section class="section"><h2>Calibration Procedure and Notes</h2><div class="body fields">
+<div class="field"><span class="label">Procedure code</span><span class="value">{{ r.procedure_code or "—" }}</span></div><div class="field"><span class="label">Procedure title</span><span class="value">{{ r.procedure_title or "—" }}</span></div>
+<div class="field"><span class="label">Procedure revision</span><span class="value">{{ r.procedure_revision or "—" }}</span></div><div class="field"><span class="label">Adjustment status</span><span class="value">{{ r.adjustment_status or "NOT REQUIRED" }}</span></div>
+<div class="field"><span class="label">Adjustment notes</span><span class="value">{{ r.adjustment_notes or "—" }}</span></div><div class="field"><span class="label">Technician remarks</span><span class="value">{{ r.technician_remarks or "—" }}</span></div>
+</div></section>
+
+<section class="section"><h2>Calibration Result Summary</h2><div class="body fields">
+<div class="field"><span class="label">Overall result</span><span class="value"><span class="pill {{ 'fail' if r.result == 'FAIL' else '' }}">{{ r.result }}</span></span></div><div class="field"><span class="label">Number of points</span><span class="value">{{ pts|length }}</span></div>
+<div class="field"><span class="label">Mean error</span><span class="value">{{ '%+.6g'|format(r.mean_error if r.mean_error is not none else r.error) }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Maximum absolute error</span><span class="value">{{ '%+.6g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</span></div>
+<div class="field"><span class="label">Ambient temperature</span><span class="value">{{ r.environment_temperature if r.environment_temperature is not none else "—" }}{% if r.environment_temperature is not none %} °C{% endif %}</span></div><div class="field"><span class="label">Relative humidity</span><span class="value">{{ r.environment_humidity if r.environment_humidity is not none else "—" }}{% if r.environment_humidity is not none %} %{% endif %}</span></div>
+</div></section>
+
+<section class="section"><h2>Measurement Points</h2><div class="body" style="overflow-x:auto"><table><thead><tr><th>Point</th><th>Reference ({{ r.unit or "" }})</th><th>Tolerance (±)</th><th>As-Found</th><th>Error AF</th><th>As-Left</th><th>Error AL</th><th>Final result</th></tr></thead><tbody>
+{% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.tolerance if p.tolerance is not none else "—" }}</td><td>{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}</td><td>{{ '%+.6g'|format(p.as_found_error if p.as_found_error is not none else p.error) }}</td><td>{{ p.as_left_value if p.as_left_value is not none else "—" }}</td><td>{{ '%+.6g'|format(p.as_left_error) if p.as_left_error is not none else "—" }}</td><td><span class="pill {{ 'fail' if p.result == 'FAIL' else '' }}">{{ p.result }}</span></td></tr>{% endfor %}
+</tbody></table></div></section>
+
+<section class="section"><h2>Measurement Uncertainty</h2><div class="body fields">
+<div class="field"><span class="label">Calculation method</span><span class="value">{{ r.uncertainty_method or "RSS" }}</span></div><div class="field"><span class="label">Standard uncertainty component</span><span class="value">{{ r.standard_uncertainty if r.standard_uncertainty is not none else "—" }} {{ r.unit or "" }}</span></div>
+<div class="field"><span class="label">Resolution component</span><span class="value">{{ r.resolution if r.resolution is not none else "—" }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Repeatability component</span><span class="value">{{ r.repeatability if r.repeatability is not none else "—" }} {{ r.unit or "" }}</span></div>
+<div class="field"><span class="label">Environmental component</span><span class="value">{{ r.environmental_uncertainty if r.environmental_uncertainty is not none else "—" }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Other component</span><span class="value">{{ r.other_uncertainty if r.other_uncertainty is not none else "—" }} {{ r.unit or "" }}</span></div>
+<div class="field"><span class="label">Combined standard uncertainty (uc)</span><span class="value">{{ r.combined_standard_uncertainty if r.combined_standard_uncertainty is not none else "—" }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Coverage factor (k)</span><span class="value">{{ r.coverage_factor if r.coverage_factor is not none else "—" }}</span></div>
+<div class="field"><span class="label">Expanded uncertainty (U)</span><span class="value"><strong>{{ r.expanded_uncertainty if r.expanded_uncertainty is not none else "—" }} {{ r.unit or "" }}</strong></span></div>
+</div></section>
+
+<div class="footer">Department of Hydrology and Meteorology (DHM) · Calibration Laboratory<br><span class="note">This page shows the current approved record associated with certificate {{ r.certificate_no }}. Retain it with the printed certificate.</span></div>
+</div>
+</body></html>
