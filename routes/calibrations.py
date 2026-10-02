@@ -206,7 +206,7 @@ def calibrate(sensor_id):
             flash("Enter adjustment notes when adjustment is marked as performed.", "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
         due = (date.fromisoformat(cal_date) + timedelta(days=s["interval_days"])).isoformat()
-        cert = next_certificate(db, cal_date)
+        cert = None
         cur = db.execute(
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
             "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
@@ -349,7 +349,7 @@ def calibrate_pending_request(request_id):
                 WHERE request_id=?""",
                        (sensor_type, manufacturer, serial_number, interval_days, tolerance, unit,
                         station_id, station_name, station_location, station_type, datetime.now().isoformat(timespec="seconds"), request_id))
-            cert=next_certificate(db,cal_date)
+            cert=None
             due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
                 (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
@@ -554,7 +554,7 @@ def certificate(cert):
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
-           WHERE c.certificate_no=?""", (cert,)).fetchone()
+           WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'""", (cert,)).fetchone()
     if not r:
         abort(404)
     work_order = None
