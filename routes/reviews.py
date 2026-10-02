@@ -147,12 +147,36 @@ def decide_calibration_review(review_id):
                     flash("Cannot approve: calibration record not found.", "error")
                     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                 official_cert = next_certificate(db, cal_row["cal_date"])
+            submitted_revision = review["submitted_revision"]
+            cal_state = db.execute(
+                "SELECT revision_no, lifecycle_status FROM calibrations WHERE cal_id=?",
+                (review["cal_id"],)
+            ).fetchone()
+            if not cal_state:
+                db.rollback()
+                flash("Cannot approve: calibration record not found.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+            if cal_state["revision_no"] != submitted_revision or cal_state["lifecycle_status"] != "SUBMITTED":
+                db.rollback()
+                flash("Cannot approve: the submitted calibration revision is no longer the current review version.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
             db.execute(
                 """UPDATE calibrations
                    SET lifecycle_status='APPROVED', approved_by=?, approved_at=?,
-                       certificate_no=?, certificate_issued_by=?, certificate_issued_at=?, updated_at=?
-                   WHERE cal_id=?""",
-                (g.user["user_id"], now, official_cert, g.user["user_id"], now, now, review["cal_id"])
+                       approved_revision=?, certificate_no=?, certificate_issued_by=?, certificate_issued_at=?, updated_at=?
+                   WHERE cal_id=? AND lifecycle_status='SUBMITTED' AND revision_no=?""",
+                (g.user["user_id"], now, submitted_revision, official_cert,
+                 g.user["user_id"], now, now, review["cal_id"], submitted_revision)
+            )
+            audit_event(
+                "CALIBRATION_CERTIFICATE_ISSUED",
+                "calibration", review["cal_id"],
+                old_value={"certificate_no": None, "lifecycle_status": "SUBMITTED",
+                           "revision_no": submitted_revision},
+                new_value={"certificate_no": official_cert, "lifecycle_status": "APPROVED",
+                           "approved_revision": submitted_revision},
+                details={"review_id": review_id, "certificate_issued_by": g.user["user_id"],
+                         "certificate_issued_at": now}
             )
         else:
             db.execute(
