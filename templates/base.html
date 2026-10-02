@@ -137,6 +137,7 @@
         <div class="submenu">
           <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
           <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}{% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
+          {% if g.user.role == 'admin' %}<a class="item {{ 'active' if ep in ('procedures','procedure_detail','new_procedure','edit_procedure','toggle_procedure') }}" href="{{ url_for('procedures') }}"><span class="ic">📐</span>{{ tr("Calibration procedures") }}</a>{% endif %}
           <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
         </div>
       </details>
