@@ -588,6 +588,26 @@ def record_calibration_revision(db, cal_id, event_type, created_by=None, review_
     return cal["revision_no"]
 
 
+def backfill_calibration_revision_snapshots():
+    """Populate real snapshots for legacy revision rows created during migration."""
+    with app.app_context():
+        db = get_db()
+        rows = db.execute(
+            "SELECT revision_id, cal_id FROM calibration_revisions WHERE snapshot_json='{}'"
+        ).fetchall()
+        for row in rows:
+            snapshot = calibration_snapshot(db, row["cal_id"])
+            db.execute(
+                "UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
+                (json.dumps(snapshot, ensure_ascii=False, default=str), row["revision_id"])
+            )
+        db.commit()
+
+
+
+backfill_calibration_revision_snapshots()
+
+
 def status(row):
     """Return (label, css_class) for a sensor row from LATEST."""
     if not row["next_due"]:
