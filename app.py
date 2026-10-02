@@ -40,7 +40,12 @@ def _load_key():
 app.secret_key = _load_key()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=8))
-DB = "calibration.db"
+
+# Database location can be overridden for deployments, but defaults to the
+# project directory so starting the app from another working directory cannot
+# accidentally create a second, empty calibration database.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB = os.environ.get("CALIBRATION_DB", os.path.join(BASE_DIR, "calibration.db"))
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations (
@@ -213,12 +218,41 @@ def audit_event(action, entity_type=None, entity_id=None, old_value=None, new_va
          ip, ua, datetime.now().isoformat(timespec="seconds"))
     )
 
+def _configure_connection(db):
+    """Apply SQLite settings needed for a multi-user local/LAN deployment."""
+    db.execute("PRAGMA foreign_keys = ON")
+    db.execute("PRAGMA busy_timeout = 30000")
+    # WAL lets readers continue while another connection is writing.
+    db.execute("PRAGMA journal_mode = WAL")
+    # NORMAL is the recommended balance for WAL durability/performance.
+    db.execute("PRAGMA synchronous = NORMAL")
+    db.execute("PRAGMA temp_store = MEMORY")
+    db.execute("PRAGMA cache_size = -64000")  # approximately 64 MiB
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB)
+        g.db = sqlite3.connect(DB, timeout=30)
         g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
+        _configure_connection(g.db)
     return g.db
+
+def backup_database(destination=None):
+    """Create a consistent online SQLite backup using SQLite's backup API."""
+    if destination is None:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destination = os.path.join(BASE_DIR, "backups", f"calibration_{stamp}.db")
+    os.makedirs(os.path.dirname(os.path.abspath(destination)), exist_ok=True)
+    src = sqlite3.connect(DB)
+    try:
+        _configure_connection(src)
+        dst = sqlite3.connect(destination)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    return destination
 
 
 @app.teardown_appcontext
@@ -251,7 +285,8 @@ def audit_mutating_request(response):
     return response
 
 
-with sqlite3.connect(DB) as _c:
+with sqlite3.connect(DB, timeout=30) as _c:
+    _configure_connection(_c)
     _c.executescript(SCHEMA)
     # upgrade older databases: station type and last-edited timestamp
     _station_cols = [r[1] for r in _c.execute("PRAGMA table_info(stations)")]
@@ -353,6 +388,48 @@ with sqlite3.connect(DB) as _c:
     for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT"), ("request_id", "INTEGER")):
         if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
             _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+    # Query-performance indexes. Foreign keys are not automatically indexed
+    # by SQLite, so add indexes for the relationships and common dashboard/report
+    # filters. IF NOT EXISTS makes this safe for every startup and old databases.
+    _c.executescript("""
+    CREATE INDEX IF NOT EXISTS idx_sensors_station_id ON sensors(station_id);
+    CREATE INDEX IF NOT EXISTS idx_sensors_serial_number ON sensors(serial_number);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_sensor_date ON calibrations(sensor_id, cal_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_date ON calibrations(cal_date);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_result ON calibrations(result);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_standard_id ON calibrations(standard_id);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_request_id ON calibrations(request_id);
+    CREATE INDEX IF NOT EXISTS idx_calibration_points_cal_id ON calibration_points(cal_id);
+    CREATE INDEX IF NOT EXISTS idx_calibration_points_result ON calibration_points(result);
+    CREATE INDEX IF NOT EXISTS idx_requests_status_updated ON calibration_requests(status, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_requests_received_date ON calibration_requests(received_date);
+    CREATE INDEX IF NOT EXISTS idx_requests_sensor_id ON calibration_requests(sensor_id);
+    CREATE INDEX IF NOT EXISTS idx_requests_created_by ON calibration_requests(created_by);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_technician_status
+        ON calibration_work_orders(assigned_technician_id, status);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_target_date
+        ON calibration_work_orders(target_date);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_standard_id
+        ON calibration_work_orders(standard_id);
+    CREATE INDEX IF NOT EXISTS idx_request_history_request_date
+        ON calibration_request_status_history(request_id, changed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_review_history_work_order
+        ON calibration_review_history(work_order_id, submitted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_review_history_decision
+        ON calibration_review_history(decision, reviewed_at);
+    CREATE INDEX IF NOT EXISTS idx_standards_valid_until
+        ON reference_standards(valid_until, active);
+    CREATE INDEX IF NOT EXISTS idx_standards_active_code
+        ON reference_standards(active, code);
+    CREATE INDEX IF NOT EXISTS idx_audit_entity_created
+        ON audit_log(entity_type, entity_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_action_created
+        ON audit_log(action, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_user_created
+        ON audit_log(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+        ON notifications(user_id, created_at DESC);
+    """)
     # Upgrade older databases: seed status-history snapshots.
     _c.execute("""INSERT INTO calibration_request_status_history
         (request_id, old_status, new_status, changed_by, changed_at, comments)
