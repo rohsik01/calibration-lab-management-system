@@ -151,7 +151,7 @@ def index():
                                            u.full_name, u.role
                                     FROM audit_log a
                                     LEFT JOIN users u ON u.user_id=a.user_id
-                                    ORDER BY a.audit_id DESC LIMIT 10""").fetchall()
+                                    ORDER BY a.audit_id DESC LIMIT 2""").fetchall()
 
     dashboard = {
         "request_counts": request_counts,
