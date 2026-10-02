@@ -131,14 +131,26 @@ def calibrate(sensor_id):
             points.append((ref, meas, err, "PASS" if abs(err) <= tol else "FAIL", tol))
         worst = max(points, key=lambda p: abs(p[2]))          # point with the largest error
         result = "FAIL" if any(p[3] == "FAIL" for p in points) else "PASS"
+        mean_error = round(sum(p[2] for p in points) / len(points), 6)
+        max_error = round(max(abs(p[2]) for p in points), 6)
+        adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
+        if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
+            adjustment_status = "NOT REQUIRED"
+        adjustment_notes = f.get("adjustment_notes", "").strip()
+        technician_remarks = f.get("technician_remarks", "").strip()
+        if adjustment_status == "PERFORMED" and not adjustment_notes:
+            flash("Enter adjustment notes when adjustment is marked as performed.", "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
         due = (date.fromisoformat(cal_date) + timedelta(days=s["interval_days"])).isoformat()
         cert = next_certificate(db, cal_date)
         cur = db.execute(
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
             "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
-            "standard_id,standard_details,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
+            "adjustment_notes,technician_remarks) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
-             result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id))
+             result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
+             mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
