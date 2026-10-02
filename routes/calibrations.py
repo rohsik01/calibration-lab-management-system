@@ -108,6 +108,17 @@ def calibrate(sensor_id):
         if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
         procedure_id = linked_order["procedure_id"]
+        procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
+        procedure_points = db.execute(
+            "SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",
+            (procedure_id,)
+        ).fetchall() if procedure_id else []
+        if procedure_id and (not procedure or not procedure["active"]):
+            flash("The assigned calibration procedure is no longer active.", "error")
+            return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
+        if procedure_id and not procedure_points:
+            flash("The assigned calibration procedure has no required measurement points.", "error")
+            return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
         if linked_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
             flash("This work order is awaiting review or already closed; calibration data cannot be changed.", "error")
             return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
