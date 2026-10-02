@@ -128,14 +128,14 @@ def calibrate(sensor_id):
         try:
             cal_date = datetime.strptime(f["cal_date"], "%Y-%m-%d").date().isoformat()
             refs = [float(x) for x in f.getlist("reference_value")]
-            meass = [float(x) for x in f.getlist("measured_value")]
+            found_values = [float(x) for x in f.getlist("as_found_value")]
             left_raw = f.getlist("as_left_value")
             as_left = [float(x) if x.strip() else None for x in left_raw] if left_raw else [None] * len(refs)
             raw = f.getlist("tolerance")
             tols = ([float(t) if t.strip() else s["tolerance"] for t in raw]
                     if raw else [s["tolerance"]] * len(refs))
-            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs) or len(refs) > 30
-                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
+            if (not refs or len(refs) != len(found_values) or len(refs) != len(tols) or len(as_left) != len(refs) or len(refs) > 30
+                    or not all(math.isfinite(x) for x in refs + found_values + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
                 raise ValueError("Check the date and the numeric values for every measurement point.")
             if procedure_id:
@@ -206,12 +206,12 @@ def calibrate(sensor_id):
                 flash("This work order is awaiting review or already closed. New measurements cannot be recorded until it is returned to the technician.", "error")
                 return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
         points = []
-        for ref, meas, left, tol in zip(refs, meass, as_left, tols):
-            found_err = round(meas - ref, 6)
+        for ref, found, left, tol in zip(refs, found_values, as_left, tols):
+            found_err = round(found - ref, 6)
             left_err = round(left - ref, 6) if left is not None else found_err
             found_result = "PASS" if abs(found_err) <= tol else "FAIL"
             left_result = "PASS" if abs(left_err) <= tol else "FAIL"
-            points.append((ref, meas, found_err, found_result, tol, left, left_err, left_result))
+            points.append((ref, found, found_err, found_result, tol, left, left_err, left_result))
         if f.get("adjustment_status", "NOT REQUIRED").strip().upper() == "PERFORMED" and any(p[5] is None for p in points):
             flash("Enter an As-Left reading for every point when adjustment is marked as performed.", "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
@@ -244,7 +244,7 @@ def calibrate(sensor_id):
         cert = None
         cur = db.execute(
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
-            "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
+            error,result,certificate_no,next_due,performed_by,n_points,"
             "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
             "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
             "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
@@ -258,13 +258,15 @@ def calibrate(sensor_id):
              uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], json.dumps(uncertainty["calculation"], ensure_ascii=False),
              uncertainty["environment_temperature"], uncertainty["environment_humidity"], procedure_id))
         db.executemany(
-            "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,error,result,tolerance,"
+            "INSERT INTO calibration_points(cal_id,point_no,reference_value,error,result,tolerance,"
             "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [(cur.lastrowid, i, p[0], p[5] if adjustment_status == "PERFORMED" else p[1],
-              final_errors[i-1], "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
-              p[1], p[2], p[3], p[5], p[6] if p[5] is not None else None,
-              p[7] if p[5] is not None else None) for i, p in enumerate(points, 1)])
+            [(cur.lastrowid, i, p[0], final_errors[i-1],
+              "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
+              p[1], p[2], p[3],
+              (p[5] if adjustment_status == "PERFORMED" else p[1]),
+              (p[6] if adjustment_status == "PERFORMED" else p[2]),
+              (p[7] if adjustment_status == "PERFORMED" else p[3])) for i, p in enumerate(points, 1)])
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         if request_id:
             # Submitting calibration data is the technician's review submission.
@@ -402,12 +404,12 @@ def calibrate_pending_request(request_id):
                 raise ValueError("A sensor with this serial number already exists.")
             cal_date=date.fromisoformat(request.form.get("cal_date","").strip()).isoformat()
             refs=[float(x) for x in request.form.getlist("reference_value")]
-            meass=[float(x) for x in request.form.getlist("measured_value")]
+            found_values=[float(x) for x in request.form.getlist("as_found_value")]
             left_raw=request.form.getlist("as_left_value")
             as_left=[float(x) if x.strip() else None for x in left_raw] if left_raw else [None]*len(refs)
             tols=[float(x) for x in request.form.getlist("tolerance")]
-            if (not refs or len(refs)>30 or len(refs)!=len(meass) or len(refs)!=len(tols) or len(as_left)!=len(refs)
-                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
+            if (not refs or len(refs)>30 or len(refs)!=len(found_values) or len(refs)!=len(tols) or len(as_left)!=len(refs)
+                    or not all(math.isfinite(x) for x in refs + found_values + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
                 raise ValueError("Enter complete, valid measurement points.")
             if procedure_id:
@@ -418,11 +420,11 @@ def calibrate_pending_request(request_id):
                 ):
                     raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
             pts=[]
-            for r,m,left,t in zip(refs,meass,as_left,tols):
-                found_err=round(m-r,6); left_err=round(left-r,6) if left is not None else found_err
+            for r,found,left,t in zip(refs,found_values,as_left,tols):
+                found_err=round(found-r,6); left_err=round(left-r,6) if left is not None else found_err
                 found_result="PASS" if abs(found_err)<=t else "FAIL"
                 left_result="PASS" if abs(left_err)<=t else "FAIL"
-                pts.append((r,m,found_err,found_result,t,left,left_err,left_result))
+                pts.append((r,found,found_err,found_result,t,left,left_err,left_result))
             adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
             if adjustment_status=="PERFORMED" and any(p[5] is None for p in pts):
                 raise ValueError("Enter an As-Left reading for every point when adjustment is marked as performed.")
@@ -472,7 +474,7 @@ def calibrate_pending_request(request_id):
             cert=None
             due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
-                (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
+                (sensor_id,cal_date,reference_standard,reference_value,error,result,certificate_no,
                  next_due,performed_by,n_points,standard_id,standard_details,request_id,mean_error,max_error,
                  adjustment_status,adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
@@ -487,7 +489,7 @@ def calibrate_pending_request(request_id):
                  json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"],
                  uncertainty["environment_humidity"],procedure_id))
             db.executemany("""INSERT INTO calibration_points
-                (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
+                (cal_id,point_no,reference_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 [(cur.lastrowid,i,p[0],p[5] if adjustment_status=="PERFORMED" else p[1],
@@ -579,15 +581,15 @@ def edit_calibration(cal_id):
         try:
             cal_date = datetime.strptime(f["cal_date"], "%Y-%m-%d").date().isoformat()
             refs = [float(x) for x in f.getlist("reference_value")]
-            meass = [float(x) for x in f.getlist("measured_value")]
+            found_values = [float(x) for x in f.getlist("as_found_value")]
             left_raw = f.getlist("as_left_value")
             as_left = [float(x) if x.strip() else None for x in left_raw] if left_raw else [None] * len(refs)
             default_tol = sensor["tolerance"] if sensor else (req["pending_tolerance"] or 0.5)
             raw = f.getlist("tolerance")
             tols = ([float(t) if t.strip() else default_tol for t in raw] if raw else [default_tol] * len(refs))
-            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs)
+            if (not refs or len(refs) != len(found_values) or len(refs) != len(tols) or len(as_left) != len(refs)
                     or len(refs) > 30
-                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
+                    or not all(math.isfinite(x) for x in refs + found_values + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
                 raise ValueError("Check the date and the numeric values for every measurement point.")
             if procedure_id:
@@ -598,12 +600,12 @@ def edit_calibration(cal_id):
                 ):
                     raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
             points_new = []
-            for ref, meas, left, tol in zip(refs, meass, as_left, tols):
-                found_err = round(meas - ref, 6)
+            for ref, found, left, tol in zip(refs, found_values, as_left, tols):
+                found_err = round(found - ref, 6)
                 left_err = round(left - ref, 6) if left is not None else found_err
                 found_result = "PASS" if abs(found_err) <= tol else "FAIL"
                 left_result = "PASS" if abs(left_err) <= tol else "FAIL"
-                points_new.append((ref, meas, found_err, found_result, tol, left, left_err, left_result))
+                points_new.append((ref, found, found_err, found_result, tol, left, left_err, left_result))
             adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
             if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
                 adjustment_status = "NOT REQUIRED"
@@ -651,7 +653,7 @@ def edit_calibration(cal_id):
                 current_revision = db.execute("SELECT revision_no FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()["revision_no"]
                 next_revision = current_revision + 1
                 db.execute("""UPDATE calibrations SET
-                    cal_date=?, reference_standard=?, reference_value=?, measured_value=?, error=?,
+                    cal_date=?, reference_standard=?, reference_value=?, error=?,
                     result=?, next_due=?, performed_by=?, n_points=?, standard_id=?, standard_details=?,
                     mean_error=?, max_error=?, adjustment_status=?, adjustment_notes=?, technician_remarks=?,
                     standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
@@ -667,13 +669,16 @@ def edit_calibration(cal_id):
                      next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
                 db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
                 db.executemany("""INSERT INTO calibration_points
-                    (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
+                    (cal_id,point_no,reference_value,error,result,tolerance,
                      as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    [(cal_id, i, p[0], p[5] if adjustment_status == "PERFORMED" else p[1],
-                      final_errors[i-1], "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
-                      p[1], p[2], p[3], p[5], p[6] if p[5] is not None else None,
-                      p[7] if p[5] is not None else None) for i, p in enumerate(points_new, 1)])
+                    [(cal_id, i, p[0], final_errors[i-1],
+                      "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
+                      p[1], p[2], p[3],
+                       (p[5] if adjustment_status == "PERFORMED" else p[1]),
+                       (p[6] if adjustment_status == "PERFORMED" else p[2]),
+                       (p[7] if adjustment_status == "PERFORMED" else p[3])
+                     ) for i, p in enumerate(points_new, 1)])
                 record_calibration_revision(db, cal_id, "CORRECTED", g.user["user_id"])
                 if not sensor:
                     sensor_type = f.get("sensor_type", "").strip()
