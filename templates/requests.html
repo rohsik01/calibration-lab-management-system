@@ -29,6 +29,7 @@
   {{ csrf_input() }}
   <div class="card" style="margin:14px 0;background:#f8fafd">
     <h3>{{ tr("Bulk assignment") }}</h3>
+    <p class="sub">{{ tr("Select requests with REVIEWED status. Requests that are RECEIVED must be reviewed first; requests already in calibration or under review cannot be reassigned here.") }}</p>
     <div class="grid">
       <div><label>{{ tr("Technician") }}</label><select name="technician_id" required><option value="">{{ tr("Select technician") }}</option>{% for t in technicians %}<option value="{{ t.user_id }}">{{ t.full_name }} ({{ t.username }})</option>{% endfor %}</select></div>
       <div><label>{{ tr("Target completion date") }}</label><input type="date" name="target_date"></div>
@@ -44,7 +45,14 @@
       <tr>{% if g.user.role == 'admin' %}<th><input type="checkbox" id="selectAll"></th>{% endif %}<th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
       {% for r in rows %}
       <tr>
-        {% if g.user.role == 'admin' %}<td><input type="checkbox" name="request_ids" value="{{ r.request_id }}" class="request-check"></td>{% endif %}
+        {% if g.user.role == 'admin' %}
+<td>
+  {% set selectable = r.status == 'REVIEWED' %}
+  <input type="checkbox" name="request_ids" value="{{ r.request_id }}" class="request-check"
+         {{ 'disabled' if not selectable }}
+         title="{{ tr('Only REVIEWED requests can be assigned in bulk.') if not selectable else tr('Select for bulk assignment') }}">
+</td>
+{% endif %}
         <td><a href="{{ url_for('calibration_request', request_id=r.request_id) }}"><b>{{ r.request_no }}</b></a></td>
         <td>{{ r.client_name }}{% if r.contact_person %}<small class="hint">{{ r.contact_person }}</small>{% endif %}</td>
         <td>{{ r.instrument_description }}</td>
@@ -59,7 +67,12 @@
   {% if g.user.role == 'admin' %}</form>
   <script>
   const all=document.getElementById('selectAll');
-  if(all) all.addEventListener('change',()=>document.querySelectorAll('.request-check').forEach(x=>x.checked=all.checked));
+  if(all) all.addEventListener('change',()=>document.querySelectorAll('.request-check:not(:disabled)').forEach(x=>x.checked=all.checked));
+  document.querySelectorAll('.request-check').forEach(x=>x.addEventListener('change',()=>{
+    const enabled=[...document.querySelectorAll('.request-check:not(:disabled)')];
+    all.checked=enabled.length>0 && enabled.every(x=>x.checked);
+    all.indeterminate=enabled.some(x=>x.checked) && !all.checked;
+  }));
   </script>{% endif %}
 </div>
 {% endblock %}
