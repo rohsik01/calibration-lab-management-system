@@ -244,12 +244,12 @@ def calibrate(sensor_id):
         cert = None
         cur = db.execute(
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
-            error,result,certificate_no,next_due,performed_by,n_points,"
+            "error,result,certificate_no,next_due,performed_by,n_points,"
             "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
             "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
             "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
             "expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (sensor_id, cal_date, ref_text, worst[0], (points[worst_index][5] if adjustment_status == "PERFORMED" else worst[1]), final_errors[worst_index],
+            (sensor_id, cal_date, ref_text, worst[0], final_errors[worst_index],
              result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
              mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks,
              uncertainty["standard_uncertainty"], uncertainty["resolution"], uncertainty["repeatability"],
