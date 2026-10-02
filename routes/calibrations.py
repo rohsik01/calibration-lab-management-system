@@ -264,9 +264,9 @@ def calibrate(sensor_id):
             [(cur.lastrowid, i, p[0], final_errors[i-1],
               "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
               p[1], p[2], p[3],
-              (p[5] if adjustment_status == "PERFORMED" else p[1]),
-              (p[6] if adjustment_status == "PERFORMED" else p[2]),
-              (p[7] if adjustment_status == "PERFORMED" else p[3])) for i, p in enumerate(points, 1)])
+              (p[5] if p[5] is not None else p[1]),
+              (p[6] if p[5] is not None else p[2]),
+              (p[7] if p[5] is not None else p[3])) for i, p in enumerate(points, 1)])
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         if request_id:
             # Submitting calibration data is the technician's review submission.
@@ -677,9 +677,9 @@ def edit_calibration(cal_id):
                     [(cal_id, i, p[0], final_errors[i-1],
                       "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
                       p[1], p[2], p[3],
-                       (p[5] if adjustment_status == "PERFORMED" else p[1]),
-                       (p[6] if adjustment_status == "PERFORMED" else p[2]),
-                       (p[7] if adjustment_status == "PERFORMED" else p[3])
+                       (p[5] if p[5] is not None else p[1]),
+                       (p[6] if p[5] is not None else p[2]),
+                       (p[7] if p[5] is not None else p[3])
                      ) for i, p in enumerate(points_new, 1)])
                 record_calibration_revision(db, cal_id, "CORRECTED", g.user["user_id"])
                 if not sensor:
