@@ -3,6 +3,7 @@ Run:  python app.py   then open http://127.0.0.1:5000
 """
 import base64
 import csv
+import getpass
 import hmac
 import io
 import json
@@ -72,7 +73,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
     full_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin','technician','general_user')),
+    role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','general_user')),
     active INTEGER NOT NULL DEFAULT 1,
     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
     totp_secret TEXT,
@@ -306,13 +307,13 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("ALTER TABLE users ADD COLUMN recovery_codes TEXT")
     # Upgrade legacy user table so the general_user role is accepted while preserving accounts.
     _user_sql = _c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
-    if "'general_user'" not in _user_sql:
+    if "'superadmin'" not in _user_sql or "'general_user'" not in _user_sql:
         _c.execute("""CREATE TABLE users_new (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL COLLATE NOCASE,
             full_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK (role IN ('admin','technician','general_user')),
+            role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','general_user')),
             active INTEGER NOT NULL DEFAULT 1,
             two_factor_enabled INTEGER NOT NULL DEFAULT 0,
             totp_secret TEXT,
@@ -551,7 +552,7 @@ def nav_counts():
     sensor_alerts = sum(1 for r in rows if status(r)[0] != "OK")
     standard_alerts = sum(1 for x in stds if standard_status(x)[0] != "Valid")
     pending_reviews = db.execute("SELECT COUNT(*) FROM calibration_review_history WHERE decision='PENDING'").fetchone()[0]
-    if g.user["role"] == "admin":
+    if g.user["role"] in ("admin", "superadmin"):
         unassigned = db.execute("""SELECT COUNT(*) FROM calibration_requests r
                                    WHERE r.status='REVIEWED'
                                      AND NOT EXISTS (
@@ -569,7 +570,7 @@ def nav_counts():
     # Admins see all actionable new requests, active work orders and pending reviews.
     # Technicians see only their own actionable work orders; general users see
     # new requests relevant to their own submitted requests.
-    if g.user["role"] == "admin":
+    if g.user["role"] in ("admin", "superadmin"):
         new_calibration_requests = db.execute(
             "SELECT COUNT(*) FROM calibration_requests WHERE status='RECEIVED'"
         ).fetchone()[0]
@@ -792,9 +793,20 @@ def gate():
 
 
 def admin_required(f):
+    """Require a laboratory administrator or superadministrator."""
     @wraps(f)
     def wrapper(*a, **kw):
-        if g.user["role"] != "admin":
+        if g.user["role"] not in ("admin", "superadmin"):
+            abort(403)
+        return f(*a, **kw)
+    return wrapper
+
+
+def superadmin_required(f):
+    """Require the dedicated superadministrator role for critical system tasks."""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if g.user["role"] != "superadmin":
             abort(403)
         return f(*a, **kw)
     return wrapper
@@ -834,9 +846,46 @@ def run_server():
     serve(app, host=host, port=port)
 
 
+def create_superadmin_cli():
+    """Create the first superadministrator from the local server console."""
+    db = sqlite3.connect(DB)
+    db.row_factory = sqlite3.Row
+    _configure_connection(db)
+    try:
+        if db.execute("SELECT COUNT(*) FROM users WHERE role='superadmin' AND active=1").fetchone()[0]:
+            print("An active superadmin already exists.", flush=True)
+            return 1
+        username = input("Superadmin username: ").strip()
+        full_name = input("Full name: ").strip() or username
+        password = getpass.getpass("Password: ")
+        password2 = getpass.getpass("Confirm password: ")
+        err = check_new_password(password, password2)
+        if err:
+            print(err, flush=True)
+            return 1
+        if not username:
+            print("Username is required.", flush=True)
+            return 1
+        try:
+            db.execute(
+                "INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,'superadmin')",
+                (username, full_name, generate_password_hash(password))
+            )
+            db.commit()
+        except sqlite3.IntegrityError:
+            print("That username already exists.", flush=True)
+            return 1
+        print(f"Superadmin '{username}' created successfully.", flush=True)
+        return 0
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     if "--backup" in sys.argv:
         print(f"Database backup created: {backup_database()}", flush=True)
+    elif "--create-superadmin" in sys.argv:
+        raise SystemExit(create_superadmin_cli())
     else:
         run_server()
 
