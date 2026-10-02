@@ -151,8 +151,8 @@ def calibrate(sensor_id):
                                or abs(tols[i] - proc_points[i]["tolerance"]) > 1e-9
                                for i in range(len(refs)))):
                     raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
-        except ValueError:
-            flash("Check the date and the numeric values for every measurement point.")
+        except ValueError as e:
+            flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
         std = None
         std_id, std_details = None, None
