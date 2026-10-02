@@ -44,7 +44,21 @@
   <input id="gtol" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:0;width:100px" aria-label="{{ tr('Tolerance (±)') }}" title="{{ tr('Tolerance (±)') }}">
   <button type="button" class="btn alt" id="gen">{{ tr("Create evenly spaced points") }}</button>
 </div>
-<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("As-Found reading") }} ({{ s.unit }})</th><th>{{ tr("As-Left reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody>{% if not edit_mode %}{% if procedure_points %}{% for p in procedure_points %}<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>{% endfor %}{% else %}{% for i in range(5) %}<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required style="min-width:120px"></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:90px"></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>{% endfor %}{% endif %}{% endif %}</tbody></table></div>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("As-Found reading") }} ({{ s.unit }})</th><th>{{ tr("As-Left reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody>
+{% if edit_mode %}
+{% for p in points %}
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="measured_value" type="number" step="any" required value="{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}" style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment" value="{{ p.as_left_value if p.as_left_value is not none else '' }}"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+{% endfor %}
+{% elif procedure_points %}
+{% for p in procedure_points %}
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+{% endfor %}
+{% else %}
+{% for i in range(5) %}
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required style="min-width:120px"></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:90px"></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+{% endfor %}
+{% endif %}
+</tbody></table></div>
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview" id="overall"></div>
 <div class="grid" style="margin-top:18px">
@@ -146,8 +160,5 @@ const std = document.getElementById('std'), stdtext = document.getElementById('s
 function stdChange() { const other = std.value === ''; stdtext.style.display = other ? '' : 'none'; stdtext.required = other; }
 {% if not edit_mode %}const firstValid = [...std.options].find(o => o.value && !o.disabled); if (firstValid) std.value = firstValid.value;{% endif %}
 std.onchange = stdChange; stdChange();
-{% if edit_mode %}
-const existingPoints = [{% for p in points %}{ref: {{ p.reference_value }}, meas: {{ p.as_found_value if p.as_found_value is not none else p.measured_value }}, left: {{ p.as_left_value if p.as_left_value is not none else "null" }}, tol: {{ p.tolerance if p.tolerance is not none else s.tolerance }}},{% endfor %}];
-existingPoints.forEach(p => addRow(p.ref, p.tol, p.meas, p.left === null ? '' : p.left, {{ 'true' if procedure else 'false' }}));
-{% endif %}
+
 </script>{% endblock %}
