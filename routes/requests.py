@@ -123,6 +123,9 @@ def calibration_request(request_id):
         "SELECT user_id, full_name, username FROM users "
         "WHERE role='technician' AND active=1 ORDER BY full_name"
     ).fetchall()
+    procedures = db.execute(
+        "SELECT procedure_id, code, title, instrument_type, method, revision, effective_date FROM calibration_procedures WHERE active=1 ORDER BY instrument_type, code"
+    ).fetchall()
     standards = db.execute(
         "SELECT standard_id, code, name, valid_until FROM reference_standards "
         "WHERE active=1 ORDER BY code"
@@ -142,7 +145,7 @@ def calibration_request(request_id):
     ).fetchall()
     return render_template("request_detail.html", r=row, calibrations=calibrations,
                            statuses=REQUEST_STATUSES, technicians=technicians,
-                           standards=standards, work_order=work_order,
+                           standards=standards, procedures=procedures, work_order=work_order,
                            status_history=status_history)
 
 
