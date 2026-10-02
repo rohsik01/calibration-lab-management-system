@@ -59,6 +59,13 @@
 {% if r.technician_remarks %}<tr><th>{{ tr("Technician remarks") }}</th><td>{{ r.technician_remarks }}</td></tr>{% endif %}
 <tr><th>{{ tr("Overall result") }}</th><td><span class="badge {{ 'green' if r.result=='PASS' else 'red' }}">{{ tr(r.result) }}</span></td></tr>
 <tr><th>{{ tr("Calibrated by") }}</th><td>{{ r.performed_by or '—' }}</td></tr>
+{% if not preview %}
+<tr><th>Approved by</th><td>{{ r.approved_by or '—' }}</td></tr>
+<tr><th>Approval date</th><td>{{ date_pair(r.approved_at[:10]) if r.approved_at else '—' }}</td></tr>
+<tr><th>Approved revision</th><td>Revision {{ r.approved_revision or '—' }}</td></tr>
+<tr><th>Certificate issued by</th><td>{{ r.certificate_issued_by_name or '—' }}</td></tr>
+<tr><th>Certificate issue date</th><td>{{ date_pair(r.certificate_issued_at[:10]) if r.certificate_issued_at else '—' }}</td></tr>
+{% endif %}
 <tr><th>{{ tr("Next due") }}</th><td>{{ date_pair(r.next_due) }}</td></tr></table>
 <h2 style="margin-top:24px">{{ tr("Measurement points") }}</h2>
 <table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("As-Found") }} ({{ r.unit }})</th><th>{{ tr("As-Found error") }} ({{ r.unit }})</th><th>{{ tr("As-Left") }} ({{ r.unit }})</th><th>{{ tr("As-Left error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
