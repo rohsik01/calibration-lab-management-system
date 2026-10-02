@@ -38,7 +38,17 @@
 <div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("Sensor reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody></tbody></table></div>
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview" id="overall"></div>
-<button class="btn">{{ tr("Save and issue certificate") }}</button>
+<div class="grid" style="margin-top:18px">
+<div><label>{{ tr("Adjustment status") }}</label>
+<select name="adjustment_status">
+<option value="NOT REQUIRED">{{ tr("Not required") }}</option>
+<option value="REQUIRED">{{ tr("Adjustment required") }}</option>
+<option value="PERFORMED">{{ tr("Adjustment performed") }}</option>
+</select></div>
+<div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}"></textarea></div>
+<div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}"></textarea></div>
+</div>
+<button class="btn">{{ tr("Save measurement results") }}</button>
 <a class="btn alt" href="{{ url_for('sensor', sensor_id=s.sensor_id) }}">{{ tr("Cancel") }}</a></form></div>
 <script>
 const T = {{ {"fill": tr("Fill in every point to preview the overall result."),
