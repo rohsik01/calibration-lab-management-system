@@ -3,6 +3,8 @@ from app import *
 
 PROCEDURE_FIELDS = ("code", "title", "instrument_type", "method", "revision",
                     "effective_date", "tolerance_unit", "environmental_requirements",
+                    "environment_temperature_min", "environment_temperature_max",
+                    "environment_humidity_min", "environment_humidity_max", "uncertainty_method",
                     "instructions")
 
 def read_procedure(form):
@@ -13,6 +15,26 @@ def read_procedure(form):
         d["effective_date"] = date.fromisoformat(d["effective_date"]).isoformat()
     except ValueError:
         raise ValueError("Enter a valid effective date.")
+    d["uncertainty_method"] = (d["uncertainty_method"] or "RSS").upper()
+    if d["uncertainty_method"] != "RSS":
+        raise ValueError("Currently supported uncertainty method is RSS.")
+    for key in ("environment_temperature_min", "environment_temperature_max",
+                "environment_humidity_min", "environment_humidity_max"):
+        raw = d[key]
+        if raw == "":
+            d[key] = None
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            raise ValueError(f"Enter a numeric value for {key.replace('_', ' ')}.")
+        if not math.isfinite(value):
+            raise ValueError(f"Enter a finite value for {key.replace('_', ' ')}.")
+        d[key] = value
+    if d["environment_temperature_min"] is not None and d["environment_temperature_max"] is not None and d["environment_temperature_min"] > d["environment_temperature_max"]:
+        raise ValueError("Minimum temperature cannot exceed maximum temperature.")
+    if d["environment_humidity_min"] is not None and d["environment_humidity_max"] is not None and d["environment_humidity_min"] > d["environment_humidity_max"]:
+        raise ValueError("Minimum humidity cannot exceed maximum humidity.")
     return d
 
 def read_points(form):
@@ -58,9 +80,13 @@ def new_procedure():
             cur = db.execute(
                 """INSERT INTO calibration_procedures
                    (code,title,instrument_type,method,revision,effective_date,tolerance_unit,
-                    environmental_requirements,instructions,active,created_by,created_at,updated_at)
+                    environmental_requirements,environment_temperature_min,environment_temperature_max,
+                    environment_humidity_min,environment_humidity_max,uncertainty_method,instructions,
+                    active,created_by,created_at,updated_at)
                    VALUES (:code,:title,:instrument_type,:method,:revision,:effective_date,:tolerance_unit,
-                           :environmental_requirements,:instructions,1,:created_by,:created_at,:updated_at)""",
+                           :environmental_requirements,:environment_temperature_min,:environment_temperature_max,
+                           :environment_humidity_min,:environment_humidity_max,:uncertainty_method,:instructions,
+                           1,:created_by,:created_at,:updated_at)""",
                 {**d, "active": 1, "created_by": g.user["user_id"],
                  "created_at": now, "updated_at": now}
             )
@@ -126,7 +152,9 @@ def edit_procedure(procedure_id):
                 changed = (
                     any(str(d.get(k, "")) != str(p[k] or "") for k in
                         ("code", "title", "instrument_type", "method", "revision",
-                         "effective_date", "tolerance_unit", "environmental_requirements", "instructions"))
+                         "effective_date", "tolerance_unit", "environmental_requirements",
+                         "environment_temperature_min", "environment_temperature_max",
+                         "environment_humidity_min", "environment_humidity_max", "uncertainty_method", "instructions"))
                     or len(points) != len(old_points)
                     or any(abs(points[i][1] - old_points[i]["reference_value"]) > 1e-9
                            or abs(points[i][2] - old_points[i]["tolerance"]) > 1e-9
@@ -142,7 +170,10 @@ def edit_procedure(procedure_id):
             db.execute(
                 """UPDATE calibration_procedures SET code=:code,title=:title,instrument_type=:instrument_type,
                    method=:method,revision=:revision,effective_date=:effective_date,tolerance_unit=:tolerance_unit,
-                   environmental_requirements=:environmental_requirements,instructions=:instructions,
+                   environmental_requirements=:environmental_requirements,
+                   environment_temperature_min=:environment_temperature_min,environment_temperature_max=:environment_temperature_max,
+                   environment_humidity_min=:environment_humidity_min,environment_humidity_max=:environment_humidity_max,
+                   uncertainty_method=:uncertainty_method,instructions=:instructions,
                    updated_at=:updated_at WHERE procedure_id=:procedure_id""",
                 {**d, "procedure_id": procedure_id, "updated_at": now}
             )
