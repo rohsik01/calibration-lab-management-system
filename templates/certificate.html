@@ -49,6 +49,11 @@
 <tr><th>{{ tr("Points measured") }}</th><td>{{ pts|length }}</td></tr>
 <tr><th>{{ tr("Maximum error") }}</th><td>{{ '%+g'|format(r.max_error if r.max_error is not none else r.error) }} {{ r.unit }}</td></tr>
 <tr><th>{{ tr("Mean error") }}</th><td>{{ '%+g'|format(r.mean_error if r.mean_error is not none else r.error) }} {{ r.unit }}</td></tr>
+{% if r.expanded_uncertainty is not none %}
+<tr><th>{{ tr("Combined standard uncertainty") }}</th><td>{{ '%.6g'|format(r.combined_standard_uncertainty or 0) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Coverage factor") }}</th><td>k = {{ '%.4g'|format(r.coverage_factor or 2) }}</td></tr>
+<tr><th>{{ tr("Expanded uncertainty") }}</th><td><strong>U = {{ '%.6g'|format(r.expanded_uncertainty) }} {{ r.unit }}</strong></td></tr>
+{% endif %}
 <tr><th>{{ tr("Adjustment status") }}</th><td>{{ tr(r.adjustment_status or "NOT REQUIRED") }}</td></tr>
 {% if r.adjustment_notes %}<tr><th>{{ tr("Adjustment notes") }}</th><td>{{ r.adjustment_notes }}</td></tr>{% endif %}
 {% if r.technician_remarks %}<tr><th>{{ tr("Technician remarks") }}</th><td>{{ r.technician_remarks }}</td></tr>{% endif %}
