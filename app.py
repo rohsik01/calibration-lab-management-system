@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS calibrations (
     environmental_uncertainty REAL, other_uncertainty REAL,
     combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
     expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
+    uncertainty_calculation_json TEXT,
+    environment_temperature REAL,
+    environment_humidity REAL,
     certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER);
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,6 +138,11 @@ CREATE TABLE IF NOT EXISTS calibration_procedures (
     effective_date TEXT NOT NULL,
     tolerance_unit TEXT,
     environmental_requirements TEXT,
+    environment_temperature_min REAL,
+    environment_temperature_max REAL,
+    environment_humidity_min REAL,
+    environment_humidity_max REAL,
+    uncertainty_method TEXT NOT NULL DEFAULT 'RSS',
     instructions TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     created_by INTEGER REFERENCES users(user_id),
@@ -303,6 +311,68 @@ def get_db():
         _configure_connection(g.db)
     return g.db
 
+def validate_calibration_controls(form, procedure=None, standard=None, unit=""):
+    """Validate controlled-procedure environmental and uncertainty requirements."""
+    def num(name, default=None, allow_blank=True):
+        raw = form.get(name, "").strip()
+        if raw == "":
+            if allow_blank:
+                return default
+            raise ValueError(f"Enter {name.replace('_', ' ')}.")
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(f"Invalid {name.replace('_', ' ')}.")
+        return value
+
+    temperature = num("environment_temperature")
+    humidity = num("environment_humidity")
+    if procedure:
+        checks = [
+            ("environment_temperature", temperature, procedure["environment_temperature_min"], procedure["environment_temperature_max"], "Temperature"),
+            ("environment_humidity", humidity, procedure["environment_humidity_min"], procedure["environment_humidity_max"], "Relative humidity"),
+        ]
+        for _, value, minimum, maximum, label in checks:
+            if minimum is not None or maximum is not None:
+                if value is None:
+                    raise ValueError(f"{label} is required by the assigned calibration procedure.")
+                if minimum is not None and value < minimum:
+                    raise ValueError(f"{label} {value:g} is below the procedure minimum of {minimum:g}.")
+                if maximum is not None and value > maximum:
+                    raise ValueError(f"{label} {value:g} is above the procedure maximum of {maximum:g}.")
+
+    uncertainty = calculate_measurement_uncertainty(form)
+    required_method = (procedure["uncertainty_method"] if procedure and procedure["uncertainty_method"] else "RSS").strip().upper()
+    selected_method = (uncertainty["uncertainty_method"] or "RSS").strip().upper()
+    if selected_method != required_method:
+        raise ValueError(f"The assigned procedure requires uncertainty method {required_method}.")
+    uncertainty["uncertainty_method"] = required_method
+    uncertainty["procedure_id"] = procedure["procedure_id"] if procedure else None
+    uncertainty["standard_id"] = standard["standard_id"] if standard else None
+    uncertainty["unit"] = unit or ""
+    uncertainty["environment_temperature"] = temperature
+    uncertainty["environment_humidity"] = humidity
+    uncertainty["calculation"] = {
+        "method": required_method,
+        "formula": "uc = sqrt(u_standard^2 + resolution^2/12 + repeatability^2 + environmental^2 + other^2); U = k × uc",
+        "standard_id": standard["standard_id"] if standard else None,
+        "procedure_id": procedure["procedure_id"] if procedure else None,
+        "unit": unit or "",
+        "inputs": {
+            "standard_uncertainty": uncertainty["standard_uncertainty"],
+            "resolution": uncertainty["resolution"],
+            "repeatability": uncertainty["repeatability"],
+            "environmental_uncertainty": uncertainty["environmental_uncertainty"],
+            "other_uncertainty": uncertainty["other_uncertainty"],
+            "coverage_factor": uncertainty["coverage_factor"],
+            "environment_temperature": temperature,
+            "environment_humidity": humidity,
+        },
+        "combined_standard_uncertainty": uncertainty["combined_standard_uncertainty"],
+        "expanded_uncertainty": uncertainty["expanded_uncertainty"],
+    }
+    return uncertainty
+
+
 def calculate_measurement_uncertainty(form):
     """Calculate Type A/B components with root-sum-of-squares and k coverage factor."""
     def num(name, default=0.0):
@@ -416,6 +486,27 @@ with sqlite3.connect(DB, timeout=30) as _c:
             WHERE h.standard_id = rs.standard_id
         )
     """)
+    # upgrade older databases: controlled procedure environment and uncertainty fields
+    _proc_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_procedures)")]
+    for _name, _sql in (
+        ("environment_temperature_min", "ALTER TABLE calibration_procedures ADD COLUMN environment_temperature_min REAL"),
+        ("environment_temperature_max", "ALTER TABLE calibration_procedures ADD COLUMN environment_temperature_max REAL"),
+        ("environment_humidity_min", "ALTER TABLE calibration_procedures ADD COLUMN environment_humidity_min REAL"),
+        ("environment_humidity_max", "ALTER TABLE calibration_procedures ADD COLUMN environment_humidity_max REAL"),
+        ("uncertainty_method", "ALTER TABLE calibration_procedures ADD COLUMN uncertainty_method TEXT NOT NULL DEFAULT 'RSS'"),
+    ):
+        if _name not in _proc_cols:
+            _c.execute(_sql)
+            _proc_cols.append(_name)
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    for _name, _sql in (
+        ("uncertainty_calculation_json", "ALTER TABLE calibrations ADD COLUMN uncertainty_calculation_json TEXT"),
+        ("environment_temperature", "ALTER TABLE calibrations ADD COLUMN environment_temperature REAL"),
+        ("environment_humidity", "ALTER TABLE calibrations ADD COLUMN environment_humidity REAL"),
+    ):
+        if _name not in _cal_cols:
+            _c.execute(_sql)
+            _cal_cols.append(_name)
     # upgrade older databases: station type and last-edited timestamp
     _station_cols = [r[1] for r in _c.execute("PRAGMA table_info(stations)")]
     if "type" not in _station_cols:
