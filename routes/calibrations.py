@@ -125,11 +125,21 @@ def calibrate(sensor_id):
             if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs) or len(refs) > 30
                     or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
-                if procedure_id:
-                    proc_points = db.execute("SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no", (procedure_id,)).fetchall()
-                    if len(proc_points) != len(refs) or any(abs(refs[i] - proc_points[i]["reference_value"]) > 1e-9 or abs(tols[i] - proc_points[i]["tolerance"]) > 1e-9 for i in range(len(refs))):
-                        raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
-                raise ValueError
+                raise ValueError("Check the date and the numeric values for every measurement point.")
+            if procedure_id:
+                proc = db.execute("SELECT procedure_id, active FROM calibration_procedures WHERE procedure_id=?",
+                                  (procedure_id,)).fetchone()
+                if not proc or not proc["active"]:
+                    raise ValueError("The assigned calibration procedure is no longer active.")
+                proc_points = db.execute(
+                    "SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",
+                    (procedure_id,)
+                ).fetchall()
+                if (not proc_points or len(proc_points) != len(refs)
+                        or any(abs(refs[i] - proc_points[i]["reference_value"]) > 1e-9
+                               or abs(tols[i] - proc_points[i]["tolerance"]) > 1e-9
+                               for i in range(len(refs)))):
+                    raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
         except ValueError:
             flash("Check the date and the numeric values for every measurement point.")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
@@ -225,7 +235,7 @@ def calibrate(sensor_id):
              uncertainty["standard_uncertainty"], uncertainty["resolution"], uncertainty["repeatability"],
              uncertainty["environmental_uncertainty"], uncertainty["other_uncertainty"],
              uncertainty["combined_standard_uncertainty"], uncertainty["coverage_factor"],
-             uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"]))
+             uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], procedure_id))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
