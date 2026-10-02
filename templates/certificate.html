@@ -3,146 +3,158 @@
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  @page { size: A5 landscape; margin: 0; }
+  @page { size: A5 portrait; margin: 0; }
 
   .certificate-page {
-    width: 210mm; height: 148mm; max-width: 210mm;
-    margin: 8mm auto; padding: 9mm 10mm 13mm 12mm;
-    position: relative; overflow: hidden;
-    background: #fff; color: #172b43;
-    border: .45mm solid #174b7b; border-radius: 3mm;
-    box-shadow: 0 4px 20px rgba(20,45,80,.14);
-    font: 8.4pt/1.28 Arial, "Segoe UI", sans-serif;
+    width:148mm; height:210mm; max-width:148mm;
+    margin:8mm auto; padding:9mm 9mm 11mm 10mm;
+    position:relative; overflow:hidden;
+    background:#fff; color:#172b43;
+    border:.45mm solid #174b7b; border-radius:3mm;
+    box-shadow:0 4px 20px rgba(20,45,80,.14);
+    font:8.2pt/1.28 Arial,"Segoe UI",sans-serif;
   }
-  .certificate-page * { box-sizing: border-box; }
+  .certificate-page * { box-sizing:border-box; }
 
   .gov-watermark {
-    position:absolute; z-index:0; left:25mm; top:32mm;
-    width:125mm; height:95mm; display:grid; place-items:center;
+    position:absolute; z-index:0; left:19mm; top:54mm;
+    width:108mm; height:103mm; display:grid; place-items:center;
     pointer-events:none; overflow:hidden;
   }
   .gov-watermark img {
-    width:92mm; height:auto; opacity:.12; filter:grayscale(1);
+    width:78mm; height:auto; opacity:.13; filter:grayscale(1);
   }
   .certificate-content { position:relative; z-index:1; height:100%; }
 
   .card-header {
-    display:grid; grid-template-columns:minmax(0,1fr) 72mm;
-    gap:6mm; align-items:center;
+    display:grid; grid-template-columns:1fr 1fr;
+    gap:4mm; align-items:center;
     padding-bottom:4mm; border-bottom:.65mm solid #174b7b;
   }
   .agency {
-    color:#174b7b; font-weight:900; font-size:13pt;
+    color:#174b7b; font-weight:900; font-size:11.5pt;
     line-height:1.05; letter-spacing:.01em;
   }
-  .agency-sub { font-size:7.5pt; color:#52657b; margin-top:1mm; }
+  .agency-sub { font-size:6.8pt; color:#52657b; margin-top:1mm; }
   .certificate-heading { text-align:right; color:#174b7b; }
   .certificate-heading .title {
-    font-size:17pt; font-weight:900; letter-spacing:.045em;
+    font-size:13.5pt; font-weight:900; letter-spacing:.035em;
+    line-height:1.05;
   }
   .certificate-heading .number {
-    margin-top:1.5mm; font-size:8pt; color:#52657b;
+    margin-top:1.5mm; font-size:7.2pt; color:#52657b;
   }
   .certificate-heading .number strong { color:#172b43; }
 
   .card-body {
-    display:grid; grid-template-columns:minmax(0,1fr) 55mm;
-    gap:6mm; min-height:99mm; padding-top:5mm;
+    display:grid; grid-template-columns:minmax(0,1fr) 43mm;
+    gap:4mm; min-height:145mm; padding-top:5mm;
   }
   .info-side { min-width:0; }
 
   .section-title {
-    color:#174b7b; font-size:7pt; font-weight:900;
+    color:#174b7b; font-size:6.8pt; font-weight:900;
     letter-spacing:.12em; text-transform:uppercase;
     margin-bottom:2.5mm;
   }
   .info-grid {
     display:grid;
-    grid-template-columns:28mm minmax(0,1fr) 28mm minmax(0,1fr);
-    column-gap:3mm; row-gap:2.7mm;
+    grid-template-columns:21mm minmax(0,1fr);
+    column-gap:2.5mm; row-gap:2.3mm;
   }
   .label {
-    color:#607187; font-size:7pt; font-weight:600;
+    color:#607187; font-size:6.7pt; font-weight:600;
     white-space:nowrap;
   }
   .value {
     min-width:0; font-weight:700; overflow-wrap:anywhere;
     border-bottom:.2mm solid rgba(96,113,135,.25);
-    padding-bottom:1mm;
+    padding-bottom:.8mm;
   }
-  .wide-value { grid-column:2 / 5; }
 
   .result-row {
-    margin-top:5mm; display:grid; grid-template-columns:1fr 1fr 1.25fr;
+    margin-top:4mm; display:grid; grid-template-columns:1fr 1fr;
     border:.3mm solid #cbd8e5; border-radius:2mm; overflow:hidden;
-    background:rgba(255,255,255,.92);
+    background:rgba(255,255,255,.93);
   }
-  .result-cell { padding:3mm 2.5mm; text-align:center; min-width:0; }
+  .result-cell { padding:2.5mm 2mm; text-align:center; min-width:0; }
   .result-cell + .result-cell { border-left:.3mm solid #d7e1ec; }
+  .result-cell:last-child { grid-column:1 / 3; border-left:0; border-top:.3mm solid #d7e1ec; }
   .result-cell span {
-    display:block; color:#607187; font-size:6.5pt;
+    display:block; color:#607187; font-size:6.1pt;
     text-transform:uppercase; letter-spacing:.04em;
   }
   .result-cell strong {
-    display:block; margin-top:1mm; font-size:10pt; overflow-wrap:anywhere;
+    display:block; margin-top:1mm; font-size:9pt; overflow-wrap:anywhere;
   }
   .pass { color:#087443; } .fail { color:#b42318; }
 
   .lower-grid {
-    margin-top:5mm; display:grid; grid-template-columns:1fr 1fr;
-    gap:5mm;
+    margin-top:4mm; display:grid; grid-template-columns:1fr;
+    gap:3mm;
   }
-  .approval-box, .trace-box {
-    background:rgba(255,255,255,.9);
+  .approval-box,.trace-box {
+    background:rgba(255,255,255,.91);
     border:.25mm solid #d7e1ec; border-radius:1.5mm;
-    padding:2.5mm 3mm; min-height:19mm;
+    padding:2.5mm 3mm; min-height:17mm;
   }
   .box-caption {
-    color:#607187; font-size:6.5pt; text-transform:uppercase;
+    color:#607187; font-size:6.1pt; text-transform:uppercase;
     letter-spacing:.05em;
   }
-  .box-value { font-size:9pt; font-weight:900; margin-top:1mm; }
-  .box-note { color:#607187; font-size:6.5pt; margin-top:1mm; }
+  .box-value { font-size:8.5pt; font-weight:900; margin-top:1mm; overflow-wrap:anywhere; }
+  .box-note { color:#607187; font-size:6pt; margin-top:1mm; line-height:1.25; }
 
   .qr-side {
-    border-left:.35mm solid #cbd8e5; padding-left:6mm;
+    border-left:.35mm solid #cbd8e5; padding-left:4mm;
     display:flex; flex-direction:column; align-items:center;
-    justify-content:center; background:rgba(255,255,255,.94);
-    border-radius:2mm;
+    justify-content:flex-start; padding-top:2mm;
+    background:rgba(255,255,255,.94); border-radius:2mm;
   }
   .qr-frame {
-    padding:3mm; border:.45mm solid #174b7b;
+    padding:2.5mm; border:.45mm solid #174b7b;
     border-radius:2mm; background:#fff;
   }
   .qr-side img {
-    width:48mm; height:48mm; display:block;
+    width:35mm; height:35mm; display:block;
     image-rendering:pixelated; background:#fff;
   }
   .qr-placeholder {
-    width:48mm; height:48mm; display:grid; place-items:center;
+    width:35mm; height:35mm; display:grid; place-items:center;
     border:.25mm dashed #aab8c8; background:#fff; text-align:center;
-    color:#718096; font-size:7pt;
+    color:#718096; font-size:6.5pt;
   }
   .qr-label {
     margin-top:3mm; text-align:center; color:#174b7b;
-    font-size:8pt; font-weight:900; letter-spacing:.06em;
+    font-size:7pt; font-weight:900; letter-spacing:.05em;
   }
   .qr-hint {
     margin-top:1.2mm; text-align:center; color:#607187;
-    font-size:6.5pt; line-height:1.3; max-width:48mm;
+    font-size:5.8pt; line-height:1.3; max-width:36mm;
   }
+  .qr-meta {
+    width:100%; margin-top:4mm; padding-top:3mm;
+    border-top:.25mm solid #d7e1ec;
+  }
+  .qr-meta-row {
+    display:flex; justify-content:space-between; gap:2mm;
+    padding:1.2mm 0; border-bottom:.2mm solid rgba(96,113,135,.18);
+    font-size:6pt;
+  }
+  .qr-meta-row span { color:#607187; }
+  .qr-meta-row strong { text-align:right; overflow-wrap:anywhere; }
 
   .card-footer {
-    position:absolute; left:12mm; right:10mm; bottom:5mm;
+    position:absolute; left:10mm; right:9mm; bottom:4.5mm;
     padding-top:2mm; border-top:.3mm solid #d7e1ec;
-    display:flex; justify-content:space-between; gap:5mm;
-    color:#607187; font-size:6pt;
+    display:flex; justify-content:space-between; gap:3mm;
+    color:#607187; font-size:5.7pt;
   }
 
   .preview-watermark {
-    position:absolute; z-index:4; left:10mm; right:60mm; top:45%;
+    position:absolute; z-index:4; left:12mm; right:48mm; top:43%;
     text-align:center; transform:rotate(-18deg);
-    font-size:25pt; font-weight:900; color:rgba(180,35,24,.12);
+    font-size:21pt; font-weight:900; color:rgba(180,35,24,.12);
     pointer-events:none;
   }
   .preview-note {
@@ -152,7 +164,7 @@
   }
 
   .certificate-actions {
-    width:210mm; max-width:calc(100% - 16mm);
+    width:148mm; max-width:calc(100% - 16mm);
     margin:0 auto 3mm; text-align:right;
   }
   .certificate-actions .btn {
@@ -160,21 +172,21 @@
   }
 
   @media screen and (max-width:700px) {
-    .certificate-page { width:100%; max-width:210mm; margin:4mm auto; }
+    .certificate-page { width:100%; max-width:148mm; margin:4mm auto; }
   }
 
   @media print {
     html,body {
-      width:210mm!important; height:148mm!important; min-width:0!important;
+      width:148mm!important; height:210mm!important; min-width:0!important;
       margin:0!important; padding:0!important; background:#fff!important;
     }
     main {
-      width:210mm!important; max-width:none!important;
+      width:148mm!important; max-width:none!important;
       margin:0!important; padding:0!important;
     }
     .certificate-page {
-      width:210mm!important; height:148mm!important; max-width:none!important;
-      margin:0!important; padding:9mm 10mm 13mm 12mm!important;
+      width:148mm!important; height:210mm!important; max-width:none!important;
+      margin:0!important; padding:9mm 9mm 11mm 10mm!important;
       border:0!important; border-radius:0!important; box-shadow:none!important;
     }
     .certificate-page .noprint { display:none!important; }
