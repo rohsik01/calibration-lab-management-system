@@ -31,6 +31,7 @@
 {% if calibration %}
 <div class="grid">
 <div><label>{{ tr("Certificate number") }}</label><div>{% if w.status == 'COMPLETED' %}<a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a>{% else %}{{ calibration.certificate_no }} <span class="badge amber">UNVERIFIED — technician preview only</span>{% endif %}</div></div>
+<div><label>{{ tr("Calibration revision") }}</label><div>v{{ calibration.revision_no or 1 }} <span class="badge amber">{{ calibration.lifecycle_status or 'DRAFT' }}</span></div></div>
 <div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
 <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
 <div><label>{{ tr("Performed by") }}</label><div>{{ calibration.performed_by or '—' }}</div></div>
@@ -43,8 +44,8 @@
 {% else %}<p class="sub">{{ tr("No calibration measurements have been recorded for this request yet.") }}</p>{% endif %}
 </div>
 <div class="card"><h2>{{ tr("Review history") }}</h2>
-{% if reviews %}<div class="scroll"><table><thead><tr><th>{{ tr("Submitted") }}</th><th>{{ tr("Submitted by") }}</th><th>{{ tr("Decision") }}</th><th>{{ tr("Reviewer") }}</th><th>{{ tr("Reviewed at") }}</th><th>{{ tr("Comments") }}</th></tr></thead><tbody>
-{% for h in reviews %}<tr><td>{{ h.submitted_at }}</td><td>{{ h.submitted_by_name }}</td><td><span class="badge {{ 'green' if h.decision == 'APPROVED' else 'red' if h.decision == 'RETURNED' else 'amber' }}">{{ h.decision }}</span></td><td>{{ h.reviewer_name or '—' }}</td><td>{{ h.reviewed_at or '—' }}</td><td style="white-space:normal;min-width:180px">{{ h.comments or '—' }}</td></tr>{% endfor %}
+{% if reviews %}<div class="scroll"><table><thead><tr><th>{{ tr("Submitted") }}</th><th>{{ tr("Revision") }}</th><th>{{ tr("Submitted by") }}</th><th>{{ tr("Decision") }}</th><th>{{ tr("Reviewer") }}</th><th>{{ tr("Reviewed at") }}</th><th>{{ tr("Comments") }}</th></tr></thead><tbody>
+{% for h in reviews %}<tr><td>{{ h.submitted_at }}</td><td>v{{ h.submitted_revision or 1 }}</td><td>{{ h.submitted_by_name }}</td><td><span class="badge {{ 'green' if h.decision == 'APPROVED' else 'red' if h.decision == 'RETURNED' else 'amber' }}">{{ h.decision }}</span></td><td>{{ h.reviewer_name or '—' }}</td><td>{{ h.reviewed_at or '—' }}</td><td style="white-space:normal;min-width:180px">{{ h.comments or '—' }}</td></tr>{% endfor %}
 </tbody></table></div>{% else %}<p class="sub">{{ tr("No review decisions have been recorded yet.") }}</p>{% endif %}
 </div>
 {% if g.user.role == 'admin' and w.status == 'AWAITING REVIEW' %}
