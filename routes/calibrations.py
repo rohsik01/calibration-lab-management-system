@@ -102,11 +102,12 @@ def calibrate(sensor_id):
             flash("This request belongs to a different registered instrument.", "error")
             return redirect(url_for("calibration_request", request_id=int(linked_request_id)))
         linked_order = db.execute(
-            "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
+            "SELECT work_order_id, assigned_technician_id, status, procedure_id FROM calibration_work_orders WHERE request_id=?",
             (int(linked_request_id),)
         ).fetchone()
         if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
+        procedure_id = linked_order["procedure_id"]
         if linked_order["status"] in ("AWAITING REVIEW", "COMPLETED", "CANCELLED"):
             flash("This work order is awaiting review or already closed; calibration data cannot be changed.", "error")
             return redirect(url_for("work_order_detail", work_order_id=linked_order["work_order_id"]))
@@ -124,6 +125,10 @@ def calibrate(sensor_id):
             if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs) or len(refs) > 30
                     or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
+                if procedure_id:
+                    proc_points = db.execute("SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no", (procedure_id,)).fetchall()
+                    if len(proc_points) != len(refs) or any(abs(refs[i] - proc_points[i]["reference_value"]) > 1e-9 or abs(tols[i] - proc_points[i]["tolerance"]) > 1e-9 for i in range(len(refs))):
+                        raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
                 raise ValueError
         except ValueError:
             flash("Check the date and the numeric values for every measurement point.")
@@ -213,7 +218,7 @@ def calibrate(sensor_id):
             "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
             "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
             "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
-            "expanded_uncertainty,uncertainty_method) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "expanded_uncertainty,uncertainty_method,procedure_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
              result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
              mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks,
@@ -363,7 +368,7 @@ def calibrate_pending_request(request_id):
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
                  uncertainty["environmental_uncertainty"],uncertainty["other_uncertainty"],
                  uncertainty["combined_standard_uncertainty"],uncertainty["coverage_factor"],
-                 uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"]))
+                 uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"],procedure_id))
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
