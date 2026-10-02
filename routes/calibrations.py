@@ -66,11 +66,13 @@ def calibrate(sensor_id):
             cal_date = datetime.strptime(f["cal_date"], "%Y-%m-%d").date().isoformat()
             refs = [float(x) for x in f.getlist("reference_value")]
             meass = [float(x) for x in f.getlist("measured_value")]
+            left_raw = f.getlist("as_left_value")
+            as_left = [float(x) if x.strip() else None for x in left_raw] if left_raw else [None] * len(refs)
             raw = f.getlist("tolerance")
             tols = ([float(t) if t.strip() else s["tolerance"] for t in raw]
                     if raw else [s["tolerance"]] * len(refs))
-            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(refs) > 30
-                    or not all(math.isfinite(x) for x in refs + meass + tols)
+            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs) or len(refs) > 30
+                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
                 raise ValueError
         except ValueError:
@@ -126,13 +128,20 @@ def calibrate(sensor_id):
                 flash("This work order is awaiting review or already closed. New measurements cannot be recorded until it is returned to the technician.", "error")
                 return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
         points = []
-        for ref, meas, tol in zip(refs, meass, tols):
-            err = round(meas - ref, 6)
-            points.append((ref, meas, err, "PASS" if abs(err) <= tol else "FAIL", tol))
-        worst = max(points, key=lambda p: abs(p[2]))          # point with the largest error
-        result = "FAIL" if any(p[3] == "FAIL" for p in points) else "PASS"
-        mean_error = round(sum(p[2] for p in points) / len(points), 6)
-        max_error = round(max(abs(p[2]) for p in points), 6)
+        for ref, meas, left, tol in zip(refs, meass, as_left, tols):
+            found_err = round(meas - ref, 6)
+            left_err = round(left - ref, 6) if left is not None else found_err
+            found_result = "PASS" if abs(found_err) <= tol else "FAIL"
+            left_result = "PASS" if abs(left_err) <= tol else "FAIL"
+            points.append((ref, meas, found_err, found_result, tol, left, left_err, left_result))
+        if f.get("adjustment_status", "NOT REQUIRED").strip().upper() == "PERFORMED" and any(p[5] is None for p in points):
+            flash("Enter an As-Left reading for every point when adjustment is marked as performed.", "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
+        worst = max(points, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
+        result = "FAIL" if any(p[7] == "FAIL" for p in points) else "PASS"
+        final_errors = [p[6] if p[5] is not None else p[2] for p in points]
+        mean_error = round(sum(final_errors) / len(final_errors), 6)
+        max_error = round(max(abs(x) for x in final_errors), 6)
         try:
             uncertainty = calculate_measurement_uncertainty(f)
         except (ValueError, TypeError) as e:
