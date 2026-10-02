@@ -446,11 +446,30 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("ALTER TABLE calibrations ADD COLUMN approved_by INTEGER")
     if "approved_at" not in _cal_cols:
         _c.execute("ALTER TABLE calibrations ADD COLUMN approved_at TEXT")
-    _c.execute("UPDATE calibrations SET lifecycle_status=CASE
-        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='APPROVED') THEN 'APPROVED'
-        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='PENDING') THEN 'SUBMITTED'
-        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='RETURNED') THEN 'RETURNED'
-        ELSE COALESCE(lifecycle_status,'DRAFT') END")
+    _c.execute("""
+        UPDATE calibrations
+        SET lifecycle_status = CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM calibration_review_history h
+                WHERE h.cal_id = calibrations.cal_id
+                  AND h.decision = 'APPROVED'
+            ) THEN 'APPROVED'
+            WHEN EXISTS (
+                SELECT 1
+                FROM calibration_review_history h
+                WHERE h.cal_id = calibrations.cal_id
+                  AND h.decision = 'PENDING'
+            ) THEN 'SUBMITTED'
+            WHEN EXISTS (
+                SELECT 1
+                FROM calibration_review_history h
+                WHERE h.cal_id = calibrations.cal_id
+                  AND h.decision = 'RETURNED'
+            ) THEN 'RETURNED'
+            ELSE COALESCE(lifecycle_status, 'DRAFT')
+        END
+    """)
     _review_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_review_history)")]
     if "submitted_revision" not in _review_cols:
         _c.execute("ALTER TABLE calibration_review_history ADD COLUMN submitted_revision INTEGER NOT NULL DEFAULT 1")
