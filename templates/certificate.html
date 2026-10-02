@@ -3,8 +3,6 @@
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  @page { size: A5 portrait; margin: 0; }
-
   .certificate-page {
     width:148mm; height:210mm; max-width:148mm;
     margin:8mm auto; padding:9mm 9mm 11mm 10mm;
@@ -164,7 +162,7 @@
   }
 
   .certificate-actions {
-    width:148mm; max-width:calc(100% - 16mm);
+    width:100%; max-width:calc(100% - 16mm);
     margin:0 auto 3mm; text-align:right;
   }
   .certificate-actions .btn {
@@ -177,17 +175,16 @@
 
   @media print {
     html,body {
-      width:148mm!important; height:210mm!important; min-width:0!important;
       margin:0!important; padding:0!important; background:#fff!important;
     }
     main {
-      width:148mm!important; max-width:none!important;
+      width:100%!important; max-width:none!important;
       margin:0!important; padding:0!important;
     }
     .certificate-page {
-      width:148mm!important; height:210mm!important; max-width:none!important;
-      margin:0!important; padding:9mm 9mm 11mm 10mm!important;
-      border:0!important; border-radius:0!important; box-shadow:none!important;
+      width:100%!important; max-width:none!important;
+      margin:0!important; border:0!important; border-radius:0!important;
+      box-shadow:none!important;
     }
     .certificate-page .noprint { display:none!important; }
     .side,.topbar,.langbar,.flash { display:none!important; }
