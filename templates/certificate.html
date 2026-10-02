@@ -3,147 +3,178 @@
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  @page { size: A6 landscape; margin: 0; }
+  @page { size: A5 landscape; margin: 0; }
 
   .certificate-page {
-    width: 148mm; height: 105mm; max-width: 148mm; margin: 8mm auto;
-    padding: 5mm 5mm 9mm 11mm; position: relative; overflow: hidden;
+    width: 210mm; height: 148mm; max-width: 210mm;
+    margin: 8mm auto; padding: 9mm 10mm 13mm 12mm;
+    position: relative; overflow: hidden;
     background: #fff; color: #172b43;
     border: .45mm solid #174b7b; border-radius: 3mm;
-    box-shadow: 0 3px 16px rgba(20,45,80,.14);
-    font: 7.4pt/1.22 Arial, "Segoe UI", sans-serif;
+    box-shadow: 0 4px 20px rgba(20,45,80,.14);
+    font: 8.4pt/1.28 Arial, "Segoe UI", sans-serif;
   }
   .certificate-page * { box-sizing: border-box; }
 
-  /* The watermark is deliberately confined to the information side.
-     The QR side remains a clean white area for reliable scanning. */
   .gov-watermark {
-    position: absolute; z-index: 0;
-    left: 13mm; top: 21mm; width: 96mm; height: 75mm;
-    display: grid; place-items: center;
-    pointer-events: none; overflow: hidden;
+    position:absolute; z-index:0; left:25mm; top:32mm;
+    width:125mm; height:95mm; display:grid; place-items:center;
+    pointer-events:none; overflow:hidden;
   }
   .gov-watermark img {
-    width: 74mm; height: auto;
-    opacity: .15; filter: grayscale(1);
+    width:92mm; height:auto; opacity:.12; filter:grayscale(1);
   }
-  .certificate-content { position: relative; z-index: 1; height: 100%; }
+  .certificate-content { position:relative; z-index:1; height:100%; }
 
   .card-header {
-    display: grid; grid-template-columns: 1fr 42mm;
-    gap: 3mm; align-items: center;
-    padding-bottom: 2.2mm; border-bottom: .55mm solid #174b7b;
+    display:grid; grid-template-columns:minmax(0,1fr) 72mm;
+    gap:6mm; align-items:center;
+    padding-bottom:4mm; border-bottom:.65mm solid #174b7b;
   }
-  .agency { color: #174b7b; font-weight: 900; font-size: 9.5pt; line-height: 1.05; }
-  .agency-sub { font-size: 6.4pt; color: #52657b; margin-top: .7mm; }
-  .certificate-heading { text-align: right; color: #174b7b; }
+  .agency {
+    color:#174b7b; font-weight:900; font-size:13pt;
+    line-height:1.05; letter-spacing:.01em;
+  }
+  .agency-sub { font-size:7.5pt; color:#52657b; margin-top:1mm; }
+  .certificate-heading { text-align:right; color:#174b7b; }
   .certificate-heading .title {
-    font-size: 11pt; font-weight: 900; letter-spacing: .035em;
+    font-size:17pt; font-weight:900; letter-spacing:.045em;
   }
   .certificate-heading .number {
-    margin-top: .8mm; font-size: 6.8pt; color: #52657b;
+    margin-top:1.5mm; font-size:8pt; color:#52657b;
   }
+  .certificate-heading .number strong { color:#172b43; }
 
   .card-body {
-    display: grid; grid-template-columns: minmax(0,1fr) 42mm;
-    gap: 3.5mm; height: 76mm; padding-top: 2.5mm;
+    display:grid; grid-template-columns:minmax(0,1fr) 55mm;
+    gap:6mm; min-height:99mm; padding-top:5mm;
   }
+  .info-side { min-width:0; }
 
-  .info-side { min-width: 0; }
+  .section-title {
+    color:#174b7b; font-size:7pt; font-weight:900;
+    letter-spacing:.12em; text-transform:uppercase;
+    margin-bottom:2.5mm;
+  }
   .info-grid {
-    display: grid; grid-template-columns: 22mm minmax(0,1fr) 22mm minmax(0,1fr);
-    column-gap: 1.6mm; row-gap: 1.4mm;
+    display:grid;
+    grid-template-columns:28mm minmax(0,1fr) 28mm minmax(0,1fr);
+    column-gap:3mm; row-gap:2.7mm;
   }
-  .label { color: #607187; font-size: 6.2pt; white-space: nowrap; }
+  .label {
+    color:#607187; font-size:7pt; font-weight:600;
+    white-space:nowrap;
+  }
   .value {
-    font-weight: 700; min-width: 0; overflow-wrap: anywhere;
-    border-bottom: .2mm solid rgba(96,113,135,.24); padding-bottom: .55mm;
+    min-width:0; font-weight:700; overflow-wrap:anywhere;
+    border-bottom:.2mm solid rgba(96,113,135,.25);
+    padding-bottom:1mm;
   }
-  .wide-label { grid-column: 1 / 2; }
-  .wide-value { grid-column: 2 / 5; }
+  .wide-value { grid-column:2 / 5; }
 
   .result-row {
-    margin-top: 2.5mm; display: grid; grid-template-columns: 1fr 1fr 1fr;
-    border: .25mm solid #d7e1ec; border-radius: 1.5mm; overflow: hidden;
-    background: rgba(255,255,255,.88);
+    margin-top:5mm; display:grid; grid-template-columns:1fr 1fr 1.25fr;
+    border:.3mm solid #cbd8e5; border-radius:2mm; overflow:hidden;
+    background:rgba(255,255,255,.92);
   }
-  .result-cell { padding: 1.4mm 1.2mm; text-align: center; min-width: 0; }
-  .result-cell + .result-cell { border-left: .25mm solid #d7e1ec; }
-  .result-cell span { display: block; color: #607187; font-size: 5.8pt; }
-  .result-cell strong { display: block; margin-top: .35mm; font-size: 7pt; overflow-wrap: anywhere; }
-  .pass { color: #087443; }
-  .fail { color: #b42318; }
+  .result-cell { padding:3mm 2.5mm; text-align:center; min-width:0; }
+  .result-cell + .result-cell { border-left:.3mm solid #d7e1ec; }
+  .result-cell span {
+    display:block; color:#607187; font-size:6.5pt;
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  .result-cell strong {
+    display:block; margin-top:1mm; font-size:10pt; overflow-wrap:anywhere;
+  }
+  .pass { color:#087443; } .fail { color:#b42318; }
 
-  .approval {
-    margin-top: 2.5mm; display: grid; grid-template-columns: 1fr 1fr;
-    gap: 3mm; align-items: end;
+  .lower-grid {
+    margin-top:5mm; display:grid; grid-template-columns:1fr 1fr;
+    gap:5mm;
   }
-  .approval-box {
-    background: rgba(255,255,255,.9);
-    border-left: 1.1mm solid #174b7b; padding: 1.5mm 2mm;
-    min-height: 11mm;
+  .approval-box, .trace-box {
+    background:rgba(255,255,255,.9);
+    border:.25mm solid #d7e1ec; border-radius:1.5mm;
+    padding:2.5mm 3mm; min-height:19mm;
   }
-  .approval-box .caption { font-size: 5.8pt; color: #607187; }
-  .approval-box .name { font-size: 8pt; font-weight: 900; color: #172b43; margin-top: .5mm; }
-  .approval-box .date { font-size: 5.8pt; color: #607187; margin-top: .4mm; }
-
-  .scope-note {
-    font-size: 5.7pt; color: #607187; line-height: 1.25;
-    text-align: right; align-self: end;
+  .box-caption {
+    color:#607187; font-size:6.5pt; text-transform:uppercase;
+    letter-spacing:.05em;
   }
+  .box-value { font-size:9pt; font-weight:900; margin-top:1mm; }
+  .box-note { color:#607187; font-size:6.5pt; margin-top:1mm; }
 
   .qr-side {
-    border-left: .3mm solid #d7e1ec; padding-left: 3mm;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(255,255,255,.96);
-    border-radius: 1.5mm;
+    border-left:.35mm solid #cbd8e5; padding-left:6mm;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; background:rgba(255,255,255,.94);
+    border-radius:2mm;
+  }
+  .qr-frame {
+    padding:3mm; border:.45mm solid #174b7b;
+    border-radius:2mm; background:#fff;
   }
   .qr-side img {
-    width: 38mm; height: 38mm; display: block;
-    image-rendering: pixelated; background: #fff;
+    width:48mm; height:48mm; display:block;
+    image-rendering:pixelated; background:#fff;
   }
   .qr-placeholder {
-    width: 38mm; height: 38mm; display: grid; place-items: center;
-    border: .25mm dashed #aab8c8; background: #fff; text-align: center;
-    color: #718096; font-size: 5.8pt;
+    width:48mm; height:48mm; display:grid; place-items:center;
+    border:.25mm dashed #aab8c8; background:#fff; text-align:center;
+    color:#718096; font-size:7pt;
   }
   .qr-label {
-    margin-top: 1.3mm; text-align: center; color: #174b7b;
-    font-size: 6.3pt; font-weight: 900; letter-spacing: .04em;
+    margin-top:3mm; text-align:center; color:#174b7b;
+    font-size:8pt; font-weight:900; letter-spacing:.06em;
   }
   .qr-hint {
-    margin-top: .7mm; text-align: center; color: #607187;
-    font-size: 5.3pt; line-height: 1.2;
+    margin-top:1.2mm; text-align:center; color:#607187;
+    font-size:6.5pt; line-height:1.3; max-width:48mm;
   }
 
   .card-footer {
-    position: absolute; left: 11mm; right: 5mm; bottom: 3mm;
-    padding-top: 1mm; border-top: .3mm solid #d7e1ec;
-    display: flex; justify-content: space-between; gap: 3mm;
-    color: #607187; font-size: 5.2pt;
+    position:absolute; left:12mm; right:10mm; bottom:5mm;
+    padding-top:2mm; border-top:.3mm solid #d7e1ec;
+    display:flex; justify-content:space-between; gap:5mm;
+    color:#607187; font-size:6pt;
   }
 
   .preview-watermark {
-    position:absolute; z-index:4; left:4mm; right:39mm; top:44%;
-    text-align:center; transform:rotate(-22deg);
-    font-size:17pt; font-weight:900; color:rgba(180,35,24,.12);
+    position:absolute; z-index:4; left:10mm; right:60mm; top:45%;
+    text-align:center; transform:rotate(-18deg);
+    font-size:25pt; font-weight:900; color:rgba(180,35,24,.12);
     pointer-events:none;
   }
   .preview-note {
-    margin:0 0 3mm; padding:1.5mm;
+    margin:0 0 4mm; padding:2mm;
     border:.3mm solid #b42318; color:#b42318;
-    text-align:center; font-weight:700; font-size:7pt;
+    text-align:center; font-weight:700; font-size:8pt;
+  }
+
+  .certificate-actions {
+    width:210mm; max-width:calc(100% - 16mm);
+    margin:0 auto 3mm; text-align:right;
+  }
+  .certificate-actions .btn {
+    padding:2.5mm 5mm; font-weight:700; cursor:pointer;
   }
 
   @media screen and (max-width:700px) {
-    .certificate-page { width:100%; max-width:148mm; margin:4mm auto; }
+    .certificate-page { width:100%; max-width:210mm; margin:4mm auto; }
   }
+
   @media print {
-    html,body { width:148mm!important; height:105mm!important; min-width:0!important; margin:0!important; padding:0!important; background:#fff!important; }
-    main { width:148mm!important; max-width:none!important; margin:0!important; padding:0!important; }
+    html,body {
+      width:210mm!important; height:148mm!important; min-width:0!important;
+      margin:0!important; padding:0!important; background:#fff!important;
+    }
+    main {
+      width:210mm!important; max-width:none!important;
+      margin:0!important; padding:0!important;
+    }
     .certificate-page {
-      width:148mm!important; height:105mm!important; max-width:none!important;
-      margin:0!important; padding:5mm!important;
+      width:210mm!important; height:148mm!important; max-width:none!important;
+      margin:0!important; padding:9mm 10mm 13mm 12mm!important;
       border:0!important; border-radius:0!important; box-shadow:none!important;
     }
     .certificate-page .noprint { display:none!important; }
@@ -177,6 +208,7 @@
 
     <div class="card-body">
       <section class="info-side">
+        <div class="section-title">{{ tr("Instrument identification") }}</div>
         <div class="info-grid">
           <span class="label">{{ tr("Instrument") }}</span><span class="value">{{ r.sensor_type or "—" }}</span>
           <span class="label">{{ tr("Serial number") }}</span><span class="value">{{ r.serial_number or "—" }}</span>
@@ -209,28 +241,33 @@
           </div>
         </div>
 
-        <div class="approval">
+        <div class="lower-grid">
           <div class="approval-box">
-            <div class="caption">{{ tr("Approved by") }}</div>
-            <div class="name">{{ r.approved_by or "—" }}</div>
-            <div class="date">{% if r.approved_at %}{{ tr("Approved") }}: {{ r.approved_at[:10] }}{% elif r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}{% endif %}</div>
+            <div class="box-caption">{{ tr("Approved by") }}</div>
+            <div class="box-value">{{ r.approved_by or "—" }}</div>
+            <div class="box-note">
+              {% if r.approved_at %}{{ tr("Approved") }}: {{ r.approved_at[:10] }}
+              {% elif r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}{% endif %}
+            </div>
           </div>
-          <div class="scope-note">
-            This certificate applies only to the instrument identified above.<br>
-            Scan the QR code for the complete certificate, measurement data,<br>
-            uncertainty, procedure and traceability information.
+          <div class="trace-box">
+            <div class="box-caption">{{ tr("Traceability") }}</div>
+            <div class="box-value">{{ standard.code if standard else (r.reference_standard or "—") }}</div>
+            <div class="box-note">Complete measurement data, uncertainty, procedure and reference details are embedded in the QR.</div>
           </div>
         </div>
       </section>
 
       <aside class="qr-side">
         {% if qr_code and not preview %}
-          <img src="{{ qr_code }}" alt="QR code to verify the full calibration certificate">
+          <div class="qr-frame">
+            <img src="{{ qr_code }}" alt="QR code containing complete calibration certificate data">
+          </div>
         {% else %}
           <div class="qr-placeholder">QR available<br>after approval</div>
         {% endif %}
         <div class="qr-label">SCAN FOR COMPLETE DATA</div>
-        <div class="qr-hint">All calibration data is<br>embedded in this QR</div>
+        <div class="qr-hint">All calibration information is embedded directly in this QR code. No web or localhost link is required.</div>
       </aside>
     </div>
   </div>
