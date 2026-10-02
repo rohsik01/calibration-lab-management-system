@@ -4,7 +4,7 @@
 <div class="hero">
   <div>
     <h1>{{ tr("Calibration Revision History") }}</h1>
-    <p class="sub">{{ cal.certificate_no }}{% if cal.request_no %} · {{ cal.request_no }}{% endif %}</p>
+    <p class="sub">{% if cal.certificate_no %}{{ cal.certificate_no }}{% else %}UNVERIFIED — no official certificate issued{% endif %}{% if cal.request_no %} · {{ cal.request_no }}{% endif %}</p>
   </div>
   <div class="actions">
     {% if cal.work_order_id %}
