@@ -114,6 +114,30 @@ def edit_procedure(procedure_id):
         try:
             d = read_procedure(request.form)
             points = read_points(request.form)
+            used_count = db.execute(
+                "SELECT COUNT(*) FROM calibration_work_orders WHERE procedure_id=?",
+                (procedure_id,)
+            ).fetchone()[0]
+            if used_count:
+                old_points = db.execute(
+                    "SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",
+                    (procedure_id,)
+                ).fetchall()
+                changed = (
+                    any(str(d.get(k, "")) != str(p[k] or "") for k in
+                        ("code", "title", "instrument_type", "method", "revision",
+                         "effective_date", "tolerance_unit", "environmental_requirements", "instructions"))
+                    or len(points) != len(old_points)
+                    or any(abs(points[i][1] - old_points[i]["reference_value"]) > 1e-9
+                           or abs(points[i][2] - old_points[i]["tolerance"]) > 1e-9
+                           for i in range(min(len(points), len(old_points))))
+                )
+                if changed:
+                    raise ValueError(
+                        "This calibration procedure has been assigned to work orders. "
+                        "Its method, revision, instructions and required points are locked. "
+                        "Create a new procedure revision instead."
+                    )
             now = datetime.now().isoformat(timespec="seconds")
             db.execute(
                 """UPDATE calibration_procedures SET code=:code,title=:title,instrument_type=:instrument_type,
