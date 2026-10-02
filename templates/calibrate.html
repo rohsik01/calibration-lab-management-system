@@ -23,6 +23,13 @@
   <input name="reference_standard" id="stdtext" value="{{ calibration.reference_standard if edit_mode and not calibration.standard_id else '' }}" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px">
   <small class="hint">{{ tr("Standards come from the") }} <a href="{{ url_for('standards') }}">{{ tr("Reference standards") }}</a> {{ tr("register.") }}</small></div>
 </div>
+{% if procedure %}<div class="card" style="margin-top:18px;background:#f8fafd">
+<h2>{{ tr("Controlled calibration procedure") }}</h2>
+<div class="grid"><div><label>{{ tr("Procedure") }}</label><div><b>{{ procedure.code }}</b> — {{ procedure.title }}</div></div><div><label>{{ tr("Revision") }}</label><div>{{ procedure.revision }}</div></div><div><label>{{ tr("Method") }}</label><div>{{ procedure.method }}</div></div></div>
+{% if procedure.environmental_requirements %}<p class="hint"><b>{{ tr("Environmental requirements") }}:</b> {{ procedure.environmental_requirements }}</p>{% endif %}
+{% if procedure.instructions %}<div class="preview" style="white-space:pre-wrap">{{ procedure.instructions }}</div>{% endif %}
+<input type="hidden" name="procedure_id" value="{{ procedure.procedure_id }}">
+</div>{% endif %}
 <div class="card" style="margin-top:18px;background:#f8fafd">
 <h2>{{ tr("Request workflow") }}</h2>
 <p class="sub">{{ tr("Select the request above to keep the calibration record connected to its originating laboratory request.") }}</p>
@@ -138,5 +145,5 @@ std.onchange = stdChange; stdChange();
 {% if edit_mode %}
 const existingPoints = [{% for p in points %}{ref: {{ p.reference_value }}, meas: {{ p.as_found_value if p.as_found_value is not none else p.measured_value }}, left: {{ p.as_left_value if p.as_left_value is not none else "null" }}, tol: {{ p.tolerance if p.tolerance is not none else s.tolerance }}},{% endfor %}];
 existingPoints.forEach(p => addRow(p.ref, p.tol, p.meas, p.left === null ? '' : p.left));
-{% else %}addRow();{% endif %}
+{% else %}{% if procedure_points %}const controlledPoints = [{% for p in procedure_points %}{ref: {{ p.reference_value }}, tol: {{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p => addRow(p.ref, p.tol));{% else %}addRow();{% endif %}{% endif %}
 </script>{% endblock %}
