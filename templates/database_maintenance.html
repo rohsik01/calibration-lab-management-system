@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Database maintenance") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h1>{{ tr("Database maintenance") }}</h1>
+    <div class="sub">{{ tr("Monitor database health, storage, indexes and backups.") }}</div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat brand"><span class="n">{{ "%.2f"|format(db_size / 1048576) }} MB</span><span>{{ tr("Database size") }}</span></div>
+  <div class="stat"><span class="n">{{ "%.2f"|format(wal_size / 1048576) }} MB</span><span>WAL</span></div>
+  <div class="stat"><span class="n">{{ index_count }}</span><span>{{ tr("Indexes") }}</span></div>
+  <div class="stat {{ 'green' if integrity == 'ok' else 'red' }}">
+    <span class="n">{{ tr("Healthy") if integrity == 'ok' else tr("Check required") }}</span>
+    <span>{{ tr("Integrity status") }}</span>
+  </div>
+</div>
+
+<div class="two">
+  <div class="card">
+    <h2>{{ tr("Database health") }}</h2>
+    <table>
+      <tr><th>{{ tr("Property") }}</th><th>{{ tr("Value") }}</th></tr>
+      <tr><td>{{ tr("Database file") }}</td><td><code>{{ db_size }} bytes</code></td></tr>
+      <tr><td>Journal mode</td><td><span class="badge green">{{ journal_mode|upper }}</span></td></tr>
+      <tr><td>Integrity check</td><td>{{ integrity }}</td></tr>
+      <tr><td>WAL file</td><td>{{ "%.2f"|format(wal_size / 1048576) }} MB</td></tr>
+      <tr><td>Shared-memory file</td><td>{{ "%.2f"|format(shm_size / 1048576) }} MB</td></tr>
+      <tr><td>{{ tr("Indexes") }}</td><td>{{ index_count }}</td></tr>
+    </table>
+    <div class="actions" style="margin-top:16px">
+      <form method="post" onsubmit="return confirm('{{ tr("Run database integrity check?") }}')">
+        {{ csrf_input() }}<input type="hidden" name="action" value="integrity">
+        <button class="btn alt">{{ tr("Run integrity check") }}</button>
+      </form>
+      <form method="post" onsubmit="return confirm('{{ tr("Create a database backup now?") }}')">
+        {{ csrf_input() }}<input type="hidden" name="action" value="backup">
+        <button class="btn">{{ tr("Create backup") }}</button>
+      </form>
+      <form method="post" onsubmit="return confirm('{{ tr("VACUUM can take time on a large database. Continue?") }}')">
+        {{ csrf_input() }}<input type="hidden" name="action" value="vacuum">
+        <button class="btn alt">{{ tr("Optimize database (VACUUM)") }}</button>
+      </form>
+    </div>
+    <div class="hint">{{ tr("Always create a backup before VACUUM. VACUUM is maintenance, not a substitute for backups.") }}</div>
+  </div>
+
+  <div class="card">
+    <h2>{{ tr("Record counts") }}</h2>
+    <table>
+      <tr><th>{{ tr("Table") }}</th><th>{{ tr("Records") }}</th></tr>
+      {% for label, table, count in counts %}
+      <tr><td>{{ tr(label) }}</td><td><strong>{{ "{:,}".format(count) }}</strong></td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>{{ tr("Recent backups") }}</h2>
+  {% if backups %}
+  <div class="scroll">
+    <table>
+      <tr><th>{{ tr("File") }}</th><th>{{ tr("Created") }}</th><th>{{ tr("Size") }}</th></tr>
+      {% for b in backups %}
+      <tr>
+        <td><code>{{ b.name }}</code></td>
+        <td>{{ b.mtime }}</td>
+        <td>{{ "%.2f"|format(b.size / 1048576) }} MB</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ tr("No backups have been created yet.") }}</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>{{ tr("Backup policy") }}</h2>
+  <ul class="steps">
+    <li>{{ tr("Create a backup before major application/database changes.") }}</li>
+    <li>{{ tr("Keep backups on a separate drive or server; do not rely only on the application computer.") }}</li>
+    <li>{{ tr("Periodically test a backup by opening it on a separate copy of the application.") }}</li>
+    <li>{{ tr("Do not restore an old database directly over a live production database without first taking a current backup.") }}</li>
+  </ul>
+</div>
+{% endblock %}
