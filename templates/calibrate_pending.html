@@ -49,7 +49,7 @@ S/N: {{ req.pending_serial_number }} ·
 <input name="reference_standard" id="stdtext" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px"></div>
 </div>
 <h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
-<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("Sensor reading") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr></thead><tbody></tbody></table></div>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("As-Found reading") }}</th><th>{{ tr("As-Left reading") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr></thead><tbody></tbody></table></div>
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview">{{ tr("Tolerance default") }}: ±{{ req.pending_tolerance or 0.5 }} {{ req.pending_unit or '' }}</div>
 <div class="grid" style="margin-top:18px">
@@ -82,7 +82,7 @@ S/N: {{ req.pending_serial_number }} ·
 const body=document.querySelector('#pts tbody'), defTol={{ req.pending_tolerance or 0.5 }};
 function addRow(){
  const tr=document.createElement('tr');
- tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="tolerance" type="number" step="any" min="0" value="'+defTol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
+ tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+defTol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
  tr.querySelector('.del').onclick=()=>{if(body.rows.length>1)tr.remove(); renumber();};
  body.appendChild(tr); renumber();
 }
