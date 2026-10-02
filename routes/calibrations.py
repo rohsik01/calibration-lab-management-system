@@ -253,12 +253,14 @@ def calibrate(sensor_id):
                          cert=cert), "ok")
         return redirect(url_for("certificate", cert=cert))
     standards_ = db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
+    procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (linked_order["procedure_id"],)).fetchone() if linked_order and linked_order["procedure_id"] else None
+    procedure_points = db.execute("SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no", (procedure["procedure_id"],)).fetchall() if procedure else []
     requests_ = db.execute(
         "SELECT request_id, request_no, client_name, instrument_description FROM calibration_requests "
         "WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY request_id DESC"
     ).fetchall()
     return render_template("calibrate.html", s=s, today=date.today().isoformat(),
-                           standards=standards_, requests=requests_)
+                           standards=standards_, requests=requests_, procedure=procedure, procedure_points=procedure_points)
 
 
 @app.route("/calibrate-request/<int:request_id>", methods=["GET", "POST"])
