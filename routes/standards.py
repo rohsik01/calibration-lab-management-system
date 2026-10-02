@@ -34,6 +34,10 @@ def read_standard(f):
     d = {k: f.get(k, "").strip() for k in STD_FIELDS}
     if not d["code"] or not d["name"]:
         raise ValueError("Code and name are required.")
+    if not d["certificate_no"]:
+        raise ValueError("A calibration certificate number is required for a reference standard.")
+    if not d["traceability"]:
+        raise ValueError("Traceability information is required for a reference standard.")
     try:
         cal, val = date.fromisoformat(d["calibrated_on"]), date.fromisoformat(d["valid_until"])
     except ValueError:
