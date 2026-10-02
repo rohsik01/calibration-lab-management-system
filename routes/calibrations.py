@@ -258,10 +258,10 @@ def calibrate_pending_request(request_id):
             db.execute("""UPDATE calibration_requests SET
                 pending_sensor_type=?, pending_manufacturer=?, pending_serial_number=?,
                 pending_interval_days=?, pending_tolerance=?, pending_unit=?,
-                pending_station_id=?, pending_station_name=?, pending_station_location=?, updated_at=?
+                pending_station_id=?, pending_station_name=?, pending_station_location=?, pending_station_type=?, updated_at=?
                 WHERE request_id=?""",
                        (sensor_type, manufacturer, serial_number, interval_days, tolerance, unit,
-                        station_id, station_name, station_location, datetime.now().isoformat(timespec="seconds"), request_id))
+                        station_id, station_name, station_location, station_type, datetime.now().isoformat(timespec="seconds"), request_id))
             cert=next_certificate(db,cal_date)
             due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
