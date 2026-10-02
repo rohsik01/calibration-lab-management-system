@@ -30,9 +30,10 @@ def calibration_requests():
               for st in REQUEST_STATUSES}
     technicians = db.execute("SELECT user_id, full_name, username FROM users WHERE role='technician' AND active=1 ORDER BY full_name").fetchall()
     standards = db.execute("SELECT standard_id, code, name, valid_until FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
+    procedures = db.execute("SELECT procedure_id, code, title, revision FROM calibration_procedures WHERE active=1 ORDER BY code").fetchall()
     return render_template("requests.html", rows=rows, counts=counts,
                            statuses=REQUEST_STATUSES, q=q, status_filter=status_filter,
-                           technicians=technicians, standards=standards)
+                           technicians=technicians, standards=standards, procedures=procedures)
 
 
 @app.route("/requests/new", methods=["GET", "POST"])
