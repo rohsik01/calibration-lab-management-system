@@ -24,11 +24,11 @@ def setup():
             flash(err or "Username is required.")
         else:
             db.execute("INSERT INTO users(username, full_name, password_hash, role) "
-                       "VALUES (?,?,?, 'admin')",
+                       "VALUES (?,?,?, 'superadmin')",
                        (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
                         generate_password_hash(f["password"])))
             db.commit()
-            flash("Administrator created. Please sign in.")
+            flash("Superadministrator created. Please sign in.")
             return redirect(url_for("login"))
     return render_template("setup.html")
 
