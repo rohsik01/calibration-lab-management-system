@@ -191,6 +191,20 @@ def assign_calibration_request(request_id):
         flash("Enter a valid target date.", "error")
         return redirect(url_for("calibration_request", request_id=request_id))
     method = request.form.get("calibration_method", "").strip()
+    procedure_text = request.form.get("procedure_id", "").strip()
+    procedure_id = None
+    if procedure_text:
+        procedure = db.execute(
+            "SELECT procedure_id FROM calibration_procedures WHERE procedure_id=? AND active=1",
+            (int(procedure_text),)
+        ).fetchone() if procedure_text.isdigit() else None
+        if not procedure:
+            flash("Select a valid active calibration procedure.", "error")
+            return redirect(url_for("calibration_request", request_id=request_id))
+        procedure_id = procedure["procedure_id"]
+    elif not existing:
+        flash("Select a controlled calibration procedure.", "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
     standard_text = request.form.get("standard_id", "").strip()
     standard_id = None
     if standard_text:
