@@ -39,7 +39,7 @@ def review_calibration_details(review_id):
     row = db.execute(
         """SELECT h.review_id, h.cal_id, h.submitted_at, h.submitted_revision,
                   c.certificate_no, c.cal_date, c.reference_standard,
-                  c.reference_value, c.measured_value, c.error, c.result,
+                  c.reference_value, c.error, c.result,
                   c.performed_by, c.n_points, c.mean_error, c.max_error,
                   c.adjustment_status, c.adjustment_notes, c.technician_remarks,
                   rq.request_no, rq.client_name, rq.instrument_description,
@@ -60,7 +60,8 @@ def review_calibration_details(review_id):
     if not row:
         abort(404)
     points = db.execute(
-        """SELECT point_no, reference_value, measured_value, error, tolerance, result
+        """SELECT point_no, reference_value, as_found_value, as_found_error, as_found_result,
+                  as_left_value, as_left_error, as_left_result, error, tolerance, result
            FROM calibration_points WHERE cal_id=? ORDER BY point_no""",
         (row["cal_id"],)
     ).fetchall()
