@@ -106,8 +106,16 @@ def bulk_assign_calibration_requests():
     std_text=request.form.get("standard_id","").strip(); standard_id=None
     if std_text:
         if not std_text.isdigit(): flash("Select a valid reference standard.","error"); return redirect(url_for("calibration_requests"))
-        st=db.execute("SELECT standard_id FROM reference_standards WHERE standard_id=? AND active=1",(int(std_text),)).fetchone()
-        if not st: flash("Select an active reference standard.","error"); return redirect(url_for("calibration_requests"))
+        st=db.execute(
+            """SELECT standard_id, calibrated_on, valid_until
+               FROM reference_standards
+               WHERE standard_id=? AND active=1""", (int(std_text),)
+        ).fetchone()
+        if not st:
+            flash("Select an active reference standard.","error"); return redirect(url_for("calibration_requests"))
+        if st["calibrated_on"] > date.today().isoformat() or st["valid_until"] < date.today().isoformat():
+            flash("The selected reference standard is not currently within its calibration validity period.","error")
+            return redirect(url_for("calibration_requests"))
         standard_id=st["standard_id"]
     now=datetime.now().isoformat(timespec="seconds"); assigned=0; skipped=0
     with db:
@@ -180,10 +188,17 @@ def assign_calibration_request(request_id):
         if not standard_text.isdigit():
             flash("Select a valid reference standard.", "error")
             return redirect(url_for("calibration_request", request_id=request_id))
-        standard = db.execute("SELECT standard_id FROM reference_standards WHERE standard_id=? AND active=1",
-                              (int(standard_text),)).fetchone()
+        standard = db.execute(
+            """SELECT standard_id, calibrated_on, valid_until
+               FROM reference_standards
+               WHERE standard_id=? AND active=1""",
+            (int(standard_text),)
+        ).fetchone()
         if not standard:
             flash("Select an active reference standard.", "error")
+            return redirect(url_for("calibration_request", request_id=request_id))
+        if standard["calibrated_on"] > date.today().isoformat() or standard["valid_until"] < date.today().isoformat():
+            flash("The selected reference standard is not currently within its calibration validity period.", "error")
             return redirect(url_for("calibration_request", request_id=request_id))
         standard_id = standard["standard_id"]
     now = datetime.now().isoformat(timespec="seconds")
