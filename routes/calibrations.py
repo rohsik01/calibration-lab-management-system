@@ -1,5 +1,6 @@
 """Route module: calibrations."""
 from app import *
+from app import _qr_data_uri
 
 @app.route("/calibrations/<int:cal_id>/delete", methods=["POST"])
 @admin_required
