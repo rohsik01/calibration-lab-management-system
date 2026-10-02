@@ -9,8 +9,16 @@
 <div><label>{{ tr("Revision") }}</label><input name="revision" value="{{ x.revision if x else '1.0' }}" required></div>
 <div><label>{{ tr("Effective date") }}</label><input type="date" name="effective_date" value="{{ x.effective_date if x else today }}" required></div>
 <div><label>{{ tr("Tolerance unit") }}</label><input name="tolerance_unit" value="{{ x.tolerance_unit if x else '' }}"></div>
+<div><label>{{ tr("Uncertainty method") }}</label><select name="uncertainty_method"><option value="RSS" {{ 'selected' if x and x.uncertainty_method == 'RSS' else '' }}>RSS (root-sum-of-squares)</option></select></div>
 </div>
 <div style="margin-top:14px"><label>{{ tr("Environmental requirements") }}</label><textarea name="environmental_requirements" rows="3">{{ x.environmental_requirements if x else '' }}</textarea></div>
+<div class="grid" style="margin-top:14px">
+<div><label>{{ tr("Temperature minimum (°C)") }}</label><input name="environment_temperature_min" type="number" step="any" value="{{ x.environment_temperature_min if x else '' }}"></div>
+<div><label>{{ tr("Temperature maximum (°C)") }}</label><input name="environment_temperature_max" type="number" step="any" value="{{ x.environment_temperature_max if x else '' }}"></div>
+<div><label>{{ tr("Relative humidity minimum (%)") }}</label><input name="environment_humidity_min" type="number" min="0" max="100" step="any" value="{{ x.environment_humidity_min if x else '' }}"></div>
+<div><label>{{ tr("Relative humidity maximum (%)") }}</label><input name="environment_humidity_max" type="number" min="0" max="100" step="any" value="{{ x.environment_humidity_max if x else '' }}"></div>
+</div>
+<p class="hint">{{ tr("If any environmental limit is entered, the technician must record the actual condition before submission.") }}</p>
 <div style="margin-top:14px"><label>{{ tr("Procedure instructions") }}</label><textarea name="instructions" rows="5">{{ x.instructions if x else '' }}</textarea></div>
 <h2 style="margin-top:22px">{{ tr("Required calibration points") }}</h2>
 <p class="hint">{{ tr("Enter the reference value and allowed tolerance for every required point.") }}</p>
