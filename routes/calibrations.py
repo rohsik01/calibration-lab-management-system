@@ -587,7 +587,8 @@ def certificate(cert):
                   (SELECT u.full_name FROM calibration_review_history rh
                    JOIN users u ON u.user_id=rh.reviewed_by
                    WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
-                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by,
+                  (SELECT u.full_name FROM users u WHERE u.user_id=c.certificate_issued_by) AS certificate_issued_by_name
            FROM calibrations c
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
