@@ -48,6 +48,12 @@
     <div><label>{{ tr("Next due date") }}</label><div>{{ date_pair(c.next_due) }}</div></div>
     <div><label>{{ tr("Performed by") }}</label><div>{{ c.performed_by or '—' }}</div></div>
     <div><label>{{ tr("Technician remarks") }}</label><div>{{ c.technician_remarks or '—' }}</div></div>
+    <div><label>{{ tr("Uncertainty method") }}</label><div>{{ c.uncertainty_method or '—' }}</div></div>
+    <div><label>{{ tr("Combined standard uncertainty") }}</label><div>{{ c.combined_standard_uncertainty if c.combined_standard_uncertainty is not none else '—' }}</div></div>
+    <div><label>{{ tr("Coverage factor") }}</label><div>{{ c.coverage_factor if c.coverage_factor is not none else '—' }}</div></div>
+    <div><label>{{ tr("Expanded uncertainty") }}</label><div>{{ c.expanded_uncertainty if c.expanded_uncertainty is not none else '—' }}</div></div>
+    <div><label>{{ tr("Ambient temperature") }}</label><div>{{ c.environment_temperature if c.environment_temperature is not none else '—' }}</div></div>
+    <div><label>{{ tr("Relative humidity") }}</label><div>{{ c.environment_humidity if c.environment_humidity is not none else '—' }}</div></div>
   </div>
 </div>
 <div class="card">
