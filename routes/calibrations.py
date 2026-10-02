@@ -218,7 +218,8 @@ def calibrate(sensor_id):
             raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
         adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
         if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
-            raise ValueError("Invalid adjustment status.")
+            flash("Invalid adjustment status.", "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
         final_errors = [p[6] if adjustment_status == "PERFORMED" else p[2] for p in points]
         worst_index = max(range(len(points)), key=lambda i: abs(final_errors[i]))
         worst = points[worst_index]
