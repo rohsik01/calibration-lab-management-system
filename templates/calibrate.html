@@ -27,6 +27,8 @@
 <h2>{{ tr("Controlled calibration procedure") }}</h2>
 <div class="grid"><div><label>{{ tr("Procedure") }}</label><div><b>{{ procedure.code }}</b> — {{ procedure.title }}</div></div><div><label>{{ tr("Revision") }}</label><div>{{ procedure.revision }}</div></div><div><label>{{ tr("Method") }}</label><div>{{ procedure.method }}</div></div></div>
 {% if procedure.environmental_requirements %}<p class="hint"><b>{{ tr("Environmental requirements") }}:</b> {{ procedure.environmental_requirements }}</p>{% endif %}
+{% if procedure.environment_temperature_min is not none or procedure.environment_temperature_max is not none %}<p class="hint"><b>{{ tr("Temperature range") }}:</b> {{ procedure.environment_temperature_min if procedure.environment_temperature_min is not none else '—' }} to {{ procedure.environment_temperature_max if procedure.environment_temperature_max is not none else '—' }} °C</p>{% endif %}
+{% if procedure.environment_humidity_min is not none or procedure.environment_humidity_max is not none %}<p class="hint"><b>{{ tr("Relative humidity range") }}:</b> {{ procedure.environment_humidity_min if procedure.environment_humidity_min is not none else '—' }} to {{ procedure.environment_humidity_max if procedure.environment_humidity_max is not none else '—' }} %</p>{% endif %}
 {% if procedure.instructions %}<div class="preview" style="white-space:pre-wrap">{{ procedure.instructions }}</div>{% endif %}
 <input type="hidden" name="procedure_id" value="{{ procedure.procedure_id }}">
 </div>{% endif %}
@@ -46,6 +48,8 @@
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview" id="overall"></div>
 <div class="grid" style="margin-top:18px">
+<div><label>{{ tr("Ambient temperature (°C)") }}</label><input name="environment_temperature" type="number" step="any" value="{{ calibration.environment_temperature if edit_mode and calibration.environment_temperature is not none else '' }}" {% if procedure and (procedure.environment_temperature_min is not none or procedure.environment_temperature_max is not none) %}required{% endif %}></div>
+<div><label>{{ tr("Relative humidity (%)") }}</label><input name="environment_humidity" type="number" min="0" max="100" step="any" value="{{ calibration.environment_humidity if edit_mode and calibration.environment_humidity is not none else '' }}" {% if procedure and (procedure.environment_humidity_min is not none or procedure.environment_humidity_max is not none) %}required{% endif %}></div>
 <div><label>{{ tr("Adjustment status") }}</label>
 <select name="adjustment_status">
 <option value="NOT REQUIRED" {{ 'selected' if edit_mode and (calibration.adjustment_status or 'NOT REQUIRED') == 'NOT REQUIRED' }}>{{ tr("Not required") }}</option>
@@ -57,7 +61,7 @@
 </div>
 <div class="card" style="margin-top:18px;background:#f8fafd">
 <h2>{{ tr("Measurement uncertainty") }}</h2>
-<p class="sub">{{ tr("Enter standard uncertainty components in the same unit as the measurement. Resolution is treated as a rectangular distribution (resolution²/12). The system combines components by RSS and calculates expanded uncertainty U = k × uc.") }}</p>
+<p class="sub">{{ tr("The assigned procedure requires") }} <b>{{ procedure.uncertainty_method if procedure else 'RSS' }}</b>. {{ tr("Enter uncertainty components in the same unit as the measurement. Resolution is treated as a rectangular distribution (resolution²/12). The system combines components by RSS and calculates expanded uncertainty U = k × uc.") }}</p>
 <div class="grid">
 <div><label>{{ tr("Reference standard uncertainty") }}</label><input name="standard_uncertainty" type="number" min="0" step="any" value="{{ calibration.standard_uncertainty if edit_mode and calibration.standard_uncertainty is not none else 0 }}" required required></div>
 <div><label>{{ tr("Instrument resolution") }}</label><input name="resolution" type="number" min="0" step="any" value="{{ calibration.resolution if edit_mode and calibration.resolution is not none else 0 }}" required required></div>
