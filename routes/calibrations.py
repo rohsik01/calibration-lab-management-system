@@ -398,6 +398,9 @@ def edit_calibration(cal_id):
     wo = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (cal["request_id"],)).fetchone()
     if not wo or wo["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
+    if cal["lifecycle_status"] == "APPROVED":
+        flash("Approved calibration records are immutable. Start a controlled correction/recalibration workflow instead of editing the approved record.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
     if wo["status"] != "IN PROGRESS":
         flash("Only a calibration returned for correction can be edited.", "error")
         return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
