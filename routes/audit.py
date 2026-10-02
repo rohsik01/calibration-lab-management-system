@@ -2,7 +2,7 @@
 from app import *
 
 @app.route("/audit-log")
-@admin_required
+@superadmin_required
 def audit_log():
     db = get_db()
     action = request.args.get("action", "").strip()
