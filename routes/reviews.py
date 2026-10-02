@@ -130,6 +130,16 @@ def decide_calibration_review(review_id):
                      "cal_id": review["cal_id"]}
         )
         if decision == "APPROVED":
+            # Recompute tolerance results again at approval time. A submitted
+            # record must not receive an official certificate if its stored
+            # point results or aggregate summary have been altered.
+            try:
+                validate_calibration_record_for_submission(db, review["cal_id"], review["work_order_id"])
+            except ValueError as e:
+                db.rollback()
+                flash(f"Cannot approve: {e}", "error")
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+
             # A certificate may only be issued when the calibration identifies a
             # registered reference standard whose validity covered the calibration date.
             trace = db.execute(
