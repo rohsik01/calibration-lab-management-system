@@ -202,8 +202,24 @@ def calibrate_pending_request(request_id):
             sensor_type = request.form.get("sensor_type", "").strip()
             manufacturer = request.form.get("manufacturer", "").strip()
             serial_number = request.form.get("serial_number", "").strip()
+            station_id_raw = request.form.get("station_id", "").strip()
+            station_id = None
             station_name = request.form.get("station_name", "").strip()
             station_location = request.form.get("station_location", "").strip()
+            station_type = request.form.get("station_type", "").strip() or "Meteorological"
+            if station_id_raw:
+                if not station_id_raw.isdigit():
+                    raise ValueError("Choose a valid station from the station list.")
+                station = db.execute("SELECT station_id, name, location, type FROM stations WHERE station_id=?",
+                                     (int(station_id_raw),)).fetchone()
+                if not station:
+                    raise ValueError("The selected station no longer exists. Refresh the station list.")
+                station_id = station["station_id"]
+                station_name = station["name"]
+                station_location = station["location"] or ""
+                station_type = station["type"] or "Meteorological"
+            elif not station_name:
+                raise ValueError("Select an existing station or add a new station.")
             unit = request.form.get("unit", "").strip()
             interval_days = int(request.form.get("interval_days", "365").strip() or 365)
             tolerance = float(request.form.get("sensor_tolerance", "0.5").strip() or 0.5)
@@ -242,10 +258,10 @@ def calibrate_pending_request(request_id):
             db.execute("""UPDATE calibration_requests SET
                 pending_sensor_type=?, pending_manufacturer=?, pending_serial_number=?,
                 pending_interval_days=?, pending_tolerance=?, pending_unit=?,
-                pending_station_name=?, pending_station_location=?, updated_at=?
+                pending_station_id=?, pending_station_name=?, pending_station_location=?, updated_at=?
                 WHERE request_id=?""",
                        (sensor_type, manufacturer, serial_number, interval_days, tolerance, unit,
-                        station_name, station_location, datetime.now().isoformat(timespec="seconds"), request_id))
+                        station_id, station_name, station_location, datetime.now().isoformat(timespec="seconds"), request_id))
             cert=next_certificate(db,cal_date)
             due=(date.fromisoformat(cal_date)+timedelta(days=interval_days)).isoformat()
             cur=db.execute("""INSERT INTO calibrations
@@ -269,7 +285,8 @@ def calibrate_pending_request(request_id):
         except (ValueError,sqlite3.IntegrityError) as e:
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
-    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_)
+    stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_)
 
 @app.route("/certificate/<cert>")
 def certificate(cert):
