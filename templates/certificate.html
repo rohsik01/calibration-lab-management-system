@@ -40,6 +40,7 @@
 <tr><th>{{ tr("Calibration date") }}</th><td>{{ date_pair(r.cal_date) }}</td></tr>
 <tr><th>{{ tr("Reference standard") }}</th><td>{{ r.reference_standard }}</td></tr>
 {% if det %}
+{% if standard %}<tr><th>{{ tr("Reference standard code") }}</th><td><a href="{{ url_for('standard', sid=standard.standard_id) }}">{{ standard.code }}</a>{% if standard.name %} — {{ standard.name }}{% endif %}</td></tr>{% endif %}
 {% if det.serial %}<tr><th>{{ tr("Standard serial number") }}</th><td>{{ det.serial }}</td></tr>{% endif %}
 {% if det.traceability %}<tr><th>{{ tr("Traceability") }}</th><td style="white-space:normal">{{ det.traceability }}</td></tr>{% endif %}
 {% if det.certificate %}<tr><th>{{ tr("Standard's certificate") }}</th><td>{{ det.certificate }}</td></tr>{% endif %}
