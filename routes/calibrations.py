@@ -252,12 +252,24 @@ def calibrate_pending_request(request_id):
             cal_date=date.fromisoformat(request.form.get("cal_date","").strip()).isoformat()
             refs=[float(x) for x in request.form.getlist("reference_value")]
             meass=[float(x) for x in request.form.getlist("measured_value")]
+            left_raw=request.form.getlist("as_left_value")
+            as_left=[float(x) if x.strip() else None for x in left_raw] if left_raw else [None]*len(refs)
             tols=[float(x) for x in request.form.getlist("tolerance")]
-            if not refs or len(refs)!=len(meass) or len(refs)!=len(tols): raise ValueError("Enter complete measurement points.")
-            pts=[(r,m,round(m-r,6),"PASS" if abs(m-r)<=t else "FAIL",t) for r,m,t in zip(refs,meass,tols)]
-            worst=max(pts,key=lambda p:abs(p[2])); result="FAIL" if any(p[3]=="FAIL" for p in pts) else "PASS"
-            mean_error=round(sum(p[2] for p in pts)/len(pts),6)
-            max_error=round(max(abs(p[2]) for p in pts),6)
+            if not refs or len(refs)!=len(meass) or len(refs)!=len(tols) or len(as_left)!=len(refs): raise ValueError("Enter complete measurement points.")
+            pts=[]
+            for r,m,left,t in zip(refs,meass,as_left,tols):
+                found_err=round(m-r,6); left_err=round(left-r,6) if left is not None else found_err
+                found_result="PASS" if abs(found_err)<=t else "FAIL"
+                left_result="PASS" if abs(left_err)<=t else "FAIL"
+                pts.append((r,m,found_err,found_result,t,left,left_err,left_result))
+            adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
+            if adjustment_status=="PERFORMED" and any(p[5] is None for p in pts):
+                raise ValueError("Enter an As-Left reading for every point when adjustment is marked as performed.")
+            worst=max(pts,key=lambda p:abs(p[6] if p[5] is not None else p[2]))
+            result="FAIL" if any(p[7]=="FAIL" for p in pts) else "PASS"
+            final_errors=[p[6] if p[5] is not None else p[2] for p in pts]
+            mean_error=round(sum(final_errors)/len(final_errors),6)
+            max_error=round(max(abs(x) for x in final_errors),6)
             try:
                 uncertainty = calculate_measurement_uncertainty(request.form)
             except (ValueError, TypeError) as e:
@@ -302,8 +314,13 @@ def calibrate_pending_request(request_id):
                  uncertainty["combined_standard_uncertainty"],uncertainty["coverage_factor"],
                  uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"]))
             db.executemany("""INSERT INTO calibration_points
-                (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
-                VALUES (?,?,?,?,?,?,?)""",[(cur.lastrowid,i,*p) for i,p in enumerate(pts,1)])
+                (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
+                 as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                [(cur.lastrowid,i,p[0],p[5] if p[5] is not None else p[1],
+                  p[6] if p[5] is not None else p[2],p[7] if p[5] is not None else p[3],p[4],
+                  p[1],p[2],p[3],p[5],p[6] if p[5] is not None else p[2],
+                  p[7] if p[5] is not None else p[3]) for i,p in enumerate(pts,1)])
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
