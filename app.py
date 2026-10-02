@@ -288,6 +288,11 @@ def audit_mutating_request(response):
 
 with sqlite3.connect(DB, timeout=30) as _c:
     _configure_connection(_c)
+    # Some legacy-table migrations rebuild tables with foreign-key references
+    # (for example, users and calibrations). Temporarily disable FK enforcement
+    # during the schema migration so SQLite permits the controlled table swap.
+    # Foreign keys are re-enabled before normal application use.
+    _c.execute("PRAGMA foreign_keys = OFF")
     _c.executescript(SCHEMA)
     # upgrade older databases: station type and last-edited timestamp
     _station_cols = [r[1] for r in _c.execute("PRAGMA table_info(stations)")]
@@ -389,6 +394,9 @@ with sqlite3.connect(DB, timeout=30) as _c:
     for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT"), ("request_id", "INTEGER")):
         if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
             _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+    # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
+    _c.execute("PRAGMA foreign_keys = ON")
+
     # Query-performance indexes. Foreign keys are not automatically indexed
     # by SQLite, so add indexes for the relationships and common dashboard/report
     # filters. IF NOT EXISTS makes this safe for every startup and old databases.
