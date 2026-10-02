@@ -19,8 +19,23 @@ S/N: {{ req.pending_serial_number }} ·
 <div><label>{{ tr("Sensor type") }}</label><input name="sensor_type" value="{{ req.pending_sensor_type or '' }}" placeholder="{{ tr('e.g. Rain Gauge') }}" required></div>
 <div><label>{{ tr("Manufacturer") }}</label><input name="manufacturer" value="{{ req.pending_manufacturer or '' }}"></div>
 <div><label>{{ tr("Serial number") }}</label><input name="serial_number" value="{{ req.pending_serial_number or '' }}" required></div>
-<div><label>{{ tr("Station name") }}</label><input name="station_name" value="{{ req.pending_station_name or '' }}" required></div>
-<div><label>{{ tr("Station location") }}</label><input name="station_location" value="{{ req.pending_station_location or '' }}"></div>
+<div style="grid-column:1/-1">
+<label>{{ tr("Station") }}</label>
+<input id="station_search" list="station_list" placeholder="{{ tr('Search station by name or location') }}" value="{{ req.pending_station_name or '' }}" autocomplete="off">
+<datalist id="station_list">
+{% for st in stations %}<option value="{{ st.name }}" data-id="{{ st.station_id }}">{{ st.location or '' }} · {{ st.type or 'Meteorological' }}</option>{% endfor %}
+</datalist>
+<input type="hidden" name="station_id" id="station_id" value="{{ req.pending_station_id or '' }}">
+<input type="hidden" name="station_name" id="station_name" value="{{ req.pending_station_name or '' }}">
+<p class="sub">{{ tr("Select a station from the administrator-maintained station list. If it is not listed, use Add new station below.") }}</p>
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="add_station"> {{ tr("Add new station") }}</label>
+</div>
+<div id="new_station_fields" style="display:none;grid-column:1/-1" class="grid">
+<div><label>{{ tr("New station name") }}</label><input id="new_station_name" name="new_station_name"></div>
+<div><label>{{ tr("New station location") }}</label><input id="new_station_location" name="new_station_location"></div>
+<div><label>{{ tr("Station type") }}</label><select id="new_station_type" name="new_station_type"><option>Meteorological</option><option>Hydrological</option><option>Agrometeorological</option><option>Radar</option><option>Other</option></select></div>
+</div>
+<input type="hidden" name="station_location" value="{{ req.pending_station_location or '' }}"><input type="hidden" name="station_type" value="{{ req.pending_station_type or 'Meteorological' }}">
 <div><label>{{ tr("Calibration interval (days)") }}</label><input type="number" min="1" name="interval_days" value="{{ req.pending_interval_days or 365 }}" required></div>
 <div><label>{{ tr("Sensor tolerance (±)") }}</label><input type="number" min="0" step="any" name="sensor_tolerance" value="{{ req.pending_tolerance if req.pending_tolerance is not none else 0.5 }}" required></div>
 <div><label>{{ tr("Unit") }}</label><input name="unit" value="{{ req.pending_unit or '' }}" placeholder="{{ tr('e.g. mm, °C, hPa') }}"></div>
@@ -63,5 +78,51 @@ document.getElementById('add').onclick=addRow; addRow();
 const std=document.getElementById('std'), stdtext=document.getElementById('stdtext');
 function toggle(){const other=std.value==='';stdtext.style.display=other?'':'none';stdtext.required=other;}
 std.onchange=toggle; toggle();
+
+const stationSearch=document.getElementById('station_search');
+const stationId=document.getElementById('station_id');
+const stationName=document.getElementById('station_name');
+const addStation=document.getElementById('add_station');
+const newFields=document.getElementById('new_station_fields');
+const newName=document.getElementById('new_station_name');
+const newLocation=document.getElementById('new_station_location');
+const newType=document.getElementById('new_station_type');
+const stationOptions=[...document.querySelectorAll('#station_list option')];
+
+function stationMode(){
+  const adding=addStation.checked;
+  newFields.style.display=adding?'grid':'none';
+  stationSearch.disabled=adding;
+  stationId.value=adding?'':(stationOptions.find(o=>o.value.trim().toLowerCase()===stationSearch.value.trim().toLowerCase())?.dataset.id || '');
+  stationName.value=adding?newName.value.trim():stationSearch.value.trim();
+  stationSearch.required=!adding;
+  newName.required=adding;
+  if(adding){ stationName.value=newName.value.trim(); }
+}
+stationSearch.addEventListener('input', stationMode);
+addStation.addEventListener('change', ()=>{
+  if(addStation.checked && stationSearch.value.trim()){
+    newName.value=stationSearch.value.trim();
+  }
+  stationMode();
+});
+[newName,newLocation,newType].forEach(el=>el.addEventListener('input',stationMode));
+document.querySelector('form').addEventListener('submit',e=>{
+  if(addStation.checked){
+    stationId.value='';
+    stationName.value=newName.value.trim();
+    document.querySelector('[name="station_location"]').value=newLocation.value.trim();
+    document.querySelector('[name="station_type"]').value=newType.value;
+    if(!stationName.value){ e.preventDefault(); alert('Enter the new station name.'); }
+  } else {
+    const match=stationOptions.find(o=>o.value.trim().toLowerCase()===stationSearch.value.trim().toLowerCase());
+    if(!match){ e.preventDefault(); alert('Select a station from the list or choose Add new station.'); return; }
+    stationId.value=match.dataset.id;
+    stationName.value=match.value;
+    document.querySelector('[name="station_location"]').value=match.textContent.split(' · ')[0].trim();
+    document.querySelector('[name="station_type"]').value=match.textContent.split(' · ')[1]?.trim() || 'Meteorological';
+  }
+});
+stationMode();
 </script>
 {% endblock %}
