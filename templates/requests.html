@@ -33,7 +33,8 @@
     <div class="grid">
       <div><label>{{ tr("Technician") }}</label><select name="technician_id" required><option value="">{{ tr("Select technician") }}</option>{% for t in technicians %}<option value="{{ t.user_id }}">{{ t.full_name }} ({{ t.username }})</option>{% endfor %}</select></div>
       <div><label>{{ tr("Target completion date") }}</label><input type="date" name="target_date"></div>
-      <div><label>{{ tr("Calibration method / procedure") }}</label><input name="calibration_method"></div>
+      <div><label>{{ tr("Calibration procedure") }}</label><select name="procedure_id" required><option value="">{{ tr("Select controlled procedure") }}</option>{% for p in procedures %}<option value="{{ p.procedure_id }}">{{ p.code }} — {{ p.title }} ({{ tr("Rev.") }} {{ p.revision }})</option>{% endfor %}</select></div>
+<div><label>{{ tr("Method / additional reference") }}</label><input name="calibration_method"></div>
       <div><label>{{ tr("Reference standard") }}</label><select name="standard_id"><option value="">{{ tr("Select later / not specified") }}</option>{% for s in standards %}<option value="{{ s.standard_id }}">{{ s.code }} — {{ s.name }}</option>{% endfor %}</select></div>
     </div>
     <div style="margin-top:10px"><label>{{ tr("Technician instructions") }}</label><textarea name="instructions" rows="2"></textarea></div>
