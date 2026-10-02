@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS calibrations (
     cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
     sensor_id TEXT REFERENCES sensors(sensor_id),
     cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
-    reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+    reference_value REAL NOT NULL, error REAL NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
     certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
     mean_error REAL, max_error REAL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS calibration_points (
     point_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
     point_no INTEGER NOT NULL,
-    reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+    reference_value REAL NOT NULL, error REAL NOT NULL,
     as_found_value REAL, as_found_error REAL,
     as_left_value REAL, as_left_error REAL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
@@ -267,7 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created
 
 LATEST = """
 SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
-       c.measured_value, c.error, c.result, c.certificate_no, c.next_due, c.performed_by, c.n_points
+       c.error, c.result, c.certificate_no, c.next_due, c.performed_by, c.n_points
 FROM sensors s JOIN stations st USING(station_id)
 LEFT JOIN calibrations c ON c.cal_id = (
     SELECT MAX(cal_id) FROM calibrations WHERE sensor_id = s.sensor_id)
@@ -397,7 +397,7 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id=None):
     final_errors = []
     final_results = []
     for i, (p, req) in enumerate(zip(points, proc_points), 1):
-        for field in ("reference_value", "measured_value", "error", "tolerance"):
+        for field in ("reference_value", "error", "tolerance"):
             value = p[field]
             if value is None or not math.isfinite(float(value)):
                 raise ValueError(f"Measurement point {i} has an invalid {field.replace('_', ' ')}.")
@@ -409,7 +409,7 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id=None):
             raise ValueError(f"Measurement point {i} has a negative tolerance.")
         if abs(p["reference_value"] - req["reference_value"]) > 1e-9 or abs(p["tolerance"] - req["tolerance"]) > 1e-9:
             raise ValueError(f"Measurement point {i} does not match the assigned calibration procedure.")
-        found_value = p["as_found_value"] if p["as_found_value"] is not None else p["measured_value"]
+        found_value = p["as_found_value"]
         expected_found_error = round(found_value - p["reference_value"], 6)
         expected_left_error = round(p["as_left_value"] - p["reference_value"], 6) if p["as_left_value"] is not None else expected_found_error
         expected_found_result = "PASS" if abs(expected_found_error) <= p["tolerance"] else "FAIL"
@@ -439,8 +439,7 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id=None):
     if cal["max_error"] is None or abs(cal["max_error"] - expected_max) > 1e-9:
         raise ValueError("Stored maximum error does not match the measurement points.")
     if (abs(cal["error"] - final_errors[worst_index]) > 1e-9
-            or abs(cal["reference_value"] - points[worst_index]["reference_value"]) > 1e-9
-            or abs(cal["measured_value"] - (points[worst_index]["as_left_value"] if cal["adjustment_status"] == "PERFORMED" else (points[worst_index]["as_found_value"] if points[worst_index]["as_found_value"] is not None else points[worst_index]["measured_value"]))) > 1e-9):
+            or abs(cal["reference_value"] - points[worst_index]["reference_value"]) > 1e-9):
         raise ValueError("Stored worst-point summary does not match the measurement points.")
     if cal["adjustment_status"] == "PERFORMED":
         if any(p["as_left_value"] is None for p in points):
@@ -662,15 +661,15 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("""CREATE TABLE calibrations_new (
             cal_id INTEGER PRIMARY KEY AUTOINCREMENT, sensor_id TEXT REFERENCES sensors(sensor_id),
             cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
-            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+            reference_value REAL NOT NULL, error REAL NOT NULL,
             result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
             certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
             performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1,
             standard_id INTEGER, standard_details TEXT, request_id INTEGER)""")
         _c.execute("""INSERT INTO calibrations_new
-            (cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+            (cal_id,sensor_id,cal_date,reference_standard,reference_value,error,result,
              certificate_no,next_due,performed_by,n_points,standard_id,standard_details,request_id)
-            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,error,result,
                    certificate_no,next_due,
                    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='performed_by') THEN performed_by ELSE NULL END,
                    CASE WHEN EXISTS (SELECT 1 FROM pragma_table_info('calibrations') WHERE name='n_points') THEN n_points ELSE 1 END,
@@ -783,7 +782,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
             cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
             sensor_id TEXT REFERENCES sensors(sensor_id),
             cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
-            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+            reference_value REAL NOT NULL, error REAL NOT NULL,
             result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
             certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
             mean_error REAL, max_error REAL,
@@ -802,13 +801,13 @@ with sqlite3.connect(DB, timeout=30) as _c:
             certificate_issued_by INTEGER, certificate_issued_at TEXT
         )""")
         _c.execute("""INSERT INTO calibrations_new (
-            cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+            cal_id,sensor_id,cal_date,reference_standard,reference_value,error,result,
             certificate_no,next_due,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
             standard_uncertainty,resolution,repeatability,environmental_uncertainty,other_uncertainty,
             combined_standard_uncertainty,coverage_factor,expanded_uncertainty,uncertainty_method,
             performed_by,n_points,standard_id,standard_details,request_id,revision_no,lifecycle_status,
             created_at,updated_at,approved_by,approved_at,certificate_issued_by,certificate_issued_at)
-            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,error,result,
                    certificate_no,next_due,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                    standard_uncertainty,resolution,repeatability,environmental_uncertainty,other_uncertainty,
                    combined_standard_uncertainty,coverage_factor,expanded_uncertainty,uncertainty_method,
@@ -818,8 +817,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("DROP TABLE calibrations")
         _c.execute("ALTER TABLE calibrations_new RENAME TO calibrations")
     # older single-point calibrations become calibrations with one point
-    _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, measured_value, error, result)
-                   SELECT cal_id, 1, reference_value, measured_value, error, result FROM calibrations c
+    _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, as_found_value, as_found_error, as_found_result, as_left_value, as_left_error, as_left_result, error, result)
+                   SELECT cal_id, 1, reference_value, measured_value, error, result, measured_value, error, result, error, result FROM calibrations c
                    WHERE NOT EXISTS (SELECT 1 FROM calibration_points p WHERE p.cal_id = c.cal_id)""")
     # upgrade older databases: preserve both as-found and as-left readings.
     _point_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]
@@ -827,10 +826,9 @@ with sqlite3.connect(DB, timeout=30) as _c:
         if _col not in _point_cols:
             _c.execute(f"ALTER TABLE calibration_points ADD COLUMN {_col} {_ddl}")
     _c.execute("""UPDATE calibration_points
-                  SET as_found_value=COALESCE(as_found_value, measured_value),
-                      as_found_error=COALESCE(as_found_error, error),
-                      as_left_value=COALESCE(as_left_value, measured_value),
-                      as_left_error=COALESCE(as_left_error, error),
+                  SET as_found_error=COALESCE(as_found_error, error),
+                      as_left_value=COALESCE(as_left_value, as_found_value),
+                      as_left_error=COALESCE(as_left_error, as_found_error),
                       as_found_result=COALESCE(as_found_result, result),
                       as_left_result=COALESCE(as_left_result, result)
                   WHERE as_found_value IS NULL OR as_left_value IS NULL""")
@@ -852,6 +850,63 @@ with sqlite3.connect(DB, timeout=30) as _c:
     _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
     if "procedure_id" not in _cal_cols:
         _c.execute("ALTER TABLE calibrations ADD COLUMN procedure_id INTEGER")
+    # Finalize the As-Found / As-Left data model. Legacy measured readings are
+    # preserved as As-Found values, then the obsolete measured_value columns are
+    # physically removed from the live SQLite schema.
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    if "measured_value" in _cal_cols:
+        _c.execute("DROP TABLE IF EXISTS calibrations_new_afal")
+        _c.execute("""CREATE TABLE calibrations_new_afal (
+            cal_id INTEGER PRIMARY KEY AUTOINCREMENT, sensor_id TEXT REFERENCES sensors(sensor_id),
+            cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
+            reference_value REAL NOT NULL, error REAL NOT NULL,
+            result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+            certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
+            mean_error REAL, max_error REAL,
+            adjustment_status TEXT NOT NULL DEFAULT 'NOT REQUIRED' CHECK (adjustment_status IN ('NOT REQUIRED','REQUIRED','PERFORMED')),
+            adjustment_notes TEXT, technician_remarks TEXT,
+            standard_uncertainty REAL, resolution REAL, repeatability REAL,
+            environmental_uncertainty REAL, other_uncertainty REAL,
+            combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
+            expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
+            uncertainty_calculation_json TEXT, environment_temperature REAL, environment_humidity REAL,
+            certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER,
+            performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1, standard_id INTEGER,
+            standard_details TEXT, request_id INTEGER, revision_no INTEGER NOT NULL DEFAULT 1,
+            lifecycle_status TEXT NOT NULL DEFAULT 'DRAFT', created_at TEXT, updated_at TEXT,
+            approved_by INTEGER, approved_at TEXT, procedure_id INTEGER
+        )""")
+        _cal_new_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations_new_afal)")]
+        _copy_cols = ", ".join(_cal_new_cols)
+        _c.execute(f"INSERT INTO calibrations_new_afal ({_copy_cols}) SELECT {_copy_cols} FROM calibrations")
+        _c.execute("DROP TABLE calibrations")
+        _c.execute("ALTER TABLE calibrations_new_afal RENAME TO calibrations")
+
+    _point_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]
+    if "measured_value" in _point_cols:
+        _c.execute("DROP TABLE IF EXISTS calibration_points_new_afal")
+        _c.execute("""CREATE TABLE calibration_points_new_afal (
+            point_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
+            point_no INTEGER NOT NULL,
+            reference_value REAL NOT NULL,
+            error REAL NOT NULL,
+            as_found_value REAL NOT NULL, as_found_error REAL,
+            as_left_value REAL, as_left_error REAL,
+            result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+            as_found_result TEXT CHECK (as_found_result IN ('PASS','FAIL')),
+            as_left_result TEXT CHECK (as_left_result IN ('PASS','FAIL')),
+            tolerance REAL
+        )""")
+        _c.execute("""INSERT INTO calibration_points_new_afal
+            (point_id,cal_id,point_no,reference_value,error,as_found_value,as_found_error,as_left_value,as_left_error,result,as_found_result,as_left_result,tolerance)
+            SELECT point_id,cal_id,point_no,reference_value,error,
+                   COALESCE(as_found_value, measured_value),as_found_error,as_left_value,as_left_error,
+                   result,as_found_result,as_left_result,tolerance
+            FROM calibration_points""")
+        _c.execute("DROP TABLE calibration_points")
+        _c.execute("ALTER TABLE calibration_points_new_afal RENAME TO calibration_points")
+
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
