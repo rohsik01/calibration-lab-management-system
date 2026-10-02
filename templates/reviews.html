@@ -102,6 +102,10 @@
           (d.overall_result === "PASS" ? "green" : "red") + "'>" +
           esc(d.overall_result) + "</span></div>" +
           "<div><strong>Maximum error:</strong><br>" + esc(d.max_error) + " " + esc(d.unit) + "</div>" +
+          "<div><strong>Mean error:</strong><br>" + esc(d.mean_error) + " " + esc(d.unit) + "</div>" +
+          "<div><strong>Adjustment status:</strong><br>" + esc(d.adjustment_status) + "</div>" +
+          "<div><strong>Technician remarks:</strong><br>" + esc(d.technician_remarks) + "</div>" +
+          "<div style='grid-column:1/-1'><strong>Adjustment notes:</strong><br>" + esc(d.adjustment_notes) + "</div>" +
           "</div>" +
           "<h3 style='margin-top:20px'>{{ tr('Measurement results') }}</h3>" +
           "<div class='scroll'><table><thead><tr><th>No.</th><th>Reference</th><th>Reading</th><th>Error</th><th>Tolerance</th><th>Result</th></tr></thead>" +
