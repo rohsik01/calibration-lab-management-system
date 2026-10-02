@@ -245,7 +245,7 @@ def assign_calibration_request(request_id):
                 """INSERT INTO calibration_work_orders
                    (work_order_no, request_id, assigned_technician_id, assigned_by, assigned_at,
                     target_date, calibration_method, procedure_id, standard_id, instructions, status, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,'ASSIGNED',?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?, 'ASSIGNED',?,?)""",
                 (work_order_no, request_id, technician["user_id"], g.user["user_id"], now,
                  target, method, standard_id, request.form.get("instructions", "").strip(), now, now)
             )
