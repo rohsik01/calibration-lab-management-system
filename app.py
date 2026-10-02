@@ -414,7 +414,7 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id=None):
         expected_left_error = round(p["as_left_value"] - p["reference_value"], 6) if p["as_left_value"] is not None else expected_found_error
         expected_found_result = "PASS" if abs(expected_found_error) <= p["tolerance"] else "FAIL"
         expected_left_result = "PASS" if abs(expected_left_error) <= p["tolerance"] else "FAIL"
-        final_error = expected_left_error if cal["adjustment_status"] == "PERFORMED" else expected_found_error
+        final_error = expected_left_error if p["as_left_value"] is not None else expected_found_error
         final_result = "PASS" if abs(final_error) <= p["tolerance"] else "FAIL"
         if abs(p["error"] - final_error) > 1e-9 or p["result"] != final_result:
             raise ValueError(f"Measurement point {i} contains inconsistent final error/result data.")
