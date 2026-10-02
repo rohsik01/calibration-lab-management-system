@@ -616,6 +616,12 @@ def certificate(cert):
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    return render_template("certificate.html", r=r, pts=pts, det=details, preview=preview)
+    standard = None
+    if r["standard_id"]:
+        standard = db.execute(
+            "SELECT standard_id, code, name FROM reference_standards WHERE standard_id=?",
+            (r["standard_id"],)
+        ).fetchone()
+    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard, preview=preview)
 
 
