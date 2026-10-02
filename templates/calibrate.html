@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}{{ tr("Record calibration") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ tr("Edit calibration") if edit_mode else tr("Record calibration") }} — {{ s.sensor_id }}</h1>{% if edit_mode %}<div class="preview"><b>{{ tr("Returned for correction") }}</b> — {{ tr("Update the calibration data identified by the administrator, then resubmit the work order for review.") }}</div>{% endif %}
 <p class="sub">{{ tr("Each point has its own allowed error (tolerance), pre-filled with this sensor's default of ±{tol} {unit}.").format(tol=s.tolerance, unit=s.unit) }}
-{{ tr("The sensor passes only if all points pass. Error, Pass/Fail, certificate number and next due date are worked out for you.") }}</p>
+{{ tr("The sensor passes only if all points pass. Error, Pass/Fail and next due date are worked out for you. The official certificate number is issued after administrator approval.") }}</p>
 <form method="post" action="{{ url_for('edit_calibration', cal_id=calibration.cal_id) if edit_mode else url_for('calibrate', sensor_id=s.sensor_id) }}">{{ csrf_input() }}
 <div class="grid">
 <div><label>{{ tr("Calibration request") }}</label>
