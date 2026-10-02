@@ -1,6 +1,12 @@
 """Route module: standards."""
 from app import *
 
+# Form fields used by the reference-standard create/edit routes.
+STD_FIELDS = (
+    "code", "name", "standard_type", "manufacturer", "serial_number",
+    "uncertainty", "traceability", "certificate_no", "calibrated_on", "valid_until",
+)
+
 def read_standard(f):
     d = {k: f.get(k, "").strip() for k in STD_FIELDS}
     if not d["code"] or not d["name"]:
