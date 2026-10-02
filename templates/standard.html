@@ -12,8 +12,16 @@
 <tr><th>{{ tr("Certificate") }}</th><td>{{ x.certificate_no or '—' }}</td></tr>
 <tr><th>{{ tr("Calibrated on") }}</th><td>{{ date_pair(x.calibrated_on) }}</td></tr>
 <tr><th>{{ tr("Valid until") }}</th><td>{{ date_pair(x.valid_until) }}</td></tr></table></div>
+<div class="card">
+<h2>{{ tr("Traceability control") }}</h2>
+<p class="sub">{{ tr("This standard is linked to {n} calibration record(s).").format(n=usage_count) }}</p>
+{% if usage_count %}
+<p class="hint">{{ tr("Its identity, certificate, traceability and validity fields are locked to preserve historical measurement traceability. Create a new standard record when it is recalibrated or replaced.") }}</p>
+{% endif %}
+</div>
 <div class="card"><h2>{{ tr("Calibrations that used this standard") }}</h2>
-<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
-{% for u in used %}<tr><td>{{ date_pair(u.cal_date) }}</td><td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td>
-<td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td><a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a></td></tr>
-{% else %}<tr><td colspan="4">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Work order") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
+{% for u in used %}<tr><td>{{ date_pair(u.cal_date) }}</td><td>{% if u.work_order_id %}<a href="{{ url_for('work_order_detail', work_order_id=u.work_order_id) }}">{{ u.work_order_no }}</a>{% else %}—{% endif %}</td>
+<td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td><td>{{ u.technician_name or '—' }}</td>
+<td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td>{% if u.certificate_no %}<a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a>{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="6">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
