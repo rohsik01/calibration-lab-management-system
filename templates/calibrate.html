@@ -44,18 +44,18 @@
   <input id="gtol" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:0;width:100px" aria-label="{{ tr('Tolerance (±)') }}" title="{{ tr('Tolerance (±)') }}">
   <button type="button" class="btn alt" id="gen">{{ tr("Create evenly spaced points") }}</button>
 </div>
-<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("As-Found reading") }} ({{ s.unit }})</th><th>{{ tr("As-Left reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("As-Found reading") }} ({{ s.unit }})</th><th>{{ tr("As-Left reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error AF") }}</th><th>{{ tr("Error AL") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody>
 {% if edit_mode %}
 {% for p in points %}
-<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="measured_value" type="number" step="any" required value="{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}" style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment" value="{{ p.as_left_value if p.as_left_value is not none else '' }}"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="as_found_value" type="number" step="any" required value="{{ p.as_found_value }}" style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment" value="{{ p.as_left_value if p.as_left_value is not none else '' }}"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err-af">—</td><td class="err-al">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
 {% endfor %}
 {% elif procedure_points %}
 {% for p in procedure_points %}
-<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" style="min-width:120px" readonly></td><td><input name="as_found_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" style="min-width:90px" readonly></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
 {% endfor %}
 {% else %}
 {% for i in range(5) %}
-<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required style="min-width:120px"></td><td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:90px"></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_found_value" type="number" step="any" required style="min-width:120px"></td><td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:90px"></td><td class="err">—</td><td class="res">—</td><td><button type="button" class="btn alt del" style="padding:3px 10px">✕</button></td></tr>
 {% endfor %}
 {% endif %}
 </tbody></table></div>
@@ -106,11 +106,11 @@ async function refreshBsDate() {
 }
 calDate.addEventListener('change', refreshBsDate);
 const body = document.querySelector('#pts tbody'), overall = document.getElementById('overall');
-function addRow(ref = '', tol = defTol, meas = '', left = '', controlled = false) {
+function addRow(ref = '', tol = defTol, found = '', left = '', controlled = false) {
   const tr = document.createElement('tr');
   tr.innerHTML = `<td class="no"></td>
     <td><input name="reference_value" type="number" step="any" required value="${ref}" style="min-width:120px" ${controlled ? "readonly" : ""}></td>
-    <td><input name="measured_value" type="number" step="any" required value="${meas}" style="min-width:120px"></td>
+    <td><input name="as_found_value" type="number" step="any" required value="${found}" style="min-width:120px"></td>
     <td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment" value="${left}"></td>
     <td><input name="tolerance" type="number" step="any" min="0" value="${tol}" style="min-width:90px" aria-label="${T.tol}" ${controlled ? "readonly" : ""}></td>
     <td class="err">—</td><td class="res">—</td>
@@ -123,12 +123,17 @@ function update() {
   let filled = 0, fails = 0, worst = 0;
   [...body.rows].forEach((tr, i) => {
     tr.querySelector('.no').textContent = i + 1;
-    const [r, m, t] = tr.querySelectorAll('input'), err = tr.querySelector('.err'), res = tr.querySelector('.res');
-    if (r.value === '' || m.value === '') { err.textContent = '—'; res.textContent = '—'; return; }
+    const inputs = tr.querySelectorAll('input'), r = inputs[0], f = inputs[1], left = inputs[2], t = inputs[3];
+    const errAf = tr.querySelector('.err-af'), errAl = tr.querySelector('.err-al'), res = tr.querySelector('.res');
+    if (r.value === '' || f.value === '') { errAf.textContent = '—'; errAl.textContent = '—'; res.textContent = '—'; return; }
     const tol = t.value === '' ? defTol : parseFloat(t.value);
-    const e = parseFloat((m.value - r.value).toFixed(6)), pass = Math.abs(e) <= tol;
+    const eAf = parseFloat((f.value - r.value).toFixed(6));
+    const eAl = left.value === '' ? eAf : parseFloat((left.value - r.value).toFixed(6));
+    const useLeft = document.querySelector('[name="adjustment_status"]').value === 'PERFORMED' && left.value !== '';
+    const e = useLeft ? eAl : eAf, pass = Math.abs(e) <= tol;
     filled++; if (!pass) fails++; if (Math.abs(e) > Math.abs(worst)) worst = e;
-    err.textContent = (e > 0 ? '+' : '') + e;
+    errAf.textContent = (eAf > 0 ? '+' : '') + eAf;
+    errAl.textContent = left.value === '' ? '—' : (eAl > 0 ? '+' : '') + eAl;
     res.innerHTML = `<span class="badge ${pass ? 'green' : 'red'}">${pass ? T.pass : T.fail}</span>`;
   });
   if (filled < body.rows.length) { overall.textContent = T.fill; return; }
@@ -149,6 +154,7 @@ function updateUncertaintyPreview() {
 document.querySelectorAll('[name="standard_uncertainty"],[name="resolution"],[name="repeatability"],[name="environmental_uncertainty"],[name="other_uncertainty"],[name="coverage_factor"]').forEach(i => i.addEventListener('input', updateUncertaintyPreview));
 updateUncertaintyPreview();
 document.getElementById('add').onclick = () => addRow();
+document.querySelector('[name="adjustment_status"]').addEventListener('change', update);
 document.getElementById('gen').onclick = () => {
   const a = parseFloat(gmin.value), b = parseFloat(gmax.value), n = parseInt(gn.value), t = parseFloat(gtol.value);
   if (isNaN(a) || isNaN(b) || !(n >= 2 && n <= 30) || isNaN(t) || t < 0) { alert(T.gen); return; }
