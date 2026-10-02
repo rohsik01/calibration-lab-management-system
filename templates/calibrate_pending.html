@@ -21,7 +21,7 @@ S/N: {{ req.pending_serial_number }} ·
 <div><label>{{ tr("Serial number") }}</label><input name="serial_number" value="{{ req.pending_serial_number or '' }}" required></div>
 <div style="grid-column:1/-1">
 <label>{{ tr("Station") }}</label>
-<input id="station_search" name="station_search" list="station_list" placeholder="{{ tr('Search station by name or location') }}" value="{{ req.pending_station_name or '' }}" autocomplete="off">
+<input id="station_search" name="station_search" list="station_list" placeholder="{{ tr('Search station by name or location') }}" value="{{ req.pending_station_name or (calibration.pending_station_name if edit_mode else '') }}" autocomplete="off">
 <datalist id="station_list">
 {% for st in stations %}<option value="{{ st.name }}" data-id="{{ st.station_id }}">{{ st.location or '' }} · {{ st.type or 'Meteorological' }}</option>{% endfor %}
 </datalist>
@@ -60,9 +60,9 @@ S/N: {{ req.pending_serial_number }} ·
 <div><label>{{ tr("Relative humidity (%)") }}</label><input name="environment_humidity" type="number" min="0" max="100" step="any" value="{{ calibration.environment_humidity if edit_mode and calibration.environment_humidity is not none else '' }}" {% if procedure and (procedure.environment_humidity_min is not none or procedure.environment_humidity_max is not none) %}required{% endif %}></div>
 <div><label>{{ tr("Adjustment status") }}</label>
 <select name="adjustment_status">
-<option value="NOT REQUIRED">{{ tr("Not required") }}</option>
-<option value="REQUIRED">{{ tr("Adjustment required") }}</option>
-<option value="PERFORMED">{{ tr("Adjustment performed") }}</option>
+<option value="NOT REQUIRED" {{ 'selected' if edit_mode and (calibration.adjustment_status or 'NOT REQUIRED') == 'NOT REQUIRED' }}>{{ tr("Not required") }}</option>
+<option value="REQUIRED" {{ 'selected' if edit_mode and calibration.adjustment_status == 'REQUIRED' }}>{{ tr("Adjustment required") }}</option>
+<option value="PERFORMED" {{ 'selected' if edit_mode and calibration.adjustment_status == 'PERFORMED' }}>{{ tr("Adjustment performed") }}</option>
 </select></div>
 <div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}">{{ calibration.technician_remarks if edit_mode else '' }}</textarea></div>
 <div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}">{{ calibration.adjustment_notes if edit_mode else '' }}</textarea></div>
