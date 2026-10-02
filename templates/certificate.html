@@ -241,12 +241,14 @@
     {% if r.certificate_issued_at %}<span>{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}</span>{% endif %}
   </div>
 
-  <div class="noprint" style="position:absolute;left:5mm;right:5mm;bottom:-13mm;text-align:center">
-    {% if not preview %}
-      <button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
-    {% else %}
-      <span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>
-    {% endif %}
+  {% if not preview %}
+  <div class="certificate-actions noprint">
+    <button class="btn" type="button" onclick="window.print()">🖨 {{ tr("Print / Save as PDF") }}</button>
   </div>
+  {% else %}
+  <div class="noprint" style="position:absolute;left:5mm;right:5mm;bottom:-13mm;text-align:center">
+    <span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
