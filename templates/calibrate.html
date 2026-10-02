@@ -133,7 +133,7 @@ document.getElementById('gen').onclick = () => {
 // reference standard: pick the first valid one from the register, or type a name
 const std = document.getElementById('std'), stdtext = document.getElementById('stdtext');
 function stdChange() { const other = std.value === ''; stdtext.style.display = other ? '' : 'none'; stdtext.required = other; }
-const firstValid = [...std.options].find(o => o.value && !o.disabled); if (firstValid) std.value = firstValid.value;
+{% if not edit_mode %}const firstValid = [...std.options].find(o => o.value && !o.disabled); if (firstValid) std.value = firstValid.value;{% endif %}
 std.onchange = stdChange; stdChange();
 {% if edit_mode %}
 const existingPoints = [{% for p in points %}{ref: {{ p.reference_value }}, meas: {{ p.as_found_value if p.as_found_value is not none else p.measured_value }}, left: {{ p.as_left_value if p.as_left_value is not none else "null" }}, tol: {{ p.tolerance if p.tolerance is not none else s.tolerance }}},{% endfor %}];
