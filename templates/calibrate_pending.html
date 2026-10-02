@@ -81,14 +81,14 @@ S/N: {{ req.pending_serial_number }} ·
 </form></div>
 <script>
 const body=document.querySelector('#pts tbody'), defTol={{ req.pending_tolerance or 0.5 }};
-function addRow(ref='', meas='', left='', tol=defTol){
+function addRow(ref='', meas='', left='', tol=defTol, controlled=false){
  const tr=document.createElement('tr');
- tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required value="'+ref+'"></td><td><input name="measured_value" type="number" step="any" required value="'+meas+'"></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="'+left+'"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+tol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
+ tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required value="'+ref+'" '+(controlled?'readonly':'')></td><td><input name="measured_value" type="number" step="any" required value="'+meas+'"></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="'+left+'"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+tol+'" '+(controlled?'readonly':'')></td><td><button type="button" class="btn alt del">✕</button></td>';
  tr.querySelector('.del').onclick=()=>{if(body.rows.length>1)tr.remove(); renumber();};
  body.appendChild(tr); renumber();
 }
 function renumber(){[...body.rows].forEach((r,i)=>r.querySelector('.no').textContent=i+1);}
-document.getElementById('add').onclick=addRow; {% if edit_mode %}const existingPoints=[{% for p in points %}{ref:{{ p.reference_value }},meas:{{ p.as_found_value if p.as_found_value is not none else p.measured_value }},left:{{ p.as_left_value if p.as_left_value is not none else "null" }},tol:{{ p.tolerance if p.tolerance is not none else (req.pending_tolerance or 0.5) }}},{% endfor %}]; existingPoints.forEach(p=>addRow(p.ref,p.meas,p.left===null?'':p.left,p.tol));{% else %}{% if procedure_points %}const controlledPoints=[{% for p in procedure_points %}{ref:{{ p.reference_value }},tol:{{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p=>addRow(p.ref,'', '',p.tol));{% else %}addRow();{% endif %}{% endif %}
+document.getElementById('add').onclick=addRow; {% if edit_mode %}const existingPoints=[{% for p in points %}{ref:{{ p.reference_value }},meas:{{ p.as_found_value if p.as_found_value is not none else p.measured_value }},left:{{ p.as_left_value if p.as_left_value is not none else "null" }},tol:{{ p.tolerance if p.tolerance is not none else (req.pending_tolerance or 0.5) }}},{% endfor %}]; existingPoints.forEach(p=>addRow(p.ref,p.meas,p.left===null?'':p.left,p.tol));{% else %}{% if procedure_points %}const controlledPoints=[{% for p in procedure_points %}{ref:{{ p.reference_value }},tol:{{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p=>addRow(p.ref,'', '',p.tol,true));{% else %}addRow();{% endif %}{% endif %}
 const std=document.getElementById('std'), stdtext=document.getElementById('stdtext');
 function toggle(){const other=std.value==='';stdtext.style.display=other?'':'none';stdtext.required=other;}
 std.onchange=toggle; toggle();
