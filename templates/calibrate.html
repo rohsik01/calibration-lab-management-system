@@ -129,7 +129,7 @@ function update() {
     const tol = t.value === '' ? defTol : parseFloat(t.value);
     const eAf = parseFloat((f.value - r.value).toFixed(6));
     const eAl = left.value === '' ? eAf : parseFloat((left.value - r.value).toFixed(6));
-    const useLeft = document.querySelector('[name="adjustment_status"]').value === 'PERFORMED' && left.value !== '';
+    const useLeft = left.value !== '';
     const e = useLeft ? eAl : eAf, pass = Math.abs(e) <= tol;
     filled++; if (!pass) fails++; if (Math.abs(e) > Math.abs(worst)) worst = e;
     errAf.textContent = (eAf > 0 ? '+' : '') + eAf;
