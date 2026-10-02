@@ -818,9 +818,19 @@ def nav_counts():
 
 
 def next_certificate(db, cal_date):
-    n = db.execute("SELECT COUNT(*) FROM calibrations WHERE certificate_no LIKE ?",
-                   (f"CAL-{cal_date[:4]}-%",)).fetchone()[0]
-    return f"CAL-{cal_date[:4]}-{n + 1:04d}"
+    """Return the next unused official certificate number for the calibration year."""
+    prefix = f"CAL-{cal_date[:4]}-"
+    row = db.execute(
+        "SELECT MAX(CAST(substr(certificate_no, ?) AS INTEGER)) AS n "
+        "FROM calibrations WHERE certificate_no LIKE ?",
+        (len(prefix) + 1, prefix + "%")
+    ).fetchone()
+    n = int(row["n"] or 0) + 1
+    candidate = f"{prefix}{n:04d}"
+    while db.execute("SELECT 1 FROM calibrations WHERE certificate_no=?", (candidate,)).fetchone():
+        n += 1
+        candidate = f"{prefix}{n:04d}"
+    return candidate
 
 
 def next_request_number(db, received_date):
