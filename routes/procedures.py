@@ -93,7 +93,7 @@ def procedure_detail(procedure_id):
         (procedure_id,)
     ).fetchall()
     usage = db.execute(
-        """SELECT w.work_order_no, w.status, r.request_no, r.instrument_description,
+        """SELECT w.work_order_id, w.work_order_no, w.status, r.request_no, r.instrument_description,
                   u.full_name AS technician_name
            FROM calibration_work_orders w
            JOIN calibration_requests r ON r.request_id=w.request_id
