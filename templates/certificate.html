@@ -61,8 +61,8 @@
 <tr><th>{{ tr("Calibrated by") }}</th><td>{{ r.performed_by or '—' }}</td></tr>
 <tr><th>{{ tr("Next due") }}</th><td>{{ date_pair(r.next_due) }}</td></tr></table>
 <h2 style="margin-top:24px">{{ tr("Measurement points") }}</h2>
-<table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("Reading") }} ({{ r.unit }})</th><th>{{ tr("Error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
-{% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ '%+g'|format(p.error) }}</td><td>{{ p.tolerance }}</td>
+<table class="measurement"><tr><th>{{ tr("No.") }}</th><th>{{ tr("Reference value") }} ({{ r.unit }})</th><th>{{ tr("As-Found") }} ({{ r.unit }})</th><th>{{ tr("As-Found error") }} ({{ r.unit }})</th><th>{{ tr("As-Left") }} ({{ r.unit }})</th><th>{{ tr("As-Left error") }} ({{ r.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Result") }}</th></tr>
+{% for p in pts %}<tr><td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}</td><td>{{ '%+g'|format(p.as_found_error if p.as_found_error is not none else p.error) }}</td><td>{{ p.as_left_value if p.as_left_value is not none else '—' }}</td><td>{% if p.as_left_error is not none %}{{ '%+g'|format(p.as_left_error) }}{% else %}—{% endif %}</td><td>{{ p.tolerance }}</td>
 <td><span class="badge {{ 'green' if p.result=='PASS' else 'red' }}">{{ tr(p.result) }}</span></td></tr>{% endfor %}</table>
 <div class="signature">
   <div style="border-top:1px solid #333;padding-top:8px">
