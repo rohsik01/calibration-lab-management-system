@@ -1,6 +1,40 @@
 """Route module: reports."""
 from app import *
 
+# Export/report definitions shared by the report routes.
+EXPORT_COLUMNS = [
+    ("sensor_id", "Sensor ID"), ("station", "Station"), ("sensor_type", "Sensor type"),
+    ("manufacturer", "Manufacturer"), ("serial_number", "Serial number"),
+    ("cal_date", "Calibration date"), ("reference_standard", "Reference standard"),
+    ("n_points", "Number of points"), ("point_no", "Point no."),
+    ("point_tolerance", "Point tolerance (+/-)"),
+    ("reference_value", "Reference value"), ("measured_value", "Results (reading)"),
+    ("error", "Error"), ("result", "Pass/Fail"), ("overall_result", "Overall result"),
+    ("certificate_no", "Certificate"), ("next_due", "Next due date"),
+    ("performed_by", "Calibrated by"), ("unit", "Unit"), ("tolerance", "Tolerance (+/-)"),
+    ("status", "Status"),
+]
+
+HISTORY_SQL = """
+SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
+       c.measured_value, c.error, c.result, c.certificate_no, c.next_due, c.performed_by,
+       c.n_points
+FROM calibrations c JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
+"""
+
+POINTS_SQL = """
+SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.n_points, p.point_no,
+       p.reference_value, p.measured_value, p.error, p.result, p.tolerance AS point_tolerance,
+       c.result AS overall_result,
+       c.certificate_no, c.next_due, c.performed_by
+FROM calibration_points p JOIN calibrations c USING(cal_id)
+JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
+"""
+
+STATUS_FILTERS = {"ok": "OK", "overdue": "Overdue", "failed": "Failed",
+                  "never": "Never calibrated", "due_soon": "Due in"}
+
+
 def export_rows(args):
     """Rows for the export, filtered by the query-string options. Returns (rows, scope)."""
     scope = args.get("scope") if args.get("scope") in ("history", "points") else "latest"
