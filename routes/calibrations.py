@@ -266,20 +266,47 @@ def calibrate(sensor_id):
               p[1], p[2], p[3], p[5], p[6] if p[5] is not None else None,
               p[7] if p[5] is not None else None) for i, p in enumerate(points, 1)])
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
-        db.commit()
         if request_id:
+            # Submitting calibration data is the technician's review submission.
+            # No second manual work-order status action is required.
+            validate_calibration_record_for_submission(db, cur.lastrowid, linked_order["work_order_id"])
+            now = datetime.now().isoformat(timespec="seconds")
+            pending = db.execute(
+                "SELECT review_id FROM calibration_review_history WHERE work_order_id=? AND decision='PENDING'",
+                (linked_order["work_order_id"],)
+            ).fetchone()
+            if not pending:
+                db.execute(
+                    """INSERT INTO calibration_review_history
+                       (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
+                       VALUES (?,?,?,?,?, 'PENDING')""",
+                    (linked_order["work_order_id"], cur.lastrowid, g.user["user_id"], now, 1)
+                )
+            db.execute(
+                "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
+                (now, cur.lastrowid)
+            )
+            db.execute(
+                "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
+                (now, linked_order["work_order_id"])
+            )
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
                 transition_request_status(db, request_id, "IN CALIBRATION",
                                           g.user["user_id"], "Calibration measurements recorded")
-            db.commit()
+            req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
+                                   (request_id,)).fetchone()
+            if req_state and req_state["status"] == "IN CALIBRATION":
+                transition_request_status(db, request_id, "UNDER REVIEW",
+                                          g.user["user_id"], "Calibration submitted for administrator review")
+        db.commit()
         work_order = db.execute(
             "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?",
             (request_id,)
         ).fetchone() if request_id else None
         if work_order:
-            flash("Calibration measurements saved. Submit the work order for review before the certificate is released.")
+            flash("Calibration submitted to the administrator for review.")
             return redirect(url_for("work_order_detail", work_order_id=work_order["work_order_id"]))
         msg = tr("{n} point, max error {err} {unit} → {result}. Certificate {cert} issued."
                  if len(points) == 1 else
@@ -468,13 +495,40 @@ def calibrate_pending_request(request_id):
                   p[1],p[2],p[3],p[5],p[6] if p[5] is not None else None,
                   p[7] if p[5] is not None else None) for i,p in enumerate(pts,1)])
             record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
+            # Saving the calibration is also the technician's submission to the administrator.
+            validate_calibration_record_for_submission(db, cur.lastrowid, wo["work_order_id"])
+            now = datetime.now().isoformat(timespec="seconds")
+            pending = db.execute(
+                "SELECT review_id FROM calibration_review_history WHERE work_order_id=? AND decision='PENDING'",
+                (wo["work_order_id"],)
+            ).fetchone()
+            if not pending:
+                db.execute(
+                    """INSERT INTO calibration_review_history
+                       (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
+                       VALUES (?,?,?,?,?, 'PENDING')""",
+                    (wo["work_order_id"], cur.lastrowid, g.user["user_id"], now, 1)
+                )
+            db.execute(
+                "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
+                (now, cur.lastrowid)
+            )
+            db.execute(
+                "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
+                (now, wo["work_order_id"])
+            )
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
                 transition_request_status(db, request_id, "IN CALIBRATION",
                                           g.user["user_id"], "Calibration measurements recorded")
+            req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
+                                   (request_id,)).fetchone()
+            if req_state and req_state["status"] == "IN CALIBRATION":
+                transition_request_status(db, request_id, "UNDER REVIEW",
+                                          g.user["user_id"], "Calibration submitted for administrator review")
             db.commit()
-            flash("Calibration measurements saved. Submit the work order for administrator review.")
+            flash("Calibration submitted to the administrator for review.")
             return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
         except (ValueError,sqlite3.IntegrityError) as e:
             flash(str(e),"error")
@@ -496,8 +550,8 @@ def edit_calibration(cal_id):
     if cal["lifecycle_status"] == "APPROVED":
         flash("Approved calibration records are immutable. Start a controlled correction/recalibration workflow instead of editing the approved record.", "error")
         return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
-    if wo["status"] != "IN PROGRESS":
-        flash("Only a calibration returned for correction can be edited.", "error")
+    if wo["status"] != "IN PROGRESS" or cal["lifecycle_status"] != "RETURNED":
+        flash("Only a calibration returned by the administrator can be edited.", "error")
         return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
     req = db.execute("SELECT * FROM calibration_requests WHERE request_id=?", (cal["request_id"],)).fetchone()
     if not req:
@@ -643,8 +697,36 @@ def edit_calibration(cal_id):
                          float(f.get("sensor_tolerance", req["pending_tolerance"] or 0.5)), unit, station_id,
                          station_name, station_location, station_type,
                          datetime.now().isoformat(timespec="seconds"), req["request_id"]))
+                # A correction is immediately submitted as a new review revision.
+                validate_calibration_record_for_submission(db, cal_id, wo["work_order_id"])
+                now = datetime.now().isoformat(timespec="seconds")
+                pending = db.execute(
+                    "SELECT review_id FROM calibration_review_history WHERE work_order_id=? AND decision='PENDING'",
+                    (wo["work_order_id"],)
+                ).fetchone()
+                if pending:
+                    raise ValueError("This calibration is already awaiting administrator review.")
+                db.execute(
+                    """INSERT INTO calibration_review_history
+                       (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
+                       VALUES (?,?,?,?,?, 'PENDING')""",
+                    (wo["work_order_id"], cal_id, g.user["user_id"], now, next_revision)
+                )
+                db.execute(
+                    "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
+                    (now, cal_id)
+                )
+                db.execute(
+                    "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
+                    (now, wo["work_order_id"])
+                )
+                req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
+                                       (cal["request_id"],)).fetchone()
+                if req_state and req_state["status"] == "IN CALIBRATION":
+                    transition_request_status(db, cal["request_id"], "UNDER REVIEW",
+                                              g.user["user_id"], "Corrected calibration resubmitted for administrator review")
                 db.commit()
-            flash("Calibration data updated. Review the corrected data and submit it to the administrator again.")
+            flash("Corrected calibration submitted to the administrator for review.")
             return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
         except (ValueError, TypeError, sqlite3.Error) as e:
             flash(str(e), "error")
