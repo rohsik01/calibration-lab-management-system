@@ -514,7 +514,7 @@ def certificate(cert):
         ).fetchone()
     # Release only the exact calibration record approved by an administrator.
     approved = db.execute(
-        "SELECT 1 FROM calibration_review_history WHERE cal_id=? AND decision='APPROVED' LIMIT 1",
+        "SELECT 1 FROM calibrations WHERE cal_id=? AND lifecycle_status='APPROVED'",
         (r["cal_id"],)
     ).fetchone()
     if not approved:
