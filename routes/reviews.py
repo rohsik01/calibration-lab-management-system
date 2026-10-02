@@ -147,6 +147,7 @@ def decide_calibration_review(review_id):
             ).fetchone()
             if req and not req["sensor_id"]:
                 if not req["pending_sensor_type"] or not req["pending_serial_number"] or not req["pending_station_name"]:
+                    db.rollback()
                     flash("Cannot approve: pending sensor details are incomplete.", "error")
                     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                 station_id = req["pending_station_id"]
@@ -156,6 +157,7 @@ def decide_calibration_review(review_id):
                         (station_id,)
                     ).fetchone()
                     if not station:
+                        db.rollback()
                         flash("Cannot approve: the selected station no longer exists.", "error")
                         return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                 else:
@@ -172,6 +174,7 @@ def decide_calibration_review(review_id):
                              req["pending_station_type"] or "Meteorological", now)
                         ).lastrowid
                 if db.execute("SELECT 1 FROM sensors WHERE serial_number=?", (req["pending_serial_number"],)).fetchone():
+                    db.rollback()
                     flash("Cannot approve: a sensor with this serial number already exists.", "error")
                     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                 sensor_id = _station_sensor_id(db, station_id, req["pending_sensor_type"])
