@@ -502,6 +502,12 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_by INTEGER")
     if "certificate_issued_at" not in _cal_cols:
         _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_at TEXT")
+    _c.execute(
+        """UPDATE calibrations
+           SET certificate_issued_by=COALESCE(certificate_issued_by, approved_by),
+               certificate_issued_at=COALESCE(certificate_issued_at, approved_at)
+           WHERE lifecycle_status='APPROVED' AND certificate_no IS NOT NULL"""
+    )
 
     # Older installations declared certificate_no NOT NULL. Rebuild once so
     # pending/returned calibrations can exist without an official certificate.
