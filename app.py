@@ -910,6 +910,41 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("DROP TABLE calibration_points")
         _c.execute("ALTER TABLE calibration_points_new_afal RENAME TO calibration_points")
 
+    # Normalize legacy immutable revision snapshots to the same As-Found / As-Left
+    # vocabulary used by the live schema. Historical audit entries remain untouched.
+    _revision_rows = _c.execute("SELECT revision_id, snapshot_json FROM calibration_revisions").fetchall()
+    for _rev_row in _revision_rows:
+        try:
+            _snap = json.loads(_rev_row["snapshot_json"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        _changed = False
+        _snap_cal = _snap.get("calibration") if isinstance(_snap, dict) else None
+        if isinstance(_snap_cal, dict) and "measured_value" in _snap_cal:
+            _snap_cal.pop("measured_value", None)
+            _changed = True
+        _snap_points = _snap.get("points") if isinstance(_snap, dict) else None
+        if isinstance(_snap_points, list):
+            for _p in _snap_points:
+                if not isinstance(_p, dict):
+                    continue
+                if _p.get("as_found_value") is None and "measured_value" in _p:
+                    _p["as_found_value"] = _p.get("measured_value")
+                    _p["as_found_error"] = _p.get("as_found_error", _p.get("error"))
+                    _p["as_found_result"] = _p.get("as_found_result", _p.get("result"))
+                    _changed = True
+                if _p.get("as_left_value") is None and _p.get("as_found_value") is not None:
+                    _p["as_left_value"] = _p.get("as_found_value")
+                    _p["as_left_error"] = _p.get("as_left_error", _p.get("as_found_error", _p.get("error")))
+                    _p["as_left_result"] = _p.get("as_left_result", _p.get("as_found_result", _p.get("result")))
+                    _changed = True
+                if "measured_value" in _p:
+                    _p.pop("measured_value", None)
+                    _changed = True
+        if _changed:
+            _c.execute("UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
+                       (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row["revision_id"]))
+
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
