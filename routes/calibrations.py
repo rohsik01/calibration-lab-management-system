@@ -335,6 +335,152 @@ def calibrate_pending_request(request_id):
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
     return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_)
 
+
+@app.route("/calibrations/<int:cal_id>/edit", methods=["GET", "POST"])
+def edit_calibration(cal_id):
+    """Allow the assigned technician to correct a returned calibration and resubmit it."""
+    db = get_db()
+    cal = db.execute("SELECT * FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if not cal or not cal["request_id"]:
+        abort(404)
+    wo = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (cal["request_id"],)).fetchone()
+    if not wo or wo["assigned_technician_id"] != g.user["user_id"]:
+        abort(403)
+    if wo["status"] != "IN PROGRESS":
+        flash("Only a calibration returned for correction can be edited.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
+    req = db.execute("SELECT * FROM calibration_requests WHERE request_id=?", (cal["request_id"],)).fetchone()
+    if not req:
+        abort(404)
+    sensor = db.execute("SELECT * FROM sensors WHERE sensor_id=?", (cal["sensor_id"],)).fetchone() if cal["sensor_id"] else None
+    if cal["sensor_id"] and not sensor:
+        abort(404)
+    points = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (cal_id,)).fetchall()
+
+    if request.method == "POST":
+        f = request.form
+        try:
+            cal_date = datetime.strptime(f["cal_date"], "%Y-%m-%d").date().isoformat()
+            refs = [float(x) for x in f.getlist("reference_value")]
+            meass = [float(x) for x in f.getlist("measured_value")]
+            left_raw = f.getlist("as_left_value")
+            as_left = [float(x) if x.strip() else None for x in left_raw] if left_raw else [None] * len(refs)
+            default_tol = sensor["tolerance"] if sensor else (req["pending_tolerance"] or 0.5)
+            raw = f.getlist("tolerance")
+            tols = ([float(t) if t.strip() else default_tol for t in raw] if raw else [default_tol] * len(refs))
+            if (not refs or len(refs) != len(meass) or len(refs) != len(tols) or len(as_left) != len(refs)
+                    or len(refs) > 30
+                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
+                    or any(t < 0 for t in tols)):
+                raise ValueError("Check the date and the numeric values for every measurement point.")
+            points_new = []
+            for ref, meas, left, tol in zip(refs, meass, as_left, tols):
+                found_err = round(meas - ref, 6)
+                left_err = round(left - ref, 6) if left is not None else found_err
+                found_result = "PASS" if abs(found_err) <= tol else "FAIL"
+                left_result = "PASS" if abs(left_err) <= tol else "FAIL"
+                points_new.append((ref, meas, found_err, found_result, tol, left, left_err, left_result))
+            adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
+            if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
+                adjustment_status = "NOT REQUIRED"
+            if adjustment_status == "PERFORMED" and any(p[5] is None for p in points_new):
+                raise ValueError("Enter an As-Left reading for every point when adjustment is marked as performed.")
+            adjustment_notes = f.get("adjustment_notes", "").strip()
+            technician_remarks = f.get("technician_remarks", "").strip()
+            if adjustment_status == "PERFORMED" and not adjustment_notes:
+                raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
+
+            std_id, std_details = None, None
+            sid = f.get("standard_id", "").strip()
+            if sid.isdigit():
+                std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (int(sid),)).fetchone()
+                if not std:
+                    raise ValueError("Could not use that reference standard. Choose another one.")
+                if std["valid_until"] < cal_date:
+                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
+                if std["calibrated_on"] > cal_date:
+                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
+                ref_text = f"{std['code']} – {std['name']}"
+                std_id = std["standard_id"]
+                std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
+                                          "certificate": std["certificate_no"], "valid_until": std["valid_until"],
+                                          "uncertainty": std["uncertainty"]}, ensure_ascii=False)
+            else:
+                ref_text = f.get("reference_standard", "").strip()
+                if not ref_text:
+                    raise ValueError("Choose a reference standard or type its name.")
+
+            worst = max(points_new, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
+            result = "FAIL" if any(p[7] == "FAIL" for p in points_new) else "PASS"
+            final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
+            mean_error = round(sum(final_errors) / len(final_errors), 6)
+            max_error = round(max(abs(x) for x in final_errors), 6)
+            uncertainty = calculate_measurement_uncertainty(f)
+            interval_days = sensor["interval_days"] if sensor else (req["pending_interval_days"] or 365)
+            due = (date.fromisoformat(cal_date) + timedelta(days=interval_days)).isoformat()
+
+            with db:
+                db.execute("""UPDATE calibrations SET
+                    cal_date=?, reference_standard=?, reference_value=?, measured_value=?, error=?,
+                    result=?, next_due=?, performed_by=?, n_points=?, standard_id=?, standard_details=?,
+                    mean_error=?, max_error=?, adjustment_status=?, adjustment_notes=?, technician_remarks=?,
+                    standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
+                    other_uncertainty=?, combined_standard_uncertainty=?, coverage_factor=?,
+                    expanded_uncertainty=?, uncertainty_method=? WHERE cal_id=?""",
+                    (cal_date, ref_text, worst[0], worst[1], worst[2], result, due, g.user["full_name"],
+                     len(points_new), std_id, std_details, mean_error, max_error, adjustment_status,
+                     adjustment_notes, technician_remarks, uncertainty["standard_uncertainty"],
+                     uncertainty["resolution"], uncertainty["repeatability"], uncertainty["environmental_uncertainty"],
+                     uncertainty["other_uncertainty"], uncertainty["combined_standard_uncertainty"],
+                     uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"],
+                     uncertainty["uncertainty_method"], cal_id))
+                db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
+                db.executemany("""INSERT INTO calibration_points
+                    (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
+                     as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    [(cal_id, i, p[0], p[5] if p[5] is not None else p[1],
+                      p[6] if p[5] is not None else p[2], p[7] if p[5] is not None else p[3], p[4],
+                      p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
+                      p[7] if p[5] is not None else p[3]) for i, p in enumerate(points_new, 1)])
+                if not sensor:
+                    sensor_type = f.get("sensor_type", "").strip()
+                    manufacturer = f.get("manufacturer", "").strip()
+                    serial_number = f.get("serial_number", "").strip()
+                    station_id_raw = f.get("station_id", "").strip()
+                    station_id = int(station_id_raw) if station_id_raw.isdigit() else None
+                    station_name = f.get("station_name", "").strip()
+                    station_location = f.get("station_location", "").strip()
+                    station_type = f.get("station_type", "").strip() or "Meteorological"
+                    unit = f.get("unit", "").strip()
+                    if not sensor_type or not serial_number or not station_name:
+                        raise ValueError("Sensor type, serial number and station name are required.")
+                    db.execute("""UPDATE calibration_requests SET
+                        pending_sensor_type=?, pending_manufacturer=?, pending_serial_number=?,
+                        pending_interval_days=?, pending_tolerance=?, pending_unit=?, pending_station_id=?,
+                        pending_station_name=?, pending_station_location=?, pending_station_type=?, updated_at=?
+                        WHERE request_id=?""",
+                        (sensor_type, manufacturer, serial_number,
+                         int(f.get("interval_days", req["pending_interval_days"] or 365)),
+                         float(f.get("sensor_tolerance", req["pending_tolerance"] or 0.5)), unit, station_id,
+                         station_name, station_location, station_type,
+                         datetime.now().isoformat(timespec="seconds"), req["request_id"]))
+                db.commit()
+            flash("Calibration data updated. Review the corrected data and submit it to the administrator again.")
+            return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
+        except (ValueError, TypeError, sqlite3.Error) as e:
+            flash(str(e), "error")
+
+    standards_ = db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
+    stations_ = db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
+    if sensor:
+        return render_template("calibrate.html", s=sensor, today=cal["cal_date"], standards=standards_,
+                               requests=[], calibration=cal, points=points, edit_mode=True,
+                               work_order_id=wo["work_order_id"])
+    return render_template("calibrate_pending.html", req=req, today=cal["cal_date"], standards=standards_,
+                           stations=stations_, calibration=cal, points=points, edit_mode=True,
+                           work_order_id=wo["work_order_id"])
+
 @app.route("/certificate/<cert>")
 def certificate(cert):
     db = get_db()
