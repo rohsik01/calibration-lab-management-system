@@ -448,7 +448,8 @@ def edit_calibration(cal_id):
                       p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
                       p[7] if p[5] is not None else p[3]) for i, p in enumerate(points_new, 1)])
                 record_calibration_revision(db, cal_id, "CORRECTED", g.user["user_id"])
-                if not sensor: = f.get("sensor_type", "").strip()
+                if not sensor:
+                    sensor_type = f.get("sensor_type", "").strip()
                     manufacturer = f.get("manufacturer", "").strip()
                     serial_number = f.get("serial_number", "").strip()
                     station_id_raw = f.get("station_id", "").strip()
