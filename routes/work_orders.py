@@ -9,7 +9,7 @@ def work_orders():
     sql = """
         SELECT w.*, r.request_no, r.client_name, r.instrument_description,
                r.requested_service, r.priority, r.sensor_id,
-               u.full_name AS technician_name, a.full_name AS assigned_by_name
+               u.full_name AS technician_name, a.full_name AS assigned_by_name, cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision
         FROM calibration_work_orders w
         JOIN calibration_requests r ON r.request_id=w.request_id
         JOIN users u ON u.user_id=w.assigned_technician_id
@@ -62,6 +62,7 @@ def work_order_detail(work_order_id):
            LEFT JOIN sensors s ON s.sensor_id=r.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN reference_standards rs ON rs.standard_id=w.standard_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=w.procedure_id
            WHERE w.work_order_id=?""", (work_order_id,)
     ).fetchone()
     if not row:
@@ -131,10 +132,10 @@ def bulk_assign_calibration_requests():
             target_use=target or req["requested_due_date"]
             if existing:
                 db.execute("""UPDATE calibration_work_orders SET assigned_technician_id=?,assigned_by=?,assigned_at=?,
-                    target_date=?,calibration_method=?,standard_id=?,instructions=?,
+                    target_date=?,calibration_method=?,procedure_id=?,standard_id=?,instructions=?,
                     status=CASE WHEN status IN ('ASSIGNED','CANCELLED') THEN 'ASSIGNED' ELSE status END,updated_at=?
                     WHERE request_id=?""",
-                    (tech["user_id"],g.user["user_id"],now,target_use,method,standard_id,
+                    (tech["user_id"],g.user["user_id"],now,target_use,method,procedure_id,standard_id,
                      request.form.get("instructions","").strip(),now,rid))
             else:
                 wo=next_work_order_number(db,now[:10])
@@ -210,7 +211,7 @@ def assign_calibration_request(request_id):
                        calibration_method=?, standard_id=?, instructions=?,
                        status=CASE WHEN status IN ('ASSIGNED','CANCELLED') THEN 'ASSIGNED' ELSE status END,
                        updated_at=? WHERE request_id=?""",
-                (technician["user_id"], g.user["user_id"], now, target, method, standard_id,
+                (technician["user_id"], g.user["user_id"], now, target, method, procedure_id, standard_id,
                  request.form.get("instructions", "").strip(), now, request_id)
             )
             work_order_no = existing["work_order_no"]
