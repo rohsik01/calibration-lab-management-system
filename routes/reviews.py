@@ -37,7 +37,7 @@ def calibration_reviews():
 def review_calibration_details(review_id):
     db = get_db()
     row = db.execute(
-        """SELECT h.review_id, h.cal_id, h.submitted_at,
+        """SELECT h.review_id, h.cal_id, h.submitted_at, h.submitted_revision,
                   c.certificate_no, c.cal_date, c.reference_standard,
                   c.reference_value, c.measured_value, c.error, c.result,
                   c.performed_by, c.n_points, c.mean_error, c.max_error,
@@ -66,6 +66,7 @@ def review_calibration_details(review_id):
     ).fetchall()
     return {
         "certificate_no": row["certificate_no"],
+        "revision": row["submitted_revision"],
         "cal_date": row["cal_date"],
         "reference_standard": row["reference_standard"],
         "sensor_type": row["sensor_type"],
