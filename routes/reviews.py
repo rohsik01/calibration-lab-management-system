@@ -129,6 +129,16 @@ def decide_calibration_review(review_id):
                      "cal_id": review["cal_id"]}
         )
         if decision == "APPROVED":
+            db.execute(
+                "UPDATE calibrations SET lifecycle_status='APPROVED', approved_by=?, approved_at=?, updated_at=? WHERE cal_id=?",
+                (g.user["user_id"], now, now, review["cal_id"])
+            )
+        else:
+            db.execute(
+                "UPDATE calibrations SET lifecycle_status='RETURNED', approved_by=NULL, approved_at=NULL, updated_at=? WHERE cal_id=?",
+                (now, review["cal_id"])
+            )
+        if decision == "APPROVED":
             req = db.execute(
                 """SELECT r.* FROM calibration_requests r
                    JOIN calibration_work_orders w ON w.request_id=r.request_id
