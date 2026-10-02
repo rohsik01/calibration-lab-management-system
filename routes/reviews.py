@@ -130,6 +130,36 @@ def decide_calibration_review(review_id):
                      "cal_id": review["cal_id"]}
         )
         if decision == "APPROVED":
+            # A certificate may only be issued when the calibration identifies a
+            # registered reference standard whose validity covered the calibration date.
+            trace = db.execute(
+                """SELECT c.cal_date, c.standard_id, rs.code, rs.serial_number,
+                          rs.certificate_no, rs.traceability, rs.calibrated_on, rs.valid_until
+                   FROM calibrations c
+                   LEFT JOIN reference_standards rs ON rs.standard_id=c.standard_id
+                   WHERE c.cal_id=?""",
+                (review["cal_id"],)
+            ).fetchone()
+            if not trace or not trace["standard_id"]:
+                db.rollback()
+                flash("Cannot approve: a registered reference standard is required for certificate traceability.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+            if (not trace["calibrated_on"] or not trace["valid_until"] or
+                    trace["calibrated_on"] > trace["cal_date"] or trace["valid_until"] < trace["cal_date"]):
+                db.rollback()
+                flash(
+                    f"Cannot approve: reference standard {trace['code']} was not valid on the calibration date.",
+                    "error"
+                )
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+            if not trace["traceability"] or not trace["certificate_no"]:
+                db.rollback()
+                flash(
+                    f"Cannot approve: reference standard {trace['code']} is missing certificate or traceability information.",
+                    "error"
+                )
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+
             # Official certificate issuance happens atomically with approval.
             # The number does not change on return/correction/resubmission.
             existing_cert = db.execute(
