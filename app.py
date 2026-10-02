@@ -64,14 +64,15 @@ CREATE TABLE IF NOT EXISTS calibrations (
     cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
     reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
-    certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
+    certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
     mean_error REAL, max_error REAL,
     adjustment_status TEXT NOT NULL DEFAULT 'NOT REQUIRED' CHECK (adjustment_status IN ('NOT REQUIRED','REQUIRED','PERFORMED')),
     adjustment_notes TEXT, technician_remarks TEXT,
     standard_uncertainty REAL, resolution REAL, repeatability REAL,
     environmental_uncertainty REAL, other_uncertainty REAL,
     combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
-    expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS');
+    expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
+    certificate_issued_by INTEGER, certificate_issued_at TEXT);
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -493,6 +494,58 @@ with sqlite3.connect(DB, timeout=30) as _c:
     # upgrade older databases: multi-point calibration
     if "n_points" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN n_points INTEGER NOT NULL DEFAULT 1")
+
+    # Official certificate issuance fields. New calibrations intentionally have
+    # no official certificate number until administrator approval.
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    if "certificate_issued_by" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_by INTEGER")
+    if "certificate_issued_at" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_at TEXT")
+
+    # Older installations declared certificate_no NOT NULL. Rebuild once so
+    # pending/returned calibrations can exist without an official certificate.
+    _cal_info = _c.execute("PRAGMA table_info(calibrations)").fetchall()
+    _cert_notnull = next((row[3] for row in _cal_info if row[1] == "certificate_no"), 0)
+    if _cert_notnull:
+        _c.execute("""CREATE TABLE calibrations_new (
+            cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sensor_id TEXT REFERENCES sensors(sensor_id),
+            cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
+            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
+            result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+            certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
+            mean_error REAL, max_error REAL,
+            adjustment_status TEXT NOT NULL DEFAULT 'NOT REQUIRED' CHECK (adjustment_status IN ('NOT REQUIRED','REQUIRED','PERFORMED')),
+            adjustment_notes TEXT, technician_remarks TEXT,
+            standard_uncertainty REAL, resolution REAL, repeatability REAL,
+            environmental_uncertainty REAL, other_uncertainty REAL,
+            combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
+            expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
+            performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1,
+            standard_id INTEGER, standard_details TEXT, request_id INTEGER,
+            revision_no INTEGER NOT NULL DEFAULT 1,
+            lifecycle_status TEXT NOT NULL DEFAULT 'DRAFT',
+            created_at TEXT, updated_at TEXT,
+            approved_by INTEGER, approved_at TEXT,
+            certificate_issued_by INTEGER, certificate_issued_at TEXT
+        )""")
+        _c.execute("""INSERT INTO calibrations_new (
+            cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+            certificate_no,next_due,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
+            standard_uncertainty,resolution,repeatability,environmental_uncertainty,other_uncertainty,
+            combined_standard_uncertainty,coverage_factor,expanded_uncertainty,uncertainty_method,
+            performed_by,n_points,standard_id,standard_details,request_id,revision_no,lifecycle_status,
+            created_at,updated_at,approved_by,approved_at,certificate_issued_by,certificate_issued_at)
+            SELECT cal_id,sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,
+                   certificate_no,next_due,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
+                   standard_uncertainty,resolution,repeatability,environmental_uncertainty,other_uncertainty,
+                   combined_standard_uncertainty,coverage_factor,expanded_uncertainty,uncertainty_method,
+                   performed_by,n_points,standard_id,standard_details,request_id,revision_no,lifecycle_status,
+                   created_at,updated_at,approved_by,approved_at,certificate_issued_by,certificate_issued_at
+            FROM calibrations""")
+        _c.execute("DROP TABLE calibrations")
+        _c.execute("ALTER TABLE calibrations_new RENAME TO calibrations")
     # older single-point calibrations become calibrations with one point
     _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, measured_value, error, result)
                    SELECT cal_id, 1, reference_value, measured_value, error, result FROM calibrations c
