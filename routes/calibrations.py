@@ -221,7 +221,7 @@ def calibrate(sensor_id):
         if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
             flash("Invalid adjustment status.", "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
-        final_errors = [p[6] if adjustment_status == "PERFORMED" else p[2] for p in points]
+        final_errors = [p[6] if p[5] is not None else p[2] for p in points]
         worst_index = max(range(len(points)), key=lambda i: abs(final_errors[i]))
         worst = points[worst_index]
         result = "FAIL" if any(abs(final_errors[i]) > points[i][4] for i in range(len(points))) else "PASS"
@@ -431,7 +431,7 @@ def calibrate_pending_request(request_id):
             adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
             if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"):
                 raise ValueError("Invalid adjustment status.")
-            final_errors=[p[6] if adjustment_status=="PERFORMED" else p[2] for p in pts]
+            final_errors=[p[6] if p[5] is not None else p[2] for p in pts]
             worst_index=max(range(len(pts)),key=lambda i:abs(final_errors[i]))
             worst=pts[worst_index]
             result="FAIL" if any(abs(final_errors[i])>pts[i][4] for i in range(len(pts))) else "PASS"
@@ -641,7 +641,7 @@ def edit_calibration(cal_id):
 
             if procedure_id and not std_id:
                 raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
-            final_errors = [p[6] if adjustment_status == "PERFORMED" else p[2] for p in points_new]
+            final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
             worst_index = max(range(len(points_new)), key=lambda i: abs(final_errors[i]))
             worst = points_new[worst_index]
             result = "FAIL" if any(abs(final_errors[i]) > points_new[i][4] for i in range(len(points_new))) else "PASS"
