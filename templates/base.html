@@ -150,12 +150,13 @@
       </details>
       {% endif %}
 
-      {% if g.user.role == 'admin' %}
-      <div class="grp">{{ tr("Administration") }}</div>
-      <details class="menu-group" {% if ep in ('users','database_maintenance') %}open{% endif %}>
-        <summary class="{{ 'active' if ep in ('users','database_maintenance') }}">{{ tr("Administration") }}</summary>
+      {% if g.user.role == 'superadmin' %}
+      <div class="grp">{{ tr("System administration") }}</div>
+      <details class="menu-group" {% if ep in ('users','audit_log','database_maintenance') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('users','audit_log','database_maintenance') }}">{{ tr("System administration") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users") }}</a>
+          <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users & roles") }}</a>
+          <a class="item {{ 'active' if ep == 'audit_log' }}" href="{{ url_for('audit_log') }}"><span class="ic">🛡️</span>{{ tr("Audit log") }}</a>
           <a class="item {{ 'active' if ep == 'database_maintenance' }}" href="{{ url_for('database_maintenance') }}"><span class="ic">🗄️</span>{{ tr("Database maintenance") }}</a>
         </div>
       </details>
