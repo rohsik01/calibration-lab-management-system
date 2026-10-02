@@ -143,6 +143,7 @@ def calibrate(sensor_id):
         except ValueError:
             flash("Check the date and the numeric values for every measurement point.")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
+        std = None
         std_id, std_details = None, None
         sid = f.get("standard_id", "")
         if sid.isdigit():
