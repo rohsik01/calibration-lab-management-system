@@ -306,7 +306,7 @@ def calibrate_pending_request(request_id):
                  adjustment_status,adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
                  expanded_uncertainty,uncertainty_method)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
                  request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
