@@ -178,7 +178,6 @@ def calibrate(sensor_id):
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         db.commit()
         if request_id:
-            record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
