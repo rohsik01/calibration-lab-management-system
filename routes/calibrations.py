@@ -540,6 +540,7 @@ def edit_calibration(cal_id):
             if adjustment_status == "PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
 
+            std = None
             std_id, std_details = None, None
             sid = f.get("standard_id", "").strip()
             if sid.isdigit():
