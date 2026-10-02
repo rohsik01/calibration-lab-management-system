@@ -37,6 +37,16 @@ S/N: {{ req.pending_serial_number }} ·
 <div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("Sensor reading") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr></thead><tbody></tbody></table></div>
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview">{{ tr("Tolerance default") }}: ±{{ req.pending_tolerance or 0.5 }} {{ req.pending_unit or '' }}</div>
+<div class="grid" style="margin-top:18px">
+<div><label>{{ tr("Adjustment status") }}</label>
+<select name="adjustment_status">
+<option value="NOT REQUIRED">{{ tr("Not required") }}</option>
+<option value="REQUIRED">{{ tr("Adjustment required") }}</option>
+<option value="PERFORMED">{{ tr("Adjustment performed") }}</option>
+</select></div>
+<div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}"></textarea></div>
+<div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}"></textarea></div>
+</div>
 <div class="actions" style="margin-top:18px"><button class="btn">{{ tr("Save calibration for review") }}</button>
 <a class="btn alt" href="{{ url_for('work_order_detail', work_order_id=request.args.get('work_order_id', 0)) }}">{{ tr("Cancel") }}</a></div>
 </form></div>
