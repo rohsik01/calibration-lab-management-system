@@ -397,7 +397,9 @@ def calibrate_pending_request(request_id):
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
-    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_)
+    procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
+    procedure_points = db.execute("SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no", (procedure_id,)).fetchall() if procedure_id else []
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,procedure=procedure,procedure_points=procedure_points)
 
 
 @app.route("/calibrations/<int:cal_id>/edit", methods=["GET", "POST"])
