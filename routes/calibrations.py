@@ -893,7 +893,7 @@ def certificate(cert):
     for p in pts:
         qr_lines.append("|".join([
             str(p['point_no']), str(p['reference_value']), str(p['tolerance'] if p['tolerance'] is not None else '—'),
-            str(p['as_found_value'] if p['as_found_value'] is not None else p['measured_value']),
+            str(p['as_found_value']),
             str(p['as_found_error'] if p['as_found_error'] is not None else p['error']),
             str(p['as_left_value'] if p['as_left_value'] is not None else '—'),
             str(p['as_left_error'] if p['as_left_error'] is not None else '—'), str(p['result'])
