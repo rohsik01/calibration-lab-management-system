@@ -112,6 +112,8 @@ def bulk_assign_calibration_requests():
         if not procedure:
             flash("Select a valid active calibration procedure.","error"); return redirect(url_for("calibration_requests"))
         procedure_id=procedure["procedure_id"]
+    else:
+        flash("Select a controlled calibration procedure.","error"); return redirect(url_for("calibration_requests"))
     std_text=request.form.get("standard_id","").strip(); standard_id=None
     if std_text:
         if not std_text.isdigit(): flash("Select a valid reference standard.","error"); return redirect(url_for("calibration_requests"))
