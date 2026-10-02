@@ -57,18 +57,18 @@ S/N: {{ req.pending_serial_number }} ·
 {% for p in points %}
 <tr><td class="no">{{ loop.index }}</td>
 <td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" readonly></td>
-<td><input name="measured_value" type="number" step="any" required value="{{ p.as_found_value if p.as_found_value is not none else p.measured_value }}"></td>
+<td><input name="as_found_value" type="number" step="any" required value="{{ p.as_found_value }}"></td>
 <td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="{{ p.as_left_value if p.as_left_value is not none else '' }}"></td>
 <td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" readonly></td>
 <td><button type="button" class="btn alt del">✕</button></td></tr>
 {% endfor %}
 {% elif procedure_points %}
 {% for p in procedure_points %}
-<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" readonly></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" readonly></td><td><button type="button" class="btn alt del">✕</button></td></tr>
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required value="{{ p.reference_value }}" readonly></td><td><input name="as_found_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ p.tolerance }}" readonly></td><td><button type="button" class="btn alt del">✕</button></td></tr>
 {% endfor %}
 {% else %}
 {% for i in range(5) %}
-<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ req.pending_tolerance or 0.5 }}"></td><td><button type="button" class="btn alt del">✕</button></td></tr>
+<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" required></td><td><input name="as_found_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="{{ req.pending_tolerance or 0.5 }}"></td><td><button type="button" class="btn alt del">✕</button></td></tr>
 {% endfor %}
 {% endif %}
 </tbody></table></div>
@@ -106,7 +106,7 @@ S/N: {{ req.pending_serial_number }} ·
 const body=document.querySelector('#pts tbody'), defTol={{ req.pending_tolerance or 0.5 }};
 function addRow(ref='', meas='', left='', tol=defTol, controlled=false){
  const tr=document.createElement('tr');
- tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required value="'+ref+'" '+(controlled?'readonly':'')></td><td><input name="measured_value" type="number" step="any" required value="'+meas+'"></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="'+left+'"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+tol+'" '+(controlled?'readonly':'')></td><td><button type="button" class="btn alt del">✕</button></td>';
+ tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required value="'+ref+'" '+(controlled?'readonly':'')></td><td><input name="as_found_value" type="number" step="any" required value="'+meas+'"></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="'+left+'"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+tol+'" '+(controlled?'readonly':'')></td><td><button type="button" class="btn alt del">✕</button></td>';
  tr.querySelector('.del').onclick=()=>{if(body.rows.length>1)tr.remove(); renumber();};
  body.appendChild(tr); renumber();
 }
