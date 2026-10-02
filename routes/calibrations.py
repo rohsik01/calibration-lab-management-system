@@ -268,6 +268,7 @@ def calibrate_pending_request(request_id):
     if not req or req["sensor_id"]: abort(404)
     wo=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(request_id,)).fetchone()
     if not wo or wo["assigned_technician_id"]!=g.user["user_id"]: abort(403)
+    procedure_id = wo["procedure_id"]
     if wo["status"] in ("AWAITING REVIEW","COMPLETED","CANCELLED"):
         flash("This work order is already submitted or closed.","error")
         return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
@@ -312,6 +313,10 @@ def calibrate_pending_request(request_id):
             as_left=[float(x) if x.strip() else None for x in left_raw] if left_raw else [None]*len(refs)
             tols=[float(x) for x in request.form.getlist("tolerance")]
             if not refs or len(refs)!=len(meass) or len(refs)!=len(tols) or len(as_left)!=len(refs): raise ValueError("Enter complete measurement points.")
+            if procedure_id:
+                proc_points=db.execute("SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",(procedure_id,)).fetchall()
+                if len(proc_points)!=len(refs) or any(abs(refs[i]-proc_points[i]["reference_value"])>1e-9 or abs(tols[i]-proc_points[i]["tolerance"])>1e-9 for i in range(len(refs))):
+                    raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
             pts=[]
             for r,m,left,t in zip(refs,meass,as_left,tols):
                 found_err=round(m-r,6); left_err=round(left-r,6) if left is not None else found_err
@@ -361,8 +366,8 @@ def calibrate_pending_request(request_id):
                  next_due,performed_by,n_points,standard_id,standard_details,request_id,mean_error,max_error,
                  adjustment_status,adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
-                 expanded_uncertainty,uncertainty_method)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 expanded_uncertainty,uncertainty_method,procedure_id)
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
                  request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
