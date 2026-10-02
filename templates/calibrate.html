@@ -88,13 +88,13 @@ async function refreshBsDate() {
 }
 calDate.addEventListener('change', refreshBsDate);
 const body = document.querySelector('#pts tbody'), overall = document.getElementById('overall');
-function addRow(ref = '', tol = defTol, meas = '', left = '') {
+function addRow(ref = '', tol = defTol, meas = '', left = '', controlled = false) {
   const tr = document.createElement('tr');
   tr.innerHTML = `<td class="no"></td>
-    <td><input name="reference_value" type="number" step="any" required value="${ref}" style="min-width:120px"></td>
+    <td><input name="reference_value" type="number" step="any" required value="${ref}" style="min-width:120px" ${controlled ? "readonly" : ""}></td>
     <td><input name="measured_value" type="number" step="any" required value="${meas}" style="min-width:120px"></td>
     <td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment" value="${left}"></td>
-    <td><input name="tolerance" type="number" step="any" min="0" value="${tol}" style="min-width:90px" aria-label="${T.tol}"></td>
+    <td><input name="tolerance" type="number" step="any" min="0" value="${tol}" style="min-width:90px" aria-label="${T.tol}" ${controlled ? "readonly" : ""}></td>
     <td class="err">—</td><td class="res">—</td>
     <td><button type="button" class="btn alt del" style="padding:3px 10px" aria-label="${T.rm}">✕</button></td>`;
   tr.querySelectorAll('input').forEach(i => i.addEventListener('input', update));
@@ -145,5 +145,5 @@ std.onchange = stdChange; stdChange();
 {% if edit_mode %}
 const existingPoints = [{% for p in points %}{ref: {{ p.reference_value }}, meas: {{ p.as_found_value if p.as_found_value is not none else p.measured_value }}, left: {{ p.as_left_value if p.as_left_value is not none else "null" }}, tol: {{ p.tolerance if p.tolerance is not none else s.tolerance }}},{% endfor %}];
 existingPoints.forEach(p => addRow(p.ref, p.tol, p.meas, p.left === null ? '' : p.left));
-{% else %}{% if procedure_points %}const controlledPoints = [{% for p in procedure_points %}{ref: {{ p.reference_value }}, tol: {{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p => addRow(p.ref, p.tol));{% else %}addRow();{% endif %}{% endif %}
+{% else %}{% if procedure_points %}const controlledPoints = [{% for p in procedure_points %}{ref: {{ p.reference_value }}, tol: {{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p => addRow(p.ref, p.tol, '', '', true));{% else %}addRow();{% endif %}{% endif %}
 </script>{% endblock %}
