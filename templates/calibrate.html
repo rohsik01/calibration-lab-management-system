@@ -48,6 +48,19 @@
 <div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}"></textarea></div>
 <div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}"></textarea></div>
 </div>
+<div class="card" style="margin-top:18px;background:#f8fafd">
+<h2>{{ tr("Measurement uncertainty") }}</h2>
+<p class="sub">{{ tr("Enter standard uncertainty components in the same unit as the measurement. Resolution is treated as a rectangular distribution (resolution²/12). The system combines components by RSS and calculates expanded uncertainty U = k × uc.") }}</p>
+<div class="grid">
+<div><label>{{ tr("Reference standard uncertainty") }}</label><input name="standard_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Instrument resolution") }}</label><input name="resolution" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Repeatability (standard uncertainty)") }}</label><input name="repeatability" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Environmental uncertainty") }}</label><input name="environmental_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Other uncertainty") }}</label><input name="other_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Coverage factor k") }}</label><input name="coverage_factor" type="number" min="0.1" step="any" value="2" required></div>
+</div>
+<div class="preview" id="uncertainty-preview">{{ tr("Expanded uncertainty") }}: 0 {{ s.unit }}</div>
+</div>
 <button class="btn">{{ tr("Save measurement results") }}</button>
 <a class="btn alt" href="{{ url_for('sensor', sensor_id=s.sensor_id) }}">{{ tr("Cancel") }}</a></form></div>
 <script>
@@ -97,6 +110,18 @@ function update() {
   const verdict = fails ? (fails === 1 ? T.f1 : T.fN.replace('{k}', fails)) : T.pass;
   overall.innerHTML = `${head} <span class="badge ${fails ? 'red' : 'green'}">${verdict}</span>`;
 }
+function updateUncertaintyPreview() {
+  const v = n => Math.max(0, parseFloat(document.querySelector('[name="'+n+'"]').value) || 0);
+  const k = v('coverage_factor') || 2;
+  const uc = Math.sqrt(v('standard_uncertainty')**2 + v('resolution')**2/12 +
+                      v('repeatability')**2 + v('environmental_uncertainty')**2 +
+                      v('other_uncertainty')**2);
+  document.getElementById('uncertainty-preview').textContent =
+    'Combined standard uncertainty: ' + uc.toFixed(6) + ' ' + unit +
+    ' · Expanded uncertainty U (k=' + k + '): ' + (uc*k).toFixed(6) + ' ' + unit;
+}
+document.querySelectorAll('[name="standard_uncertainty"],[name="resolution"],[name="repeatability"],[name="environmental_uncertainty"],[name="other_uncertainty"],[name="coverage_factor"]').forEach(i => i.addEventListener('input', updateUncertaintyPreview));
+updateUncertaintyPreview();
 document.getElementById('add').onclick = () => addRow();
 document.getElementById('gen').onclick = () => {
   const a = parseFloat(gmin.value), b = parseFloat(gmax.value), n = parseInt(gn.value), t = parseFloat(gtol.value);
