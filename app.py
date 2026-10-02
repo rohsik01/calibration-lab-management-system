@@ -393,30 +393,59 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id=None):
     points = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (cal_id,)).fetchall()
     if not proc_points or len(points) != len(proc_points):
         raise ValueError("All required calibration procedure points must be entered before submission.")
+    final_errors = []
+    final_results = []
     for i, (p, req) in enumerate(zip(points, proc_points), 1):
         for field in ("reference_value", "measured_value", "error", "tolerance"):
             value = p[field]
             if value is None or not math.isfinite(float(value)):
                 raise ValueError(f"Measurement point {i} has an invalid {field.replace('_', ' ')}.")
+        for field in ("as_found_value", "as_found_error", "as_left_value", "as_left_error"):
+            value = p[field]
+            if value is not None and not math.isfinite(float(value)):
+                raise ValueError(f"Measurement point {i} has an invalid {field.replace('_', ' ')}.")
+        if p["tolerance"] < 0:
+            raise ValueError(f"Measurement point {i} has a negative tolerance.")
         if abs(p["reference_value"] - req["reference_value"]) > 1e-9 or abs(p["tolerance"] - req["tolerance"]) > 1e-9:
             raise ValueError(f"Measurement point {i} does not match the assigned calibration procedure.")
-        expected_found_error = round(p["as_found_value"] - p["reference_value"], 6) if p["as_found_value"] is not None else round(p["measured_value"] - p["reference_value"], 6)
+        found_value = p["as_found_value"] if p["as_found_value"] is not None else p["measured_value"]
+        expected_found_error = round(found_value - p["reference_value"], 6)
         expected_left_error = round(p["as_left_value"] - p["reference_value"], 6) if p["as_left_value"] is not None else expected_found_error
         expected_found_result = "PASS" if abs(expected_found_error) <= p["tolerance"] else "FAIL"
         expected_left_result = "PASS" if abs(expected_left_error) <= p["tolerance"] else "FAIL"
-        if abs(p["error"] - expected_left_error) > 1e-9 or p["result"] != expected_left_result:
-            raise ValueError(f"Measurement point {i} contains inconsistent error/result data.")
+        final_error = expected_left_error if cal["adjustment_status"] == "PERFORMED" else expected_found_error
+        final_result = "PASS" if abs(final_error) <= p["tolerance"] else "FAIL"
+        if abs(p["error"] - final_error) > 1e-9 or p["result"] != final_result:
+            raise ValueError(f"Measurement point {i} contains inconsistent final error/result data.")
         if p["as_found_value"] is not None and (p["as_found_result"] != expected_found_result or p["as_found_error"] is None or abs(p["as_found_error"] - expected_found_error) > 1e-9):
             raise ValueError(f"Measurement point {i} contains inconsistent As-Found data.")
         if p["as_left_value"] is not None and (p["as_left_result"] != expected_left_result or p["as_left_error"] is None or abs(p["as_left_error"] - expected_left_error) > 1e-9):
             raise ValueError(f"Measurement point {i} contains inconsistent As-Left data.")
+        if p["as_left_value"] is None and (p["as_left_error"] is not None or p["as_left_result"] is not None):
+            raise ValueError(f"Measurement point {i} has As-Left status without an As-Left reading.")
+        final_errors.append(final_error)
+        final_results.append(final_result)
+    if cal["adjustment_status"] not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
+        raise ValueError("Invalid adjustment status.")
+    expected_overall = "FAIL" if any(result == "FAIL" for result in final_results) else "PASS"
+    expected_mean = round(sum(final_errors) / len(final_errors), 6)
+    expected_max = round(max(abs(error) for error in final_errors), 6)
+    worst_index = max(range(len(points)), key=lambda i: abs(final_errors[i]))
+    if cal["result"] != expected_overall:
+        raise ValueError("Overall calibration result does not match the point-by-point tolerance evaluation.")
+    if cal["mean_error"] is None or abs(cal["mean_error"] - expected_mean) > 1e-9:
+        raise ValueError("Stored mean error does not match the measurement points.")
+    if cal["max_error"] is None or abs(cal["max_error"] - expected_max) > 1e-9:
+        raise ValueError("Stored maximum error does not match the measurement points.")
+    if (abs(cal["error"] - final_errors[worst_index]) > 1e-9
+            or abs(cal["reference_value"] - points[worst_index]["reference_value"]) > 1e-9
+            or abs(cal["measured_value"] - (points[worst_index]["as_left_value"] if cal["adjustment_status"] == "PERFORMED" else (points[worst_index]["as_found_value"] if points[worst_index]["as_found_value"] is not None else points[worst_index]["measured_value"]))) > 1e-9):
+        raise ValueError("Stored worst-point summary does not match the measurement points.")
     if cal["adjustment_status"] == "PERFORMED":
         if any(p["as_left_value"] is None for p in points):
             raise ValueError("As-Left readings are required at every point when adjustment is performed.")
         if not (cal["adjustment_notes"] or "").strip():
             raise ValueError("Adjustment notes are required when adjustment is performed.")
-    if cal["adjustment_status"] not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
-        raise ValueError("Invalid adjustment status.")
     standard = db.execute("SELECT * FROM reference_standards WHERE standard_id=?", (cal["standard_id"],)).fetchone() if cal["standard_id"] else None
     if not standard or not standard["active"]:
         raise ValueError("A registered active reference standard is required before submission.")
