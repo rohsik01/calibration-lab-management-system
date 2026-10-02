@@ -14,6 +14,7 @@ def work_orders():
         JOIN calibration_requests r ON r.request_id=w.request_id
         JOIN users u ON u.user_id=w.assigned_technician_id
         JOIN users a ON a.user_id=w.assigned_by
+        LEFT JOIN calibration_procedures cp ON cp.procedure_id=w.procedure_id
     """
     where, params = [], []
     if g.user["role"] != "admin":
