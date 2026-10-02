@@ -105,6 +105,13 @@ def bulk_assign_calibration_requests():
     except ValueError:
         flash("Enter a valid target date.","error"); return redirect(url_for("calibration_requests"))
     method=request.form.get("calibration_method","").strip()
+    procedure_text=request.form.get("procedure_id","").strip(); procedure_id=None
+    if procedure_text:
+        procedure=db.execute("SELECT procedure_id FROM calibration_procedures WHERE procedure_id=? AND active=1",
+                             (int(procedure_text),)).fetchone() if procedure_text.isdigit() else None
+        if not procedure:
+            flash("Select a valid active calibration procedure.","error"); return redirect(url_for("calibration_requests"))
+        procedure_id=procedure["procedure_id"]
     std_text=request.form.get("standard_id","").strip(); standard_id=None
     if std_text:
         if not std_text.isdigit(): flash("Select a valid reference standard.","error"); return redirect(url_for("calibration_requests"))
