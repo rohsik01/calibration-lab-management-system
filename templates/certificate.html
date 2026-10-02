@@ -52,10 +52,18 @@
 <tr><th>{{ tr("Maximum error") }}</th><td>{{ '%+g'|format(r.max_error if r.max_error is not none else r.error) }} {{ r.unit }}</td></tr>
 <tr><th>{{ tr("Mean error") }}</th><td>{{ '%+g'|format(r.mean_error if r.mean_error is not none else r.error) }} {{ r.unit }}</td></tr>
 {% if r.expanded_uncertainty is not none %}
+<tr><th>{{ tr("Uncertainty method") }}</th><td>{{ r.uncertainty_method or 'RSS' }}</td></tr>
+<tr><th>{{ tr("Standard uncertainty component") }}</th><td>{{ '%.6g'|format(r.standard_uncertainty or 0) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Resolution component") }}</th><td>{{ '%.6g'|format(r.resolution or 0) }} {{ r.unit }} (rectangular distribution)</td></tr>
+<tr><th>{{ tr("Repeatability component") }}</th><td>{{ '%.6g'|format(r.repeatability or 0) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Environmental component") }}</th><td>{{ '%.6g'|format(r.environmental_uncertainty or 0) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Other component") }}</th><td>{{ '%.6g'|format(r.other_uncertainty or 0) }} {{ r.unit }}</td></tr>
 <tr><th>{{ tr("Combined standard uncertainty") }}</th><td>{{ '%.6g'|format(r.combined_standard_uncertainty or 0) }} {{ r.unit }}</td></tr>
 <tr><th>{{ tr("Coverage factor") }}</th><td>k = {{ '%.4g'|format(r.coverage_factor or 2) }}</td></tr>
 <tr><th>{{ tr("Expanded uncertainty") }}</th><td><strong>U = {{ '%.6g'|format(r.expanded_uncertainty) }} {{ r.unit }}</strong></td></tr>
 {% endif %}
+{% if r.environment_temperature is not none %}<tr><th>{{ tr("Ambient temperature") }}</th><td>{{ r.environment_temperature }} °C</td></tr>{% endif %}
+{% if r.environment_humidity is not none %}<tr><th>{{ tr("Relative humidity") }}</th><td>{{ r.environment_humidity }} %</td></tr>{% endif %}
 <tr><th>{{ tr("Adjustment status") }}</th><td>{{ tr(r.adjustment_status or "NOT REQUIRED") }}</td></tr>
 {% if r.adjustment_notes %}<tr><th>{{ tr("Adjustment notes") }}</th><td>{{ r.adjustment_notes }}</td></tr>{% endif %}
 {% if r.technician_remarks %}<tr><th>{{ tr("Technician remarks") }}</th><td>{{ r.technician_remarks }}</td></tr>{% endif %}
