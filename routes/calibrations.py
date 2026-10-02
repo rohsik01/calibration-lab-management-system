@@ -175,8 +175,10 @@ def calibrate(sensor_id):
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
             [(cur.lastrowid, i, *p) for i, p in enumerate(points, 1)])
+        record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         db.commit()
         if request_id:
+            record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
@@ -420,6 +422,8 @@ def edit_calibration(cal_id):
             due = (date.fromisoformat(cal_date) + timedelta(days=interval_days)).isoformat()
 
             with db:
+                current_revision = db.execute("SELECT revision_no FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()["revision_no"]
+                next_revision = current_revision + 1
                 db.execute("""UPDATE calibrations SET
                     cal_date=?, reference_standard=?, reference_value=?, measured_value=?, error=?,
                     result=?, next_due=?, performed_by=?, n_points=?, standard_id=?, standard_details=?,
@@ -433,7 +437,7 @@ def edit_calibration(cal_id):
                      uncertainty["resolution"], uncertainty["repeatability"], uncertainty["environmental_uncertainty"],
                      uncertainty["other_uncertainty"], uncertainty["combined_standard_uncertainty"],
                      uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"],
-                     uncertainty["uncertainty_method"], cal_id))
+                     uncertainty["uncertainty_method"], next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
                 db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
                 db.executemany("""INSERT INTO calibration_points
                     (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
