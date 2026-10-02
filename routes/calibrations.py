@@ -435,6 +435,19 @@ def edit_calibration(cal_id):
     if cal["sensor_id"] and not sensor:
         abort(404)
     points = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (cal_id,)).fetchall()
+    procedure_id = wo["procedure_id"]
+    procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
+    procedure_points = db.execute(
+        "SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",
+        (procedure_id,)
+    ).fetchall() if procedure_id else []
+
+    if procedure_id and (not procedure or not procedure["active"]):
+        flash("The assigned calibration procedure is no longer active.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
+    if procedure_id and not procedure_points:
+        flash("The assigned calibration procedure has no required measurement points.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
 
     if request.method == "POST":
         f = request.form
@@ -452,6 +465,13 @@ def edit_calibration(cal_id):
                     or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
                     or any(t < 0 for t in tols)):
                 raise ValueError("Check the date and the numeric values for every measurement point.")
+            if procedure_id:
+                if len(procedure_points) != len(refs) or any(
+                    abs(refs[i] - procedure_points[i]["reference_value"]) > 1e-9
+                    or abs(tols[i] - procedure_points[i]["tolerance"]) > 1e-9
+                    for i in range(len(refs))
+                ):
+                    raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
             points_new = []
             for ref, meas, left, tol in zip(refs, meass, as_left, tols):
                 found_err = round(meas - ref, 6)
@@ -558,7 +578,8 @@ def edit_calibration(cal_id):
     if sensor:
         return render_template("calibrate.html", s=sensor, today=cal["cal_date"], standards=standards_,
                                requests=[], calibration=cal, points=points, edit_mode=True,
-                               work_order_id=wo["work_order_id"])
+                               work_order_id=wo["work_order_id"], procedure=procedure,
+                               procedure_points=procedure_points)
     return render_template("calibrate_pending.html", req=req, today=cal["cal_date"], standards=standards_,
                            stations=stations_, calibration=cal, points=points, edit_mode=True,
                            work_order_id=wo["work_order_id"])
