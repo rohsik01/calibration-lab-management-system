@@ -79,7 +79,7 @@ def new_procedure():
         except sqlite3.IntegrityError:
             flash("Could not save the procedure: that procedure code already exists.", "error")
     return render_template("procedure_form.html", x=request.form if request.method == "POST" else None,
-                           points=[], editing=False)
+                           points=[], editing=False, today=date.today().isoformat())
 
 @app.route("/procedures/<int:procedure_id>")
 @admin_required
@@ -140,7 +140,7 @@ def edit_procedure(procedure_id):
         (procedure_id,)
     ).fetchall()
     return render_template("procedure_form.html", x=p, points=points,
-                           editing=True, procedure_id=procedure_id)
+                           editing=True, procedure_id=procedure_id, today=date.today().isoformat())
 
 @app.route("/procedures/<int:procedure_id>/toggle", methods=["POST"])
 @admin_required
