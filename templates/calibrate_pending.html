@@ -12,7 +12,7 @@ S/N: {{ req.pending_serial_number }} ·
 {{ tr("Unit") }}: {{ req.pending_unit or '—' }}
 <br><small>{{ tr("The sensor will be added to the official sensor register only when an administrator approves this calibration.") }}</small>
 </div>
-<form method="post">{{ csrf_input() }}
+<form method="post" action="{{ url_for('edit_calibration', cal_id=calibration.cal_id) if edit_mode else url_for('calibrate_pending_request', request_id=req.request_id) }}">{{ csrf_input() }}
 <h2>{{ tr("Sensor details") }}</h2>
 <p class="sub">{{ tr("This sensor is not yet registered. Complete these details before recording the calibration. The official sensor register will be updated only after administrator approval.") }}</p>
 <div class="grid">
@@ -42,11 +42,11 @@ S/N: {{ req.pending_serial_number }} ·
 </div>
 <h2 style="margin-top:22px">{{ tr("Calibration details") }}</h2>
 <div class="grid">
-<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ today }}" required></div>
+<div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ calibration.cal_date if edit_mode else today }}" required></div>
 <div><label>{{ tr("Reference standard") }}</label>
 <select name="standard_id" id="std"><option value="">{{ tr("Other — not in the register") }}</option>
-{% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
-<input name="reference_standard" id="stdtext" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px"></div>
+{% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }} {{ 'selected' if edit_mode and calibration.standard_id == x.standard_id }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
+<input name="reference_standard" id="stdtext" value="{{ calibration.reference_standard if edit_mode and not calibration.standard_id else '' }}" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px"></div>
 </div>
 <h2 style="margin-top:22px">{{ tr("Measurement points") }}</h2>
 <div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("As-Found reading") }}</th><th>{{ tr("As-Left reading") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -59,35 +59,35 @@ S/N: {{ req.pending_serial_number }} ·
 <option value="REQUIRED">{{ tr("Adjustment required") }}</option>
 <option value="PERFORMED">{{ tr("Adjustment performed") }}</option>
 </select></div>
-<div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}"></textarea></div>
-<div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}"></textarea></div>
+<div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}">{{ calibration.technician_remarks if edit_mode else '' }}</textarea></div>
+<div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}">{{ calibration.adjustment_notes if edit_mode else '' }}</textarea></div>
 </div>
 <div class="card" style="margin-top:18px;background:#f8fafd">
 <h2>{{ tr("Measurement uncertainty") }}</h2>
 <p class="sub">{{ tr("Enter standard uncertainty components in the same unit as the measurement. Resolution is treated as a rectangular distribution (resolution²/12). The system combines components by RSS and calculates expanded uncertainty U = k × uc.") }}</p>
 <div class="grid">
-<div><label>{{ tr("Reference standard uncertainty") }}</label><input name="standard_uncertainty" type="number" min="0" step="any" value="0" required></div>
-<div><label>{{ tr("Instrument resolution") }}</label><input name="resolution" type="number" min="0" step="any" value="0" required></div>
-<div><label>{{ tr("Repeatability (standard uncertainty)") }}</label><input name="repeatability" type="number" min="0" step="any" value="0" required></div>
-<div><label>{{ tr("Environmental uncertainty") }}</label><input name="environmental_uncertainty" type="number" min="0" step="any" value="0" required></div>
-<div><label>{{ tr("Other uncertainty") }}</label><input name="other_uncertainty" type="number" min="0" step="any" value="0" required></div>
-<div><label>{{ tr("Coverage factor k") }}</label><input name="coverage_factor" type="number" min="0.1" step="any" value="2" required></div>
+<div><label>{{ tr("Reference standard uncertainty") }}</label><input name="standard_uncertainty" type="number" min="0" step="any" value="{{ calibration.standard_uncertainty if edit_mode and calibration.standard_uncertainty is not none else 0 }}" required></div>
+<div><label>{{ tr("Instrument resolution") }}</label><input name="resolution" type="number" min="0" step="any" value="{{ calibration.resolution if edit_mode and calibration.resolution is not none else 0 }}" required></div>
+<div><label>{{ tr("Repeatability (standard uncertainty)") }}</label><input name="repeatability" type="number" min="0" step="any" value="{{ calibration.repeatability if edit_mode and calibration.repeatability is not none else 0 }}" required></div>
+<div><label>{{ tr("Environmental uncertainty") }}</label><input name="environmental_uncertainty" type="number" min="0" step="any" value="{{ calibration.environmental_uncertainty if edit_mode and calibration.environmental_uncertainty is not none else 0 }}" required></div>
+<div><label>{{ tr("Other uncertainty") }}</label><input name="other_uncertainty" type="number" min="0" step="any" value="{{ calibration.other_uncertainty if edit_mode and calibration.other_uncertainty is not none else 0 }}" required></div>
+<div><label>{{ tr("Coverage factor k") }}</label><input name="coverage_factor" type="number" min="0.1" step="any" value="{{ calibration.coverage_factor if edit_mode and calibration.coverage_factor is not none else 2 }}" required></div>
 </div>
 <div class="preview" id="uncertainty-preview">{{ tr("Expanded uncertainty") }}: 0 {{ req.pending_unit or '' }}</div>
 </div>
-<div class="actions" style="margin-top:18px"><button class="btn">{{ tr("Save calibration for review") }}</button>
-<a class="btn alt" href="{{ url_for('work_order_detail', work_order_id=request.args.get('work_order_id', 0)) }}">{{ tr("Cancel") }}</a></div>
+<div class="actions" style="margin-top:18px"><button class="btn">{{ tr("Update calibration and return for review") if edit_mode else tr("Save calibration for review") }}</button>
+<a class="btn alt" href="{{ url_for('work_order_detail', work_order_id=work_order_id) if edit_mode else url_for('work_order_detail', work_order_id=request.args.get('work_order_id', 0)) }}">{{ tr("Cancel") }}</a></div>
 </form></div>
 <script>
 const body=document.querySelector('#pts tbody'), defTol={{ req.pending_tolerance or 0.5 }};
-function addRow(){
+function addRow(ref='', meas='', left='', tol=defTol){
  const tr=document.createElement('tr');
- tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required></td><td><input name="measured_value" type="number" step="any" required></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+defTol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
+ tr.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" required value="'+ref+'"></td><td><input name="measured_value" type="number" step="any" required value="'+meas+'"></td><td><input name="as_left_value" type="number" step="any" placeholder="After adjustment" value="'+left+'"></td><td><input name="tolerance" type="number" step="any" min="0" value="'+tol+'"></td><td><button type="button" class="btn alt del">✕</button></td>';
  tr.querySelector('.del').onclick=()=>{if(body.rows.length>1)tr.remove(); renumber();};
  body.appendChild(tr); renumber();
 }
 function renumber(){[...body.rows].forEach((r,i)=>r.querySelector('.no').textContent=i+1);}
-document.getElementById('add').onclick=addRow; addRow();
+document.getElementById('add').onclick=addRow; {% if edit_mode %}const existingPoints=[{% for p in points %}{ref:{{ p.reference_value }},meas:{{ p.as_found_value if p.as_found_value is not none else p.measured_value }},left:{{ p.as_left_value if p.as_left_value is not none else "null" }},tol:{{ p.tolerance if p.tolerance is not none else (req.pending_tolerance or 0.5) }}},{% endfor %}]; existingPoints.forEach(p=>addRow(p.ref,p.meas,p.left===null?'':p.left,p.tol));{% else %}addRow();{% endif %}
 const std=document.getElementById('std'), stdtext=document.getElementById('stdtext');
 function toggle(){const other=std.value==='';stdtext.style.display=other?'':'none';stdtext.required=other;}
 std.onchange=toggle; toggle();
