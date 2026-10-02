@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}{{ x.code }} · {{ tr("Standard history") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Reference standard history") }}</h1>
+<p class="sub">{{ x.code }} — {{ x.name }}</p>
+<div class="actions"><a class="btn alt" href="{{ url_for('standard', sid=x.standard_id) }}">← {{ tr("Back to standard") }}</a></div>
+<div class="scroll"><table><tr><th>{{ tr("Event") }}</th><th>{{ tr("Changed at") }}</th><th>{{ tr("Changed by") }}</th><th>{{ tr("Details") }}</th><th>{{ tr("Snapshot") }}</th></tr>
+{% for row in history %}<tr><td>{{ row.event_type }}</td><td>{{ row.changed_at }}</td><td>{{ row.changed_by_name or 'System / migration' }}</td><td>{{ row.details or '—' }}</td>
+<td><details><summary>{{ tr("View snapshot") }}</summary><pre style="white-space:pre-wrap">{{ row.snapshot_json }}</pre></details></td></tr>
+{% else %}<tr><td colspan="5">{{ tr("No history recorded.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
