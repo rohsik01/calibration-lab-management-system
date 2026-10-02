@@ -137,14 +137,28 @@ def decide_calibration_review(review_id):
                 if not req["pending_sensor_type"] or not req["pending_serial_number"] or not req["pending_station_name"]:
                     flash("Cannot approve: pending sensor details are incomplete.", "error")
                     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
-                station = db.execute("SELECT station_id FROM stations WHERE name=?", (req["pending_station_name"],)).fetchone()
-                if station:
-                    station_id = station["station_id"]
+                station_id = req["pending_station_id"]
+                if station_id:
+                    station = db.execute(
+                        "SELECT station_id FROM stations WHERE station_id=?",
+                        (station_id,)
+                    ).fetchone()
+                    if not station:
+                        flash("Cannot approve: the selected station no longer exists.", "error")
+                        return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                 else:
-                    station_id = db.execute(
-                        "INSERT INTO stations(name,location,type,updated_at) VALUES (?,?,?,?)",
-                        (req["pending_station_name"], req["pending_station_location"] or "", "Meteorological", now)
-                    ).lastrowid
+                    existing_station = db.execute(
+                        "SELECT station_id FROM stations WHERE name=? COLLATE NOCASE",
+                        (req["pending_station_name"],)
+                    ).fetchone()
+                    if existing_station:
+                        station_id = existing_station["station_id"]
+                    else:
+                        station_id = db.execute(
+                            "INSERT INTO stations(name,location,type,updated_at) VALUES (?,?,?,?)",
+                            (req["pending_station_name"], req["pending_station_location"] or "",
+                             req["pending_station_type"] or "Meteorological", now)
+                        ).lastrowid
                 if db.execute("SELECT 1 FROM sensors WHERE serial_number=?", (req["pending_serial_number"],)).fetchone():
                     flash("Cannot approve: a sensor with this serial number already exists.", "error")
                     return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
