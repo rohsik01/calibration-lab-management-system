@@ -257,10 +257,15 @@ def update_work_order_status(work_order_id):
             if not pending:
                 db.execute(
                     """INSERT INTO calibration_review_history
-                       (work_order_id, cal_id, submitted_by, submitted_at, decision)
-                       VALUES (?,?,?,?, 'PENDING')""",
-                    (work_order_id, calibration["cal_id"], g.user["user_id"], now)
+                       (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
+                       VALUES (?,?,?,?,?, 'PENDING')""",
+                    (work_order_id, calibration["cal_id"], g.user["user_id"], now, calibration["revision_no"])
                 )
+                db.execute(
+                    "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
+                    (now, calibration["cal_id"])
+                )
+                record_calibration_revision(db, calibration["cal_id"], "SUBMITTED", g.user["user_id"])
             db.execute(
                 "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
                 (now, work_order_id)
