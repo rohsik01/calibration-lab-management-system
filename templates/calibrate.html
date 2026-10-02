@@ -35,7 +35,7 @@
   <input id="gtol" type="number" step="any" min="0" value="{{ s.tolerance }}" style="min-width:0;width:100px" aria-label="{{ tr('Tolerance (±)') }}" title="{{ tr('Tolerance (±)') }}">
   <button type="button" class="btn alt" id="gen">{{ tr("Create evenly spaced points") }}</button>
 </div>
-<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("Sensor reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody></tbody></table></div>
+<div class="scroll"><table id="pts"><thead><tr><th>#</th><th>{{ tr("Reference value") }} ({{ s.unit }})</th><th>{{ tr("As-Found reading") }} ({{ s.unit }})</th><th>{{ tr("As-Left reading") }} ({{ s.unit }})</th><th>{{ tr("Tolerance (±)") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Result") }}</th><th></th></tr></thead><tbody></tbody></table></div>
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview" id="overall"></div>
 <div class="grid" style="margin-top:18px">
@@ -86,6 +86,7 @@ function addRow(ref = '', tol = defTol) {
   tr.innerHTML = `<td class="no"></td>
     <td><input name="reference_value" type="number" step="any" required value="${ref}" style="min-width:120px"></td>
     <td><input name="measured_value" type="number" step="any" required style="min-width:120px"></td>
+    <td><input name="as_left_value" type="number" step="any" style="min-width:120px" placeholder="After adjustment"></td>
     <td><input name="tolerance" type="number" step="any" min="0" value="${tol}" style="min-width:90px" aria-label="${T.tol}"></td>
     <td class="err">—</td><td class="res">—</td>
     <td><button type="button" class="btn alt del" style="padding:3px 10px" aria-label="${T.rm}">✕</button></td>`;
