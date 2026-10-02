@@ -536,6 +536,41 @@ def edit_calibration(cal_id):
                            stations=stations_, calibration=cal, points=points, edit_mode=True,
                            work_order_id=wo["work_order_id"])
 
+@app.route("/calibrations/<int:cal_id>/certificate-preview")
+def calibration_certificate_preview(cal_id):
+    """Render an unverified certificate preview without an official certificate number."""
+    db = get_db()
+    r = db.execute(
+        """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
+                  COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
+                  COALESCE(s.unit, rq.pending_unit) AS unit,
+                  COALESCE(st.name, rq.pending_station_name) AS station
+           FROM calibrations c
+           LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           WHERE c.cal_id=?""",
+        (cal_id,)
+    ).fetchone()
+    if not r:
+        abort(404)
+    if g.user["role"] not in ("admin", "superadmin"):
+        wo = db.execute(
+            "SELECT assigned_technician_id FROM calibration_work_orders WHERE request_id=?",
+            (r["request_id"],)
+        ).fetchone()
+        if not wo or g.user["role"] != "technician" or wo["assigned_technician_id"] != g.user["user_id"]:
+            abort(403)
+    pts = db.execute(
+        "SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+        (cal_id,)
+    ).fetchall()
+    details = json.loads(r["standard_details"]) if r["standard_details"] else None
+    return render_template("certificate.html", r=r, pts=pts, det=details, preview=True)
+
+
 @app.route("/certificate/<cert>")
 def certificate(cert):
     db = get_db()
