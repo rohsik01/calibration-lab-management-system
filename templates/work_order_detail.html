@@ -30,7 +30,7 @@
 <div class="card"><h2>{{ tr("Calibration results") }}</h2>
 {% if calibration %}
 <div class="grid">
-<div><label>{{ tr("Certificate number") }}</label><div>{% if w.status == 'COMPLETED' %}<a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a>{% else %}{{ calibration.certificate_no }} <span class="badge amber">UNVERIFIED — technician preview only</span>{% endif %}</div></div>
+<div><label>{{ tr("Certificate number") }}</label><div>{% if w.status == 'COMPLETED' and calibration.lifecycle_status == 'APPROVED' and calibration.certificate_no %}<a href="{{ url_for('certificate', cert=calibration.certificate_no) }}">{{ calibration.certificate_no }}</a>{% else %}— <span class="badge amber">UNVERIFIED — official certificate not yet issued</span>{% endif %}</div></div>
 <div><label>{{ tr("Calibration revision") }}</label><div>v{{ calibration.revision_no or 1 }} <span class="badge amber">{{ calibration.lifecycle_status or 'DRAFT' }}</span> <a href="{{ url_for('calibration_revision_detail', cal_id=calibration.cal_id, revision_no=calibration.revision_no or 1) }}">{{ tr("View revision history") }}</a></div></div>
 <div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
 <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
