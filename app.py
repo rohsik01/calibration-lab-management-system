@@ -315,7 +315,7 @@ with sqlite3.connect(DB) as _c:
     _req_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_requests)")]
     for _col,_ddl in (("pending_sensor_type","TEXT"),("pending_manufacturer","TEXT"),("pending_serial_number","TEXT"),
                        ("pending_interval_days","INTEGER"),("pending_tolerance","REAL"),("pending_unit","TEXT"),
-                       ("pending_station_name","TEXT"),("pending_station_location","TEXT"),("pending_station_id","INTEGER")):
+                       ("pending_station_name","TEXT"),("pending_station_location","TEXT"),("pending_station_type","TEXT"),("pending_station_id","INTEGER")):
         if _col not in _req_cols: _c.execute(f"ALTER TABLE calibration_requests ADD COLUMN {_col} {_ddl}")
     _c.execute("""UPDATE calibration_requests SET
         pending_sensor_type=(SELECT sensor_type FROM sensors s WHERE s.sensor_id=calibration_requests.sensor_id),
