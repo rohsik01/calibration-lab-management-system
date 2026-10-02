@@ -563,11 +563,13 @@ def calibration_certificate_preview(cal_id):
                   COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
                   COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
                   COALESCE(s.unit, rq.pending_unit) AS unit,
-                  COALESCE(st.name, rq.pending_station_name) AS station
+                  COALESCE(st.name, rq.pending_station_name) AS station,
+                  cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision
            FROM calibrations c
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
            WHERE c.cal_id=?""",
         (cal_id,)
     ).fetchone()
@@ -598,6 +600,7 @@ def certificate(cert):
                   COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
                   COALESCE(s.unit, rq.pending_unit) AS unit,
                   COALESCE(st.name, rq.pending_station_name) AS station,
+                  cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
                   (SELECT u.full_name FROM calibration_review_history rh
                    JOIN users u ON u.user_id=rh.reviewed_by
                    WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
@@ -607,6 +610,7 @@ def certificate(cert):
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
            WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'""", (cert,)).fetchone()
     if not r:
         abort(404)
