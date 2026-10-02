@@ -130,9 +130,29 @@ def decide_calibration_review(review_id):
                      "cal_id": review["cal_id"]}
         )
         if decision == "APPROVED":
+            # Official certificate issuance happens atomically with approval.
+            # The number does not change on return/correction/resubmission.
+            existing_cert = db.execute(
+                "SELECT certificate_no FROM calibrations WHERE cal_id=?",
+                (review["cal_id"],)
+            ).fetchone()
+            official_cert = existing_cert["certificate_no"] if existing_cert else None
+            if not official_cert:
+                cal_row = db.execute(
+                    "SELECT cal_date FROM calibrations WHERE cal_id=?",
+                    (review["cal_id"],)
+                ).fetchone()
+                if not cal_row:
+                    db.rollback()
+                    flash("Cannot approve: calibration record not found.", "error")
+                    return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+                official_cert = next_certificate(db, cal_row["cal_date"])
             db.execute(
-                "UPDATE calibrations SET lifecycle_status='APPROVED', approved_by=?, approved_at=?, updated_at=? WHERE cal_id=?",
-                (g.user["user_id"], now, now, review["cal_id"])
+                """UPDATE calibrations
+                   SET lifecycle_status='APPROVED', approved_by=?, approved_at=?,
+                       certificate_no=?, certificate_issued_by=?, certificate_issued_at=?, updated_at=?
+                   WHERE cal_id=?""",
+                (g.user["user_id"], now, official_cert, g.user["user_id"], now, now, review["cal_id"])
             )
         else:
             db.execute(
