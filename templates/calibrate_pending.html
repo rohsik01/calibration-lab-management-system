@@ -54,6 +54,8 @@ S/N: {{ req.pending_serial_number }} ·
 <p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
 <div class="preview">{{ tr("Tolerance default") }}: ±{{ req.pending_tolerance or 0.5 }} {{ req.pending_unit or '' }}</div>
 <div class="grid" style="margin-top:18px">
+<div><label>{{ tr("Ambient temperature (°C)") }}</label><input name="environment_temperature" type="number" step="any" value="{{ calibration.environment_temperature if edit_mode and calibration.environment_temperature is not none else '' }}" {% if procedure and (procedure.environment_temperature_min is not none or procedure.environment_temperature_max is not none) %}required{% endif %}></div>
+<div><label>{{ tr("Relative humidity (%)") }}</label><input name="environment_humidity" type="number" min="0" max="100" step="any" value="{{ calibration.environment_humidity if edit_mode and calibration.environment_humidity is not none else '' }}" {% if procedure and (procedure.environment_humidity_min is not none or procedure.environment_humidity_max is not none) %}required{% endif %}></div>
 <div><label>{{ tr("Adjustment status") }}</label>
 <select name="adjustment_status">
 <option value="NOT REQUIRED">{{ tr("Not required") }}</option>
