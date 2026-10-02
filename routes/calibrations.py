@@ -133,6 +133,11 @@ def calibrate(sensor_id):
         result = "FAIL" if any(p[3] == "FAIL" for p in points) else "PASS"
         mean_error = round(sum(p[2] for p in points) / len(points), 6)
         max_error = round(max(abs(p[2]) for p in points), 6)
+        try:
+            uncertainty = calculate_measurement_uncertainty(f)
+        except (ValueError, TypeError) as e:
+            flash(str(e), "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
         adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
         if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
             adjustment_status = "NOT REQUIRED"
@@ -147,10 +152,16 @@ def calibrate(sensor_id):
             "INSERT INTO calibrations(sensor_id,cal_date,reference_standard,reference_value,"
             "measured_value,error,result,certificate_no,next_due,performed_by,n_points,"
             "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
-            "adjustment_notes,technician_remarks) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
+            "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
+            "expanded_uncertainty,uncertainty_method) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
              result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
-             mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks))
+             mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks,
+             uncertainty["standard_uncertainty"], uncertainty["resolution"], uncertainty["repeatability"],
+             uncertainty["environmental_uncertainty"], uncertainty["other_uncertainty"],
+             uncertainty["combined_standard_uncertainty"], uncertainty["coverage_factor"],
+             uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"]))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
@@ -238,6 +249,10 @@ def calibrate_pending_request(request_id):
             worst=max(pts,key=lambda p:abs(p[2])); result="FAIL" if any(p[3]=="FAIL" for p in pts) else "PASS"
             mean_error=round(sum(p[2] for p in pts)/len(pts),6)
             max_error=round(max(abs(p[2]) for p in pts),6)
+            try:
+                uncertainty = calculate_measurement_uncertainty(request.form)
+            except (ValueError, TypeError) as e:
+                raise ValueError(str(e))
             adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
             if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"): adjustment_status="NOT REQUIRED"
             adjustment_notes=request.form.get("adjustment_notes","").strip()
@@ -267,10 +282,16 @@ def calibrate_pending_request(request_id):
             cur=db.execute("""INSERT INTO calibrations
                 (sensor_id,cal_date,reference_standard,reference_value,measured_value,error,result,certificate_no,
                  next_due,performed_by,n_points,standard_id,standard_details,request_id,mean_error,max_error,
-                 adjustment_status,adjustment_notes,technician_remarks)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 adjustment_status,adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,
+                 environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
+                 expanded_uncertainty,uncertainty_method)
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
-                 request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks))
+                 request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
+                 uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
+                 uncertainty["environmental_uncertainty"],uncertainty["other_uncertainty"],
+                 uncertainty["combined_standard_uncertainty"],uncertainty["coverage_factor"],
+                 uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"]))
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance)
                 VALUES (?,?,?,?,?,?,?)""",[(cur.lastrowid,i,*p) for i,p in enumerate(pts,1)])
