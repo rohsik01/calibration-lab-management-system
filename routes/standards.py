@@ -50,9 +50,22 @@ def standard(sid):
     x = db.execute("SELECT * FROM reference_standards WHERE standard_id=?", (sid,)).fetchone()
     if not x:
         abort(404)
-    used = db.execute("SELECT cal_date, sensor_id, result, certificate_no FROM calibrations "
-                      "WHERE standard_id=? ORDER BY cal_id DESC LIMIT 100", (sid,)).fetchall()
-    return render_template("standard.html", x=x, used=used)
+    used = db.execute(
+        """SELECT c.cal_id, c.cal_date, c.sensor_id, c.result, c.certificate_no,
+                  c.lifecycle_status, w.work_order_id, w.work_order_no,
+                  u.full_name AS technician_name
+           FROM calibrations c
+           LEFT JOIN calibration_work_orders w ON w.request_id=c.request_id
+           LEFT JOIN users u ON u.user_id=w.assigned_technician_id
+           WHERE c.standard_id=?
+           ORDER BY c.cal_id DESC
+           LIMIT 250""",
+        (sid,)
+    ).fetchall()
+    usage_count = db.execute(
+        "SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)
+    ).fetchone()[0]
+    return render_template("standard.html", x=x, used=used, usage_count=usage_count)
 
 
 
@@ -85,12 +98,28 @@ def edit_standard(sid):
     if request.method == "POST":
         try:
             d = read_standard(request.form)
+            used_count = db.execute(
+                "SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)
+            ).fetchone()[0]
+            critical_fields = (
+                "code", "name", "standard_type", "manufacturer", "serial_number",
+                "uncertainty", "traceability", "certificate_no", "calibrated_on", "valid_until"
+            )
+            changed = any(str(d.get(k, "")) != str(x[k] or "") for k in critical_fields)
+            if used_count and changed:
+                raise ValueError(
+                    "This reference standard has been used by calibration records. "
+                    "Its identity, certificate, traceability and validity fields are immutable. "
+                    "Create a new standard record for a recalibrated or replaced standard."
+                )
             d.update(active=1 if request.form.get("active") else 0, sid=sid)
-            db.execute("UPDATE reference_standards SET code=:code, name=:name, standard_type=:standard_type,"
-                       " manufacturer=:manufacturer, serial_number=:serial_number, uncertainty=:uncertainty,"
-                       " traceability=:traceability, certificate_no=:certificate_no,"
-                       " calibrated_on=:calibrated_on, valid_until=:valid_until, active=:active"
-                       " WHERE standard_id=:sid", d)
+            db.execute(
+                "UPDATE reference_standards SET code=:code, name=:name, standard_type=:standard_type,"
+                " manufacturer=:manufacturer, serial_number=:serial_number, uncertainty=:uncertainty,"
+                " traceability=:traceability, certificate_no=:certificate_no,"
+                " calibrated_on=:calibrated_on, valid_until=:valid_until, active=:active"
+                " WHERE standard_id=:sid", d
+            )
             db.commit()
             flash("Reference standard updated.")
             return redirect(url_for("standard", sid=sid))
