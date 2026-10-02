@@ -1,5 +1,6 @@
 """Route module: auth."""
 from app import *
+from app import _complete_login, _qr_data_uri, _recovery_codes
 
 @app.route("/lang/<code>")
 def set_lang(code):
