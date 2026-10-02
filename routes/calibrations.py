@@ -725,7 +725,7 @@ def certificate(cert):
     standard = None
     if r["standard_id"]:
         standard = db.execute(
-            "SELECT standard_id, code, name FROM reference_standards WHERE standard_id=?",
+            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
             (r["standard_id"],)
         ).fetchone()
     # Self-contained QR: encode the complete calibration record as text.
