@@ -290,6 +290,11 @@ def update_work_order_status(work_order_id):
         if not calibration:
             flash("Record the calibration measurements before submitting this work order for review.", "error")
             return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+        try:
+            validate_calibration_record_for_submission(db, calibration["cal_id"], work_order_id)
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("work_order_detail", work_order_id=work_order_id))
         pending = db.execute(
             "SELECT review_id FROM calibration_review_history WHERE work_order_id=? AND decision='PENDING'",
             (work_order_id,)
