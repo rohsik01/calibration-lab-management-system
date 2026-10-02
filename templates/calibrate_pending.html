@@ -62,6 +62,19 @@ S/N: {{ req.pending_serial_number }} ·
 <div><label>{{ tr("Technician remarks") }}</label><textarea name="technician_remarks" rows="3" placeholder="{{ tr('Observations, environmental conditions, or other technical notes') }}"></textarea></div>
 <div style="grid-column:1/-1"><label>{{ tr("Adjustment notes") }}</label><textarea name="adjustment_notes" rows="3" placeholder="{{ tr('Record adjustment action, if applicable') }}"></textarea></div>
 </div>
+<div class="card" style="margin-top:18px;background:#f8fafd">
+<h2>{{ tr("Measurement uncertainty") }}</h2>
+<p class="sub">{{ tr("Enter standard uncertainty components in the same unit as the measurement. Resolution is treated as a rectangular distribution (resolution²/12). The system combines components by RSS and calculates expanded uncertainty U = k × uc.") }}</p>
+<div class="grid">
+<div><label>{{ tr("Reference standard uncertainty") }}</label><input name="standard_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Instrument resolution") }}</label><input name="resolution" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Repeatability (standard uncertainty)") }}</label><input name="repeatability" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Environmental uncertainty") }}</label><input name="environmental_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Other uncertainty") }}</label><input name="other_uncertainty" type="number" min="0" step="any" value="0" required></div>
+<div><label>{{ tr("Coverage factor k") }}</label><input name="coverage_factor" type="number" min="0.1" step="any" value="2" required></div>
+</div>
+<div class="preview" id="uncertainty-preview">{{ tr("Expanded uncertainty") }}: 0 {{ req.pending_unit or '' }}</div>
+</div>
 <div class="actions" style="margin-top:18px"><button class="btn">{{ tr("Save calibration for review") }}</button>
 <a class="btn alt" href="{{ url_for('work_order_detail', work_order_id=request.args.get('work_order_id', 0)) }}">{{ tr("Cancel") }}</a></div>
 </form></div>
