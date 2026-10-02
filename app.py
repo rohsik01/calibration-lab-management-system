@@ -647,6 +647,10 @@ with sqlite3.connect(DB, timeout=30) as _c:
     _wo_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_work_orders)")]
     if "procedure_id" not in _wo_cols:
         _c.execute("ALTER TABLE calibration_work_orders ADD COLUMN procedure_id INTEGER")
+    # Upgrade older databases: link calibration records to their controlled procedure.
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    if "procedure_id" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN procedure_id INTEGER")
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
@@ -660,6 +664,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
     CREATE INDEX IF NOT EXISTS idx_calibrations_date ON calibrations(cal_date);
     CREATE INDEX IF NOT EXISTS idx_calibrations_result ON calibrations(result);
     CREATE INDEX IF NOT EXISTS idx_calibrations_standard_id ON calibrations(standard_id);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_procedure_id ON calibrations(procedure_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_request_id ON calibrations(request_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_lifecycle ON calibrations(lifecycle_status);
     CREATE INDEX IF NOT EXISTS idx_calibration_revisions_cal ON calibration_revisions(cal_id, revision_no DESC);
