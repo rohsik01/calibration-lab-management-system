@@ -202,13 +202,15 @@ def calibrate(sensor_id):
         if f.get("adjustment_status", "NOT REQUIRED").strip().upper() == "PERFORMED" and any(p[5] is None for p in points):
             flash("Enter an As-Left reading for every point when adjustment is marked as performed.", "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
+        if procedure_id and not std_id:
+            raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
         worst = max(points, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
         result = "FAIL" if any(p[7] == "FAIL" for p in points) else "PASS"
         final_errors = [p[6] if p[5] is not None else p[2] for p in points]
         mean_error = round(sum(final_errors) / len(final_errors), 6)
         max_error = round(max(abs(x) for x in final_errors), 6)
         try:
-            uncertainty = calculate_measurement_uncertainty(f)
+            uncertainty = validate_calibration_controls(f, procedure, std, s["unit"])
         except (ValueError, TypeError) as e:
             flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
@@ -228,14 +230,15 @@ def calibrate(sensor_id):
             "standard_id,standard_details,request_id,mean_error,max_error,adjustment_status,"
             "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
             "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
-            "expanded_uncertainty,uncertainty_method,procedure_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
              result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
              mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks,
              uncertainty["standard_uncertainty"], uncertainty["resolution"], uncertainty["repeatability"],
              uncertainty["environmental_uncertainty"], uncertainty["other_uncertainty"],
              uncertainty["combined_standard_uncertainty"], uncertainty["coverage_factor"],
-             uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], procedure_id))
+             uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], json.dumps(uncertainty["calculation"], ensure_ascii=False),
+             uncertainty["environment_temperature"], uncertainty["environment_humidity"], procedure_id))
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
             "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
@@ -524,12 +527,14 @@ def edit_calibration(cal_id):
                 if not ref_text:
                     raise ValueError("Choose a reference standard or type its name.")
 
+            if procedure_id and not std_id:
+                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
             worst = max(points_new, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
             result = "FAIL" if any(p[7] == "FAIL" for p in points_new) else "PASS"
             final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
             mean_error = round(sum(final_errors) / len(final_errors), 6)
             max_error = round(max(abs(x) for x in final_errors), 6)
-            uncertainty = calculate_measurement_uncertainty(f)
+            uncertainty = validate_calibration_controls(f, procedure, std, sensor["unit"] if sensor else (req["pending_unit"] or ""))
             interval_days = sensor["interval_days"] if sensor else (req["pending_interval_days"] or 365)
             due = (date.fromisoformat(cal_date) + timedelta(days=interval_days)).isoformat()
 
@@ -542,14 +547,15 @@ def edit_calibration(cal_id):
                     mean_error=?, max_error=?, adjustment_status=?, adjustment_notes=?, technician_remarks=?,
                     standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
                     other_uncertainty=?, combined_standard_uncertainty=?, coverage_factor=?,
-                    expanded_uncertainty=?, uncertainty_method=?, revision_no=?, lifecycle_status='RETURNED', updated_at=? WHERE cal_id=?""",
+                    expanded_uncertainty=?, uncertainty_method=?, uncertainty_calculation_json=?, environment_temperature=?, environment_humidity=?, revision_no=?, lifecycle_status='RETURNED', updated_at=? WHERE cal_id=?""",
                     (cal_date, ref_text, worst[0], worst[1], worst[2], result, due, g.user["full_name"],
                      len(points_new), std_id, std_details, mean_error, max_error, adjustment_status,
                      adjustment_notes, technician_remarks, uncertainty["standard_uncertainty"],
                      uncertainty["resolution"], uncertainty["repeatability"], uncertainty["environmental_uncertainty"],
                      uncertainty["other_uncertainty"], uncertainty["combined_standard_uncertainty"],
-                     uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"],
-                     uncertainty["uncertainty_method"], next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
+                     uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"],
+                     json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"], uncertainty["environment_humidity"],
+                     next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
                 db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
                 db.executemany("""INSERT INTO calibration_points
                     (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
@@ -597,7 +603,7 @@ def edit_calibration(cal_id):
                                procedure_points=procedure_points)
     return render_template("calibrate_pending.html", req=req, today=cal["cal_date"], standards=standards_,
                            stations=stations_, calibration=cal, points=points, edit_mode=True,
-                           work_order_id=wo["work_order_id"])
+                           work_order_id=wo["work_order_id"], procedure=procedure, procedure_points=procedure_points)
 
 @app.route("/calibrations/<int:cal_id>/certificate-preview")
 def calibration_certificate_preview(cal_id):
