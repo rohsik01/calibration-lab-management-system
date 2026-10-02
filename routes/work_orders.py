@@ -243,7 +243,7 @@ def update_work_order_status(work_order_id):
     now = datetime.now().isoformat(timespec="seconds")
     if new_status == "AWAITING REVIEW":
         calibration = db.execute(
-            "SELECT cal_id FROM calibrations WHERE request_id=? ORDER BY cal_id DESC LIMIT 1",
+            "SELECT cal_id, revision_no FROM calibrations WHERE request_id=? ORDER BY cal_id DESC LIMIT 1",
             (row["request_id"],)
         ).fetchone()
         if not calibration:
