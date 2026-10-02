@@ -282,7 +282,7 @@ def calibrate(sensor_id):
         msg = tr("{n} point, max error {err} {unit} → {result}. Certificate {cert} issued."
                  if len(points) == 1 else
                  "{n} points, max error {err} {unit} → {result}. Certificate {cert} issued.")
-        flash(msg.format(n=len(points), err=f"{worst[2]:+}", unit=s["unit"], result=tr(result),
+        flash(msg.format(n=len(points), err=f"{final_errors[worst_index]:+}", unit=s["unit"], result=tr(result),
                          cert=cert), "ok")
         return redirect(url_for("certificate", cert=cert))
     standards_ = db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
