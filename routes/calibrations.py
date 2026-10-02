@@ -363,10 +363,6 @@ def calibrate_pending_request(request_id):
             final_errors=[p[6] if p[5] is not None else p[2] for p in pts]
             mean_error=round(sum(final_errors)/len(final_errors),6)
             max_error=round(max(abs(x) for x in final_errors),6)
-            try:
-                uncertainty = calculate_measurement_uncertainty(request.form)
-            except (ValueError, TypeError) as e:
-                raise ValueError(str(e))
             adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
             if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"): adjustment_status="NOT REQUIRED"
             adjustment_notes=request.form.get("adjustment_notes","").strip()
@@ -380,6 +376,18 @@ def calibrate_pending_request(request_id):
                 std_id=std["standard_id"]; std_text=f"{std['code']} – {std['name']}"
                 std_details=json.dumps({"serial":std["serial_number"],"traceability":std["traceability"],"certificate":std["certificate_no"],"valid_until":std["valid_until"],"uncertainty":std["uncertainty"]},ensure_ascii=False)
             elif not std_text: raise ValueError("Choose a reference standard or type its name.")
+            if procedure_id and not std_id:
+                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
+            if std_id:
+                if std["valid_until"] < cal_date:
+                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
+                if std["calibrated_on"] > cal_date:
+                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
+                if not std["certificate_no"] or not std["traceability"]:
+                    raise ValueError("The selected reference standard is missing certificate or traceability information.")
+            uncertainty = validate_calibration_controls(
+                request.form, procedure, std if std_id else None, unit
+            )
             if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
                 raise ValueError("A calibration record already exists for this request.")
             # Keep the sensor unregistered until administrator approval.
@@ -398,14 +406,16 @@ def calibrate_pending_request(request_id):
                  next_due,performed_by,n_points,standard_id,standard_details,request_id,mean_error,max_error,
                  adjustment_status,adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
-                 expanded_uncertainty,uncertainty_method,procedure_id)
-                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id)
+                VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
                  request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
                  uncertainty["environmental_uncertainty"],uncertainty["other_uncertainty"],
                  uncertainty["combined_standard_uncertainty"],uncertainty["coverage_factor"],
-                 uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"],procedure_id))
+                 uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"],
+                 json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"],
+                 uncertainty["environment_humidity"],procedure_id))
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
