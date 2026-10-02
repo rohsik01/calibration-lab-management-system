@@ -50,6 +50,7 @@
 {% endif %}
 <tr><th>{{ tr("Points measured") }}</th><td>{{ pts|length }}</td></tr>
 <tr><th>{{ tr("Maximum error") }}</th><td>{{ '%+g'|format(r.max_error if r.max_error is not none else r.error) }} {{ r.unit }}</td></tr>
+<tr><th>{{ tr("Worst measurement point") }}</th><td>{% for p in pts %}{% if p.error is not none and (p.error|abs) == (r.max_error if r.max_error is not none else (r.error|abs)) %}{{ p.point_no }}{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}</td></tr>
 <tr><th>{{ tr("Mean error") }}</th><td>{{ '%+g'|format(r.mean_error if r.mean_error is not none else r.error) }} {{ r.unit }}</td></tr>
 {% if r.expanded_uncertainty is not none %}
 <tr><th>{{ tr("Uncertainty method") }}</th><td>{{ r.uncertainty_method or 'RSS' }}</td></tr>
