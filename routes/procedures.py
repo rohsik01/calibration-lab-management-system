@@ -60,7 +60,7 @@ def new_procedure():
                    (code,title,instrument_type,method,revision,effective_date,tolerance_unit,
                     environmental_requirements,instructions,active,created_by,created_at,updated_at)
                    VALUES (:code,:title,:instrument_type,:method,:revision,:effective_date,:tolerance_unit,
-                           :environmental_requirements,:instructions,1,?,?,?)""",
+                           :environmental_requirements,:instructions,1,:created_by,:created_at,:updated_at)""",
                 {**d, "active": 1, "created_by": g.user["user_id"],
                  "created_at": now, "updated_at": now}
             )
