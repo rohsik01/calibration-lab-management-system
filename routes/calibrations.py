@@ -329,7 +329,7 @@ def calibrate_pending_request(request_id):
             serial_number = request.form.get("serial_number", "").strip()
             station_id_raw = request.form.get("station_id", "").strip()
             station_id = None
-            station_name = request.form.get("station_name", "").strip()
+            station_name = request.form.get("station_name", "").strip() or request.form.get("station_search", "").strip()
             station_location = request.form.get("station_location", "").strip()
             station_type = request.form.get("station_type", "").strip() or "Meteorological"
 
