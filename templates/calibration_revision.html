@@ -40,7 +40,6 @@
     <div><label>{{ tr("Reference standard") }}</label><div>{{ c.reference_standard or '—' }}</div></div>
     <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if c.result == 'PASS' else 'red' }}">{{ c.result }}</span></div></div>
     <div><label>{{ tr("Reference value") }}</label><div>{{ c.reference_value }}</div></div>
-    <div><label>{{ tr("Measured value") }}</label><div>{{ c.measured_value }}</div></div>
     <div><label>{{ tr("Error") }}</label><div>{{ c.error }}</div></div>
     <div><label>{{ tr("Mean error") }}</label><div>{{ c.mean_error if c.mean_error is not none else '—' }}</div></div>
     <div><label>{{ tr("Maximum error") }}</label><div>{{ c.max_error if c.max_error is not none else '—' }}</div></div>
@@ -60,11 +59,11 @@
   <h2>{{ tr("Measurement points in this revision") }}</h2>
   {% if snapshot.points %}
   <div class="scroll"><table>
-    <thead><tr><th>#</th><th>{{ tr("Reference") }}</th><th>{{ tr("Measured") }}</th><th>{{ tr("Error") }}</th><th>{{ tr("Tolerance") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("As Found") }}</th><th>{{ tr("As Left") }}</th></tr></thead>
+    <thead><tr><th>#</th><th>{{ tr("Reference") }}</th><th>{{ tr("As Found") }}</th><th>{{ tr("As Left") }}</th><th>{{ tr("Error AF") }}</th><th>{{ tr("Error AL") }}</th><th>{{ tr("Tolerance") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("As Found") }}</th><th>{{ tr("As Left") }}</th></tr></thead>
     <tbody>
     {% for p in snapshot.points %}
       <tr>
-        <td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.measured_value }}</td><td>{{ p.error }}</td>
+        <td>{{ p.point_no }}</td><td>{{ p.reference_value }}</td><td>{{ p.as_found_value }}</td><td>{{ p.as_left_value if p.as_left_value is not none else p.as_found_value }}</td><td>{{ p.as_found_error }}</td><td>{{ p.as_left_error if p.as_left_error is not none else p.as_found_error }}</td>
         <td>{{ p.tolerance if p.tolerance is not none else '—' }}</td>
         <td><span class="badge {{ 'green' if p.result == 'PASS' else 'red' }}">{{ p.result }}</span></td>
         <td>{{ p.as_found_value if p.as_found_value is not none else '—' }}</td>
