@@ -252,9 +252,13 @@ def calibrate(sensor_id):
              uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], json.dumps(uncertainty["calculation"], ensure_ascii=False),
              uncertainty["environment_temperature"], uncertainty["environment_humidity"], procedure_id))
         db.executemany(
-            "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,"
-            "error,result,tolerance) VALUES (?,?,?,?,?,?,?)",
-            [(cur.lastrowid, i, *p) for i, p in enumerate(points, 1)])
+            "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,error,result,tolerance,"
+            "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(cur.lastrowid, i, p[0], p[5] if p[5] is not None else p[1],
+              p[6] if p[5] is not None else p[2], p[7] if p[5] is not None else p[3], p[4],
+              p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
+              p[7] if p[5] is not None else p[3]) for i, p in enumerate(points, 1)])
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         db.commit()
         if request_id:
