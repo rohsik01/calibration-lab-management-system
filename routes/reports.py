@@ -8,8 +8,8 @@ EXPORT_COLUMNS = [
     ("cal_date", "Calibration date"), ("reference_standard", "Reference standard"),
     ("n_points", "Number of points"), ("point_no", "Point no."),
     ("point_tolerance", "Point tolerance (+/-)"),
-    ("reference_value", "Reference value"), ("measured_value", "Results (reading)"),
-    ("error", "Error"), ("result", "Pass/Fail"), ("overall_result", "Overall result"),
+    ("reference_value", "Reference value"), ("as_found_value", "As-Found"), ("as_found_error", "Error AF"),
+    ("as_left_value", "As-Left"), ("as_left_error", "Error AL"), ("error", "Final Error"), ("result", "Pass/Fail"), ("overall_result", "Overall result"),
     ("certificate_no", "Certificate"), ("next_due", "Next due date"),
     ("performed_by", "Calibrated by"), ("unit", "Unit"), ("tolerance", "Tolerance (+/-)"),
     ("status", "Status"),
@@ -17,14 +17,15 @@ EXPORT_COLUMNS = [
 
 HISTORY_SQL = """
 SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
-       c.measured_value, c.error, c.result, c.certificate_no, c.next_due, c.performed_by,
+       c.error, c.result, c.certificate_no, c.next_due, c.performed_by,
        c.n_points
 FROM calibrations c JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
 """
 
 POINTS_SQL = """
 SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.n_points, p.point_no,
-       p.reference_value, p.measured_value, p.error, p.result, p.tolerance AS point_tolerance,
+       p.reference_value, p.as_found_value, p.as_found_error, p.as_left_value, p.as_left_error,
+       p.error, p.result, p.tolerance AS point_tolerance,
        c.result AS overall_result,
        c.certificate_no, c.next_due, c.performed_by
 FROM calibration_points p JOIN calibrations c USING(cal_id)
@@ -241,9 +242,8 @@ def export_download():
     if scope != "latest":                        # status only makes sense for the register view
         cols = [c for c in cols if c[0] != "status"]
     if scope != "points":                        # per-point columns only for the points export
-        cols = [c for c in cols if c[0] not in ("point_no", "overall_result", "point_tolerance")]
-        rename = {"reference_value": "Reference value (worst point)",
-                  "measured_value": "Results (worst point)", "error": "Max error"}
+        cols = [c for c in cols if c[0] not in ("point_no", "overall_result", "point_tolerance", "as_found_value", "as_found_error", "as_left_value", "as_left_error")]
+        rename = {"reference_value": "Reference value (worst point)", "error": "Max error"}
         cols = [(k, rename.get(k, h)) for k, h in cols]
     cols = [(k, tr(h)) for k, h in cols]         # column headings follow the report language
     banner = None if request.args.get("nobanner") else BANNER[g.lang]
