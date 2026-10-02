@@ -168,6 +168,18 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
 
+CREATE TABLE IF NOT EXISTS reference_standard_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    standard_id INTEGER NOT NULL REFERENCES reference_standards(standard_id),
+    event_type TEXT NOT NULL CHECK (event_type IN ('CREATED','UPDATED','ACTIVATED','DEACTIVATED')),
+    snapshot_json TEXT NOT NULL,
+    changed_by INTEGER REFERENCES users(user_id),
+    changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    details TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reference_standard_history_standard
+    ON reference_standard_history(standard_id, history_id DESC);
+
 CREATE TABLE IF NOT EXISTS calibration_revisions (
     revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
@@ -354,6 +366,26 @@ with sqlite3.connect(DB, timeout=30) as _c:
     # Foreign keys are re-enabled before normal application use.
     _c.execute("PRAGMA foreign_keys = OFF")
     _c.executescript(SCHEMA)
+    # Backfill immutable CREATED snapshots for legacy reference standards.
+    _c.execute("""
+        INSERT INTO reference_standard_history
+            (standard_id, event_type, snapshot_json, changed_by, changed_at, details)
+        SELECT rs.standard_id, 'CREATED',
+               json_object(
+                   'standard_id', rs.standard_id, 'code', rs.code, 'name', rs.name,
+                   'standard_type', rs.standard_type, 'manufacturer', rs.manufacturer,
+                   'serial_number', rs.serial_number, 'uncertainty', rs.uncertainty,
+                   'traceability', rs.traceability, 'certificate_no', rs.certificate_no,
+                   'calibrated_on', rs.calibrated_on, 'valid_until', rs.valid_until,
+                   'active', rs.active
+               ),
+               NULL, CURRENT_TIMESTAMP, 'Backfilled from legacy reference-standard record'
+        FROM reference_standards rs
+        WHERE NOT EXISTS (
+            SELECT 1 FROM reference_standard_history h
+            WHERE h.standard_id = rs.standard_id
+        )
+    """)
     # upgrade older databases: station type and last-edited timestamp
     _station_cols = [r[1] for r in _c.execute("PRAGMA table_info(stations)")]
     if "type" not in _station_cols:
