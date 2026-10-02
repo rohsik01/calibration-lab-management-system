@@ -216,9 +216,13 @@ def calibrate(sensor_id):
             return redirect(url_for("calibrate", sensor_id=sensor_id))
         if procedure_id and not std_id:
             raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
-        worst = max(points, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
-        result = "FAIL" if any(p[7] == "FAIL" for p in points) else "PASS"
-        final_errors = [p[6] if p[5] is not None else p[2] for p in points]
+        adjustment_status = f.get("adjustment_status", "NOT REQUIRED").strip().upper()
+        if adjustment_status not in ("NOT REQUIRED", "REQUIRED", "PERFORMED"):
+            raise ValueError("Invalid adjustment status.")
+        final_errors = [p[6] if adjustment_status == "PERFORMED" else p[2] for p in points]
+        worst_index = max(range(len(points)), key=lambda i: abs(final_errors[i]))
+        worst = points[worst_index]
+        result = "FAIL" if any(abs(final_errors[i]) > points[i][4] for i in range(len(points))) else "PASS"
         mean_error = round(sum(final_errors) / len(final_errors), 6)
         max_error = round(max(abs(x) for x in final_errors), 6)
         try:
@@ -243,7 +247,7 @@ def calibrate(sensor_id):
             "adjustment_notes,technician_remarks,standard_uncertainty,resolution,repeatability,"
             "environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,"
             "expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (sensor_id, cal_date, ref_text, worst[0], worst[1], worst[2],
+            (sensor_id, cal_date, ref_text, worst[0], (points[worst_index][5] if adjustment_status == "PERFORMED" else worst[1]), final_errors[worst_index],
              result, cert, due, g.user["full_name"], len(points), std_id, std_details, request_id,
              mean_error, max_error, adjustment_status, adjustment_notes, technician_remarks,
              uncertainty["standard_uncertainty"], uncertainty["resolution"], uncertainty["repeatability"],
@@ -255,10 +259,10 @@ def calibrate(sensor_id):
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,measured_value,error,result,tolerance,"
             "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [(cur.lastrowid, i, p[0], p[5] if p[5] is not None else p[1],
-              p[6] if p[5] is not None else p[2], p[7] if p[5] is not None else p[3], p[4],
-              p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
-              p[7] if p[5] is not None else p[3]) for i, p in enumerate(points, 1)])
+            [(cur.lastrowid, i, p[0], p[5] if adjustment_status == "PERFORMED" else p[1],
+              final_errors[i-1], "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
+              p[1], p[2], p[3], p[5], p[6] if p[5] is not None else None,
+              p[7] if p[5] is not None else None) for i, p in enumerate(points, 1)])
         record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
         db.commit()
         if request_id:
@@ -374,13 +378,15 @@ def calibrate_pending_request(request_id):
             adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
             if adjustment_status=="PERFORMED" and any(p[5] is None for p in pts):
                 raise ValueError("Enter an As-Left reading for every point when adjustment is marked as performed.")
-            worst=max(pts,key=lambda p:abs(p[6] if p[5] is not None else p[2]))
-            result="FAIL" if any(p[7]=="FAIL" for p in pts) else "PASS"
-            final_errors=[p[6] if p[5] is not None else p[2] for p in pts]
+            adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
+            if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"):
+                raise ValueError("Invalid adjustment status.")
+            final_errors=[p[6] if adjustment_status=="PERFORMED" else p[2] for p in pts]
+            worst_index=max(range(len(pts)),key=lambda i:abs(final_errors[i]))
+            worst=pts[worst_index]
+            result="FAIL" if any(abs(final_errors[i])>pts[i][4] for i in range(len(pts))) else "PASS"
             mean_error=round(sum(final_errors)/len(final_errors),6)
             max_error=round(max(abs(x) for x in final_errors),6)
-            adjustment_status=request.form.get("adjustment_status","NOT REQUIRED").strip().upper()
-            if adjustment_status not in ("NOT REQUIRED","REQUIRED","PERFORMED"): adjustment_status="NOT REQUIRED"
             adjustment_notes=request.form.get("adjustment_notes","").strip()
             technician_remarks=request.form.get("technician_remarks","").strip()
             if adjustment_status=="PERFORMED" and not adjustment_notes:
@@ -424,7 +430,7 @@ def calibrate_pending_request(request_id):
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
                  expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id)
                 VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (cal_date,std_text,worst[0],worst[1],worst[2],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
+                (cal_date,std_text,worst[0],(pts[worst_index][5] if adjustment_status=="PERFORMED" else worst[1]),final_errors[worst_index],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
                  request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
                  uncertainty["environmental_uncertainty"],uncertainty["other_uncertainty"],
@@ -436,10 +442,10 @@ def calibrate_pending_request(request_id):
                 (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                [(cur.lastrowid,i,p[0],p[5] if p[5] is not None else p[1],
-                  p[6] if p[5] is not None else p[2],p[7] if p[5] is not None else p[3],p[4],
-                  p[1],p[2],p[3],p[5],p[6] if p[5] is not None else p[2],
-                  p[7] if p[5] is not None else p[3]) for i,p in enumerate(pts,1)])
+                [(cur.lastrowid,i,p[0],p[5] if adjustment_status=="PERFORMED" else p[1],
+                  final_errors[i-1],"PASS" if abs(final_errors[i-1])<=p[4] else "FAIL",p[4],
+                  p[1],p[2],p[3],p[5],p[6] if p[5] is not None else None,
+                  p[7] if p[5] is not None else None) for i,p in enumerate(pts,1)])
             record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
@@ -555,9 +561,10 @@ def edit_calibration(cal_id):
 
             if procedure_id and not std_id:
                 raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
-            worst = max(points_new, key=lambda p: abs(p[6] if p[5] is not None else p[2]))
-            result = "FAIL" if any(p[7] == "FAIL" for p in points_new) else "PASS"
-            final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
+            final_errors = [p[6] if adjustment_status == "PERFORMED" else p[2] for p in points_new]
+            worst_index = max(range(len(points_new)), key=lambda i: abs(final_errors[i]))
+            worst = points_new[worst_index]
+            result = "FAIL" if any(abs(final_errors[i]) > points_new[i][4] for i in range(len(points_new))) else "PASS"
             mean_error = round(sum(final_errors) / len(final_errors), 6)
             max_error = round(max(abs(x) for x in final_errors), 6)
             uncertainty = validate_calibration_controls(f, procedure, std, sensor["unit"] if sensor else (req["pending_unit"] or ""))
@@ -574,7 +581,7 @@ def edit_calibration(cal_id):
                     standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
                     other_uncertainty=?, combined_standard_uncertainty=?, coverage_factor=?,
                     expanded_uncertainty=?, uncertainty_method=?, uncertainty_calculation_json=?, environment_temperature=?, environment_humidity=?, revision_no=?, lifecycle_status='RETURNED', updated_at=? WHERE cal_id=?""",
-                    (cal_date, ref_text, worst[0], worst[1], worst[2], result, due, g.user["full_name"],
+                    (cal_date, ref_text, worst[0], (points_new[worst_index][5] if adjustment_status == "PERFORMED" else worst[1]), final_errors[worst_index], result, due, g.user["full_name"],
                      len(points_new), std_id, std_details, mean_error, max_error, adjustment_status,
                      adjustment_notes, technician_remarks, uncertainty["standard_uncertainty"],
                      uncertainty["resolution"], uncertainty["repeatability"], uncertainty["environmental_uncertainty"],
@@ -587,10 +594,10 @@ def edit_calibration(cal_id):
                     (cal_id,point_no,reference_value,measured_value,error,result,tolerance,
                      as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    [(cal_id, i, p[0], p[5] if p[5] is not None else p[1],
-                      p[6] if p[5] is not None else p[2], p[7] if p[5] is not None else p[3], p[4],
-                      p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
-                      p[7] if p[5] is not None else p[3]) for i, p in enumerate(points_new, 1)])
+                    [(cal_id, i, p[0], p[5] if adjustment_status == "PERFORMED" else p[1],
+                      final_errors[i-1], "PASS" if abs(final_errors[i-1]) <= p[4] else "FAIL", p[4],
+                      p[1], p[2], p[3], p[5], p[6] if p[5] is not None else None,
+                      p[7] if p[5] is not None else None) for i, p in enumerate(points_new, 1)])
                 record_calibration_revision(db, cal_id, "CORRECTED", g.user["user_id"])
                 if not sensor:
                     sensor_type = f.get("sensor_type", "").strip()
