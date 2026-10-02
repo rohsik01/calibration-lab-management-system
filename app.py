@@ -835,5 +835,8 @@ def run_server():
 
 
 if __name__ == "__main__":
-    run_server()
+    if "--backup" in sys.argv:
+        print(f"Database backup created: {backup_database()}", flush=True)
+    else:
+        run_server()
 # workflow optimization marker
