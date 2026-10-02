@@ -67,7 +67,11 @@ CREATE TABLE IF NOT EXISTS calibrations (
     certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
     mean_error REAL, max_error REAL,
     adjustment_status TEXT NOT NULL DEFAULT 'NOT REQUIRED' CHECK (adjustment_status IN ('NOT REQUIRED','REQUIRED','PERFORMED')),
-    adjustment_notes TEXT, technician_remarks TEXT);
+    adjustment_notes TEXT, technician_remarks TEXT,
+    standard_uncertainty REAL, resolution REAL, repeatability REAL,
+    environmental_uncertainty REAL, other_uncertainty REAL,
+    combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
+    expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS');
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -237,6 +241,42 @@ def get_db():
         _configure_connection(g.db)
     return g.db
 
+def calculate_measurement_uncertainty(form):
+    """Calculate Type A/B components with root-sum-of-squares and k coverage factor."""
+    def num(name, default=0.0):
+        raw = form.get(name, "").strip()
+        if raw == "":
+            return default
+        value = float(raw)
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"Invalid uncertainty component: {name}.")
+        return value
+    standard = num("standard_uncertainty")
+    resolution = num("resolution")
+    repeatability = num("repeatability")
+    environmental = num("environmental_uncertainty")
+    other = num("other_uncertainty")
+    k = num("coverage_factor", 2.0)
+    if k <= 0:
+        raise ValueError("Coverage factor k must be greater than zero.")
+    combined = math.sqrt(
+        standard**2 + (resolution**2 / 12.0) + repeatability**2 +
+        environmental**2 + other**2
+    )
+    expanded = combined * k
+    return {
+        "standard_uncertainty": round(standard, 9),
+        "resolution": round(resolution, 9),
+        "repeatability": round(repeatability, 9),
+        "environmental_uncertainty": round(environmental, 9),
+        "other_uncertainty": round(other, 9),
+        "combined_standard_uncertainty": round(combined, 9),
+        "coverage_factor": round(k, 6),
+        "expanded_uncertainty": round(expanded, 9),
+        "uncertainty_method": "RSS",
+    }
+
+
 def backup_database(destination=None):
     """Create a consistent online SQLite backup using SQLite's backup API."""
     if destination is None:
@@ -373,7 +413,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
         WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL""")
     # upgrade older databases: extended measurement/result summary
     _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
-    for _col,_ddl in (("mean_error","REAL"),("max_error","REAL"),("adjustment_status","TEXT NOT NULL DEFAULT 'NOT REQUIRED'"),("adjustment_notes","TEXT"),("technician_remarks","TEXT")):
+    for _col,_ddl in (("mean_error","REAL"),("max_error","REAL"),("adjustment_status","TEXT NOT NULL DEFAULT 'NOT REQUIRED'"),("adjustment_notes","TEXT"),("technician_remarks","TEXT"),("standard_uncertainty","REAL"),("resolution","REAL"),("repeatability","REAL"),("environmental_uncertainty","REAL"),("other_uncertainty","REAL"),("combined_standard_uncertainty","REAL"),("coverage_factor","REAL DEFAULT 2.0"),("expanded_uncertainty","REAL"),("uncertainty_method","TEXT DEFAULT 'RSS'")):
         if _col not in _cal_cols: _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
     _c.execute("UPDATE calibrations SET max_error=ABS(error), mean_error=error WHERE mean_error IS NULL OR max_error IS NULL")
     _c.execute("UPDATE calibrations SET adjustment_status='NOT REQUIRED' WHERE adjustment_status IS NULL OR adjustment_status=''")
