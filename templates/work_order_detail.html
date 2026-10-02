@@ -2,7 +2,8 @@
 {% block title %}{{ w.work_order_no }} · {{ tr("Calibration Lab") }}{% endblock %}
 {% block content %}
 <div class="hero"><div><h1>{{ w.work_order_no }}</h1><p class="sub">{{ w.request_no }} · {{ w.client_name }} · {{ w.instrument_description }}</p></div><div class="actions"><a class="btn alt" href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ tr("Open request") }}</a>{% if g.user.role == 'technician' and w.assigned_technician_id == g.user.user_id and w.status not in ('AWAITING REVIEW','COMPLETED','CANCELLED') %}
-{% if w.sensor_id %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>
+{% if calibration %}<a class="btn" href="{{ url_for('edit_calibration', cal_id=calibration.cal_id) }}">{{ tr("Edit calibration data") }}</a>
+{% elif w.sensor_id %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>
 {% else %}<a class="btn" href="{{ url_for('calibrate_pending_request', request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>{% endif %}
 {% endif %}</div></div>
 <div class="card"><h2>{{ tr("Work order details") }}</h2>
