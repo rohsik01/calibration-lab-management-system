@@ -728,8 +728,72 @@ def certificate(cert):
             "SELECT standard_id, code, name FROM reference_standards WHERE standard_id=?",
             (r["standard_id"],)
         ).fetchone()
-    verification_token = certificate_verification_token(r["certificate_no"]) if not preview else None
-    qr_code = _qr_data_uri(url_for("verify_certificate", cert=r["certificate_no"], token=verification_token, _external=True)) if verification_token else None
+    # Self-contained QR: encode the complete calibration record as text.
+    # No localhost, public URL, or network connection is required when scanning.
+    qr_lines = [
+        "DHM CALIBRATION CERTIFICATE",
+        "STATUS|APPROVED",
+        f"Certificate No|{r['certificate_no']}",
+        f"Calibration Date|{r['cal_date'] or '—'}",
+        f"Next Due|{r['next_due'] or '—'}",
+        f"Issued|{r['certificate_issued_at'][:10] if r['certificate_issued_at'] else '—'}",
+        f"Approved By|{r['approved_by'] or '—'}",
+        f"Issued By|{r['certificate_issued_by_name'] or '—'}",
+        "", "INSTRUMENT",
+        f"Type|{r['sensor_type'] or '—'}",
+        f"Manufacturer|{r['manufacturer'] or '—'}",
+        f"Serial No|{r['serial_number'] or '—'}",
+        f"Sensor ID|{r['sensor_id'] or 'Pending registration'}",
+        f"Station|{r['station'] or '—'}",
+        f"Unit|{r['unit'] or '—'}",
+        f"Tolerance|{r['tolerance'] if r['tolerance'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Calibrated By|{r['performed_by'] or '—'}",
+        "", "REFERENCE STANDARD / TRACEABILITY",
+        f"Reference|{r['reference_standard'] or '—'}",
+        f"Standard|{(standard['code'] + ' — ' + standard['name']) if standard else '—'}",
+        f"Standard Serial|{details.get('serial') if details and details.get('serial') else (standard['serial_number'] if standard else '—')}",
+        f"Standard Certificate|{details.get('certificate') if details and details.get('certificate') else (standard['certificate_no'] if standard else '—')}",
+        f"Traceability|{details.get('traceability') if details and details.get('traceability') else (standard['traceability'] if standard else '—')}",
+        f"Calibrated On|{standard['calibrated_on'] if standard else '—'}",
+        f"Valid Until|{details.get('valid_until') if details and details.get('valid_until') else (standard['valid_until'] if standard else '—')}",
+        f"Standard Uncertainty|{details.get('uncertainty') if details and details.get('uncertainty') else (standard['uncertainty'] if standard else '—')}",
+        "", "PROCEDURE / ADJUSTMENT",
+        f"Procedure Code|{r['procedure_code'] or '—'}",
+        f"Procedure Title|{r['procedure_title'] or '—'}",
+        f"Procedure Revision|{r['procedure_revision'] or '—'}",
+        f"Adjustment Status|{r['adjustment_status'] or 'NOT REQUIRED'}",
+        f"Adjustment Notes|{r['adjustment_notes'] or '—'}",
+        f"Technician Remarks|{r['technician_remarks'] or '—'}",
+        "", "RESULT SUMMARY",
+        f"Result|{r['result'] or '—'}",
+        f"Points|{len(pts)}",
+        f"Mean Error|{r['mean_error'] if r['mean_error'] is not None else r['error']} {r['unit'] or ''}".rstrip(),
+        f"Maximum Absolute Error|{r['max_error'] if r['max_error'] is not None else abs(r['error'])} {r['unit'] or ''}".rstrip(),
+        f"Ambient Temperature|{r['environment_temperature']} °C" if r['environment_temperature'] is not None else "Ambient Temperature|—",
+        f"Relative Humidity|{r['environment_humidity']} %" if r['environment_humidity'] is not None else "Relative Humidity|—",
+        "", "MEASUREMENT UNCERTAINTY",
+        f"Method|{r['uncertainty_method'] or 'RSS'}",
+        f"Standard Uncertainty|{r['standard_uncertainty'] if r['standard_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Resolution|{r['resolution'] if r['resolution'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Repeatability|{r['repeatability'] if r['repeatability'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Environmental|{r['environmental_uncertainty'] if r['environmental_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Other|{r['other_uncertainty'] if r['other_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Combined Standard Uncertainty (uc)|{r['combined_standard_uncertainty'] if r['combined_standard_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        f"Coverage Factor (k)|{r['coverage_factor'] if r['coverage_factor'] is not None else '—'}",
+        f"Expanded Uncertainty (U)|{r['expanded_uncertainty'] if r['expanded_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
+        "", "MEASUREMENT POINTS",
+        "Point|Reference|Tolerance|As-Found|Error AF|As-Left|Error AL|Result",
+    ]
+    for p in pts:
+        qr_lines.append("|".join([
+            str(p['point_no']), str(p['reference_value']), str(p['tolerance'] if p['tolerance'] is not None else '—'),
+            str(p['as_found_value'] if p['as_found_value'] is not None else p['measured_value']),
+            str(p['as_found_error'] if p['as_found_error'] is not None else p['error']),
+            str(p['as_left_value'] if p['as_left_value'] is not None else '—'),
+            str(p['as_left_error'] if p['as_left_error'] is not None else '—'), str(p['result'])
+        ]))
+    qr_lines += ["", "END OF CERTIFICATE DATA", "NO WEB / LOCALHOST LINK"]
+    qr_code = _qr_data_uri("\\n".join(qr_lines)) if not preview else None
     return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard,
                            preview=preview, qr_code=qr_code)
 
