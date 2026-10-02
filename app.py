@@ -4,6 +4,7 @@ Run:  python app.py   then open http://127.0.0.1:5000
 import base64
 import csv
 import getpass
+import hashlib
 import hmac
 import io
 import json
@@ -1250,7 +1251,7 @@ WORK_ORDER_STATUSES = ("ASSIGNED", "IN PROGRESS", "AWAITING REVIEW", "COMPLETED"
 
 
 # ------------------------------- authentication -------------------------------
-OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor", "calendar_view", "api_bs_date"}
+OPEN_ENDPOINTS = {"login", "setup", "static", "set_lang", "two_factor", "calendar_view", "api_bs_date", "verify_certificate"}
 FAILS = {}   # (username, ip) -> (failed count, locked-until timestamp)
 
 
@@ -1289,6 +1290,12 @@ def _qr_data_uri(uri):
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
 
 
+def certificate_verification_token(certificate_no):
+    """Create a stable, non-guessable verification token without adding DB columns."""
+    message = ("dhm-certificate-verification:" + str(certificate_no)).encode("utf-8")
+    return hmac.new(app.secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()[:40]
+
+
 
 @app.before_request
 def gate():
@@ -1312,7 +1319,7 @@ def gate():
         return redirect(url_for("login", next=request.full_path.rstrip("?")))
     if g.user and g.user["role"] == "general_user":
         allowed = {"index", "calibration_requests", "new_calibration_request",
-                   "calibration_request", "certificate", "account", "logout",
+                   "calibration_request", "certificate", "verify_certificate", "account", "logout",
                    "set_lang", "static"}
         if request.endpoint not in allowed:
             abort(403)
