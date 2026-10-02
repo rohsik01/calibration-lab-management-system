@@ -25,12 +25,12 @@
     .certificate-page .print-banner{display:block!important}
   }
 </style>
-{% if preview %}<div class="card" style="max-width:780px;margin:0 auto 16px;border:2px solid #b91c1c;color:#b91c1c;text-align:center"><h2 style="margin:0">UNVERIFIED — PREVIEW ONLY</h2><p style="margin:4px 0">This calibration record has not been verified by an administrator. Not an official certificate.</p></div>{% endif %}
+{% if preview %}<div class="card" style="max-width:780px;margin:0 auto 16px;border:2px solid #b91c1c;color:#b91c1c;text-align:center"><h2 style="margin:0">UNVERIFIED — PREVIEW ONLY</h2><p style="margin:4px 0">This calibration record has not been verified by an administrator. No official certificate number has been issued.</p></div>{% endif %}
 <div class="certificate-page"><div class="card" style="max-width:none;margin:0;position:relative;overflow:hidden;padding:0;border:0;border-radius:0">
 {% if preview %}<div aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;overflow:hidden"><div style="transform:rotate(-32deg);font-size:clamp(36px,8vw,76px);font-weight:900;color:rgba(185,28,28,.16);white-space:nowrap">UNVERIFIED</div></div>{% endif %}
 {% include "_banner.html" %}
 <h1 style="text-align:center;margin-top:14px">{{ tr("Calibration Certificate") }}</h1>
-<p style="text-align:center;color:var(--mute)">{{ r.certificate_no }}{% if preview %} · PREVIEW — UNVERIFIED{% endif %}</p>
+<p style="text-align:center;color:var(--mute)">{% if r.certificate_no %}{{ r.certificate_no }}{% endif %}{% if preview %}PREVIEW — UNVERIFIED{% endif %}</p>
 <table class="details">
 <tr><th>{{ tr("Sensor ID") }}</th><td>{{ r.sensor_id }}</td></tr>
 <tr><th>{{ tr("Station") }}</th><td>{{ r.station }}</td></tr>
