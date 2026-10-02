@@ -480,7 +480,7 @@ def calibrate_pending_request(request_id):
                  environmental_uncertainty,other_uncertainty,combined_standard_uncertainty,coverage_factor,
                  expanded_uncertainty,uncertainty_method,uncertainty_calculation_json,environment_temperature,environment_humidity,procedure_id)
                 VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (cal_date,std_text,worst[0],(pts[worst_index][5] if adjustment_status=="PERFORMED" else worst[1]),final_errors[worst_index],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
+                (cal_date,std_text,worst[0],final_errors[worst_index],result,cert,due,g.user["full_name"],len(pts),std_id,std_details,
                  request_id,mean_error,max_error,adjustment_status,adjustment_notes,technician_remarks,
                  uncertainty["standard_uncertainty"],uncertainty["resolution"],uncertainty["repeatability"],
                  uncertainty["environmental_uncertainty"],uncertainty["other_uncertainty"],
@@ -659,7 +659,7 @@ def edit_calibration(cal_id):
                     standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
                     other_uncertainty=?, combined_standard_uncertainty=?, coverage_factor=?,
                     expanded_uncertainty=?, uncertainty_method=?, uncertainty_calculation_json=?, environment_temperature=?, environment_humidity=?, revision_no=?, lifecycle_status='RETURNED', updated_at=? WHERE cal_id=?""",
-                    (cal_date, ref_text, worst[0], (points_new[worst_index][5] if adjustment_status == "PERFORMED" else worst[1]), final_errors[worst_index], result, due, g.user["full_name"],
+                    (cal_date, ref_text, worst[0], final_errors[worst_index], result, due, g.user["full_name"],
                      len(points_new), std_id, std_details, mean_error, max_error, adjustment_status,
                      adjustment_notes, technician_remarks, uncertainty["standard_uncertainty"],
                      uncertainty["resolution"], uncertainty["repeatability"], uncertainty["environmental_uncertainty"],
