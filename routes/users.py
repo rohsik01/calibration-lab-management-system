@@ -2,13 +2,13 @@
 from app import *
 
 @app.route("/users", methods=["GET", "POST"])
-@admin_required
+@superadmin_required
 def users():
     db = get_db()
     if request.method == "POST":
         f = request.form
         err = check_new_password(f["password"], f["password"])
-        if err or not f["username"].strip() or f["role"] not in ("admin", "technician", "general_user"):
+        if err or not f["username"].strip() or f["role"] not in ("superadmin", "admin", "technician", "general_user"):
             flash(err or "Username and a valid role are required.")
         else:
             try:
@@ -27,7 +27,7 @@ def users():
 
 
 @app.route("/users/<int:uid>/delete", methods=["POST"])
-@admin_required
+@superadmin_required
 def delete_user(uid):
     if uid == g.user["user_id"]:
         flash("You cannot delete your own account.", "error")
@@ -36,10 +36,10 @@ def delete_user(uid):
     u = db.execute("SELECT user_id, username, role, active FROM users WHERE user_id=?", (uid,)).fetchone()
     if not u:
         abort(404)
-    if u["role"] == "admin" and u["active"]:
-        active_admins = db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0]
+    if u["role"] == "superadmin" and u["active"]:
+        active_admins = db.execute("SELECT COUNT(*) FROM users WHERE role='superadmin' AND active=1").fetchone()[0]
         if active_admins <= 1:
-            flash("The last active administrator cannot be deleted.", "error")
+            flash("The last active superadministrator cannot be deleted.", "error")
             return redirect(url_for("users"))
     try:
         with db:
@@ -50,7 +50,7 @@ def delete_user(uid):
     return redirect(url_for("users"))
 
 @app.route("/users/<int:uid>/toggle", methods=["POST"])
-@admin_required
+@superadmin_required
 def toggle_user(uid):
     if uid == g.user["user_id"]:
         flash("You cannot deactivate your own account.")
@@ -63,7 +63,7 @@ def toggle_user(uid):
 
 
 @app.route("/users/<int:uid>/password", methods=["POST"])
-@admin_required
+@superadmin_required
 def reset_password(uid):
     pw = request.form["password"]
     if (err := check_new_password(pw, pw)):
