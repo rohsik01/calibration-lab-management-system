@@ -322,6 +322,7 @@ def calibrate_pending_request(request_id):
                   p[6] if p[5] is not None else p[2],p[7] if p[5] is not None else p[3],p[4],
                   p[1],p[2],p[3],p[5],p[6] if p[5] is not None else p[2],
                   p[7] if p[5] is not None else p[3]) for i,p in enumerate(pts,1)])
+            record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
             req_state = db.execute("SELECT status FROM calibration_requests WHERE request_id=?",
                                    (request_id,)).fetchone()
             if req_state and req_state["status"] == "ASSIGNED":
