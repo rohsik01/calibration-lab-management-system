@@ -21,11 +21,13 @@
 {% endif %}
 </div>
 <div class="card"><h2>{{ tr("Calibrations that used this standard") }}</h2>
-<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Work order") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th></tr>
+<div class="scroll"><table><tr><th>{{ tr("Date") }}</th><th>{{ tr("Work order") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Result") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Calibration revision") }}</th></tr>
 {% for u in used %}<tr><td>{{ date_pair(u.cal_date) }}</td><td>{% if u.work_order_id %}<a href="{{ url_for('work_order_detail', work_order_id=u.work_order_id) }}">{{ u.work_order_no }}</a>{% else %}—{% endif %}</td>
 <td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td><td>{{ u.technician_name or '—' }}</td>
-<td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td>{% if u.certificate_no %}<a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a>{% else %}—{% endif %}</td></tr>
-{% else %}<tr><td colspan="6">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table><div class="card"><h2>{{ tr("Reference standard history") }}</h2>
+<td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td>{% if u.certificate_no %}<a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a>{% else %}—{% endif %}</td>
+<td>{% if u.revision_no %}<a href="{{ url_for('calibration_revision_detail', cal_id=u.cal_id, revision_no=u.revision_no) }}">{{ tr("Revision") }} {{ u.revision_no }}</a>{% else %}—{% endif %}</td></tr>
+{% else %}<tr><td colspan="7">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table></div></div>
+<div class="card"><h2>{{ tr("Reference standard history") }}</h2>
 <p class="sub">{{ tr("Each state change is retained as an immutable snapshot.") }}</p>
 <div class="scroll"><table><tr><th>{{ tr("Event") }}</th><th>{{ tr("Date") }}</th><th>{{ tr("Changed by") }}</th><th>{{ tr("Details") }}</th></tr>
 {% for h in history %}<tr><td>{{ h.event_type }}</td><td>{{ h.changed_at }}</td><td>{{ h.changed_by_name or 'System / migration' }}</td><td>{{ h.details or '—' }}</td></tr>
