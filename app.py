@@ -58,7 +58,10 @@ CREATE TABLE IF NOT EXISTS calibrations (
     cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
     reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
-    certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL);
+    certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
+    mean_error REAL, max_error REAL,
+    adjustment_status TEXT NOT NULL DEFAULT 'NOT REQUIRED' CHECK (adjustment_status IN ('NOT REQUIRED','REQUIRED','PERFORMED')),
+    adjustment_notes TEXT, technician_remarks TEXT);
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -324,6 +327,12 @@ with sqlite3.connect(DB) as _c:
         pending_station_name=(SELECT st.name FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id),
         pending_station_location=(SELECT st.location FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id)
         WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL""")
+    # upgrade older databases: extended measurement/result summary
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    for _col,_ddl in (("mean_error","REAL"),("max_error","REAL"),("adjustment_status","TEXT NOT NULL DEFAULT 'NOT REQUIRED'"),("adjustment_notes","TEXT"),("technician_remarks","TEXT")):
+        if _col not in _cal_cols: _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+    _c.execute("UPDATE calibrations SET max_error=ABS(error), mean_error=error WHERE mean_error IS NULL OR max_error IS NULL")
+    _c.execute("UPDATE calibrations SET adjustment_status='NOT REQUIRED' WHERE adjustment_status IS NULL OR adjustment_status=''")
     # upgrade older databases: record who performed each calibration
     if "performed_by" not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
         _c.execute("ALTER TABLE calibrations ADD COLUMN performed_by TEXT")
