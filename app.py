@@ -313,6 +313,9 @@ with sqlite3.connect(DB, timeout=30) as _c:
     # Upgrade legacy user table so the general_user role is accepted while preserving accounts.
     _user_sql = _c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").fetchone()[0]
     if "'superadmin'" not in _user_sql or "'general_user'" not in _user_sql:
+        # A previous interrupted migration may have left the staging table behind.
+        # It is safe to remove because it is only a temporary migration table.
+        _c.execute("DROP TABLE IF EXISTS users_new")
         _c.execute("""CREATE TABLE users_new (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL COLLATE NOCASE,
