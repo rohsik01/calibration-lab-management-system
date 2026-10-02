@@ -125,6 +125,35 @@ CREATE TABLE IF NOT EXISTS calibration_requests (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS calibration_procedures (
+    procedure_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    title TEXT NOT NULL,
+    instrument_type TEXT NOT NULL,
+    method TEXT NOT NULL,
+    revision TEXT NOT NULL DEFAULT '1.0',
+    effective_date TEXT NOT NULL,
+    tolerance_unit TEXT,
+    environmental_requirements TEXT,
+    instructions TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS calibration_procedure_points (
+    procedure_point_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    procedure_id INTEGER NOT NULL REFERENCES calibration_procedures(procedure_id) ON DELETE CASCADE,
+    point_no INTEGER NOT NULL,
+    reference_value REAL NOT NULL,
+    tolerance REAL NOT NULL,
+    UNIQUE(procedure_id, point_no)
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_procedures_active
+    ON calibration_procedures(active, instrument_type);
+CREATE INDEX IF NOT EXISTS idx_calibration_procedure_points_procedure
+    ON calibration_procedure_points(procedure_id, point_no);
+
 CREATE TABLE IF NOT EXISTS calibration_work_orders (
     work_order_id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_order_no TEXT UNIQUE NOT NULL,
@@ -134,6 +163,7 @@ CREATE TABLE IF NOT EXISTS calibration_work_orders (
     assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     target_date TEXT,
     calibration_method TEXT,
+    procedure_id INTEGER REFERENCES calibration_procedures(procedure_id),
     standard_id INTEGER REFERENCES reference_standards(standard_id),
     instructions TEXT,
     status TEXT NOT NULL DEFAULT 'ASSIGNED'
@@ -613,6 +643,10 @@ with sqlite3.connect(DB, timeout=30) as _c:
     for _col, _ddl in (("standard_id", "INTEGER"), ("standard_details", "TEXT"), ("request_id", "INTEGER")):
         if _col not in [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]:
             _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+    # Upgrade older databases: controlled calibration procedure linkage.
+    _wo_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_work_orders)")]
+    if "procedure_id" not in _wo_cols:
+        _c.execute("ALTER TABLE calibration_work_orders ADD COLUMN procedure_id INTEGER")
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
@@ -641,6 +675,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
         ON calibration_work_orders(target_date);
     CREATE INDEX IF NOT EXISTS idx_work_orders_standard_id
         ON calibration_work_orders(standard_id);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_procedure_id
+        ON calibration_work_orders(procedure_id);
     CREATE INDEX IF NOT EXISTS idx_request_history_request_date
         ON calibration_request_status_history(request_id, changed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_review_history_work_order
@@ -1114,7 +1150,7 @@ if __name__ == "__main__":
 
 # Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
-from routes import sensors, calibrations, notifications, standards, reports, database
+from routes import sensors, calibrations, notifications, standards, reports, database, procedures
 
 # Navigation counters use these notification helpers after all route modules load.
 from routes.notifications import build_operational_alerts, sync_notifications
