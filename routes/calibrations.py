@@ -17,6 +17,56 @@ def delete_calibration(cal_id):
         flash("Could not delete the calibration record.", "error")
     return redirect(url_for("sensor", sensor_id=row["sensor_id"]))
 
+@app.route("/calibrations/<int:cal_id>/revisions/<int:revision_no>")
+def calibration_revision_detail(cal_id, revision_no):
+    """Display an immutable calibration revision snapshot for traceability."""
+    db = get_db()
+    cal = db.execute(
+        """SELECT c.cal_id, c.certificate_no, c.request_id, c.sensor_id,
+                  c.revision_no AS current_revision, r.request_no,
+                  w.work_order_id, w.assigned_technician_id
+           FROM calibrations c
+           LEFT JOIN calibration_requests r ON r.request_id=c.request_id
+           LEFT JOIN calibration_work_orders w ON w.request_id=c.request_id
+           WHERE c.cal_id=?""",
+        (cal_id,)
+    ).fetchone()
+    if not cal:
+        abort(404)
+    if g.user["role"] not in ("admin", "superadmin"):
+        if not cal["work_order_id"] or cal["assigned_technician_id"] != g.user["user_id"]:
+            abort(403)
+
+    revisions = db.execute(
+        """SELECT cr.*, u.full_name AS created_by_name
+           FROM calibration_revisions cr
+           LEFT JOIN users u ON u.user_id=cr.created_by
+           WHERE cr.cal_id=?
+           ORDER BY cr.revision_no DESC""",
+        (cal_id,)
+    ).fetchall()
+    revision = db.execute(
+        """SELECT cr.*, u.full_name AS created_by_name
+           FROM calibration_revisions cr
+           LEFT JOIN users u ON u.user_id=cr.created_by
+           WHERE cr.cal_id=? AND cr.revision_no=?""",
+        (cal_id, revision_no)
+    ).fetchone()
+    if not revision:
+        abort(404)
+    try:
+        snapshot = json.loads(revision["snapshot_json"])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        abort(500)
+    return render_template(
+        "calibration_revision.html",
+        cal=cal,
+        revisions=revisions,
+        revision=revision,
+        snapshot=snapshot,
+    )
+
+
 @app.route("/sensors/<sensor_id>")
 def sensor(sensor_id):
     db = get_db()
