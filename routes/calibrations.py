@@ -332,19 +332,38 @@ def calibrate_pending_request(request_id):
             station_name = request.form.get("station_name", "").strip()
             station_location = request.form.get("station_location", "").strip()
             station_type = request.form.get("station_type", "").strip() or "Meteorological"
+
+            # Resolve the station server-side. Do not rely only on the browser
+            # datalist/JavaScript: technicians can submit a valid station name
+            # even when station_id was not populated by the UI.
             if station_id_raw:
                 if not station_id_raw.isdigit():
                     raise ValueError("Choose a valid station from the station list.")
-                station = db.execute("SELECT station_id, name, location, type FROM stations WHERE station_id=?",
-                                     (int(station_id_raw),)).fetchone()
+                station = db.execute(
+                    "SELECT station_id, name, location, type FROM stations WHERE station_id=?",
+                    (int(station_id_raw),)
+                ).fetchone()
                 if not station:
                     raise ValueError("The selected station no longer exists. Refresh the station list.")
+            elif station_name:
+                station = db.execute(
+                    "SELECT station_id, name, location, type FROM stations WHERE name=? COLLATE NOCASE",
+                    (station_name,)
+                ).fetchone()
+                if not station:
+                    raise ValueError("Select an existing station from the station list or add a new station.")
+            elif request.form.get("new_station_name", "").strip():
+                # New-station mode: keep station_id NULL and use the supplied
+                # registration details until administrator approval.
+                station = None
+            else:
+                raise ValueError("Select an existing station or add a new station.")
+
+            if station:
                 station_id = station["station_id"]
                 station_name = station["name"]
                 station_location = station["location"] or ""
                 station_type = station["type"] or "Meteorological"
-            elif not station_name:
-                raise ValueError("Select an existing station or add a new station.")
             unit = request.form.get("unit", "").strip()
             interval_days = int(request.form.get("interval_days", "365").strip() or 365)
             tolerance = float(request.form.get("sensor_tolerance", "0.5").strip() or 0.5)
