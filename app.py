@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS calibrations (
     environmental_uncertainty REAL, other_uncertainty REAL,
     combined_standard_uncertainty REAL, coverage_factor REAL DEFAULT 2.0,
     expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
-    certificate_issued_by INTEGER, certificate_issued_at TEXT);
+    certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER);
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -502,6 +502,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_by INTEGER")
     if "certificate_issued_at" not in _cal_cols:
         _c.execute("ALTER TABLE calibrations ADD COLUMN certificate_issued_at TEXT")
+    if "approved_revision" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN approved_revision INTEGER")
     _c.execute(
         """UPDATE calibrations
            SET certificate_issued_by=COALESCE(certificate_issued_by, approved_by),
