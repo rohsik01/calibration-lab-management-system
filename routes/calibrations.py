@@ -430,7 +430,7 @@ def edit_calibration(cal_id):
                     mean_error=?, max_error=?, adjustment_status=?, adjustment_notes=?, technician_remarks=?,
                     standard_uncertainty=?, resolution=?, repeatability=?, environmental_uncertainty=?,
                     other_uncertainty=?, combined_standard_uncertainty=?, coverage_factor=?,
-                    expanded_uncertainty=?, uncertainty_method=? WHERE cal_id=?""",
+                    expanded_uncertainty=?, uncertainty_method=?, revision_no=?, lifecycle_status='RETURNED', updated_at=? WHERE cal_id=?""",
                     (cal_date, ref_text, worst[0], worst[1], worst[2], result, due, g.user["full_name"],
                      len(points_new), std_id, std_details, mean_error, max_error, adjustment_status,
                      adjustment_notes, technician_remarks, uncertainty["standard_uncertainty"],
@@ -447,8 +447,8 @@ def edit_calibration(cal_id):
                       p[6] if p[5] is not None else p[2], p[7] if p[5] is not None else p[3], p[4],
                       p[1], p[2], p[3], p[5], p[6] if p[5] is not None else p[2],
                       p[7] if p[5] is not None else p[3]) for i, p in enumerate(points_new, 1)])
-                if not sensor:
-                    sensor_type = f.get("sensor_type", "").strip()
+                record_calibration_revision(db, cal_id, "CORRECTED", g.user["user_id"])
+                if not sensor: = f.get("sensor_type", "").strip()
                     manufacturer = f.get("manufacturer", "").strip()
                     serial_number = f.get("serial_number", "").strip()
                     station_id_raw = f.get("station_id", "").strip()
