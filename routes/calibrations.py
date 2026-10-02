@@ -727,6 +727,49 @@ def certificate(cert):
             "SELECT standard_id, code, name FROM reference_standards WHERE standard_id=?",
             (r["standard_id"],)
         ).fetchone()
-    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard, preview=preview)
+    verification_token = certificate_verification_token(r["certificate_no"]) if not preview else None
+    qr_code = _qr_data_uri(url_for("verify_certificate", cert=r["certificate_no"], token=verification_token, _external=True)) if verification_token else None
+    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard,
+                           preview=preview, qr_code=qr_code)
+
+@app.route("/verify/<cert>/<token>")
+def verify_certificate(cert, token):
+    """Public, read-only full certificate view linked from the printed QR code."""
+    expected = certificate_verification_token(cert)
+    if not hmac.compare_digest(str(token), expected):
+        abort(404)
+    db = get_db()
+    r = db.execute(
+        """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
+                  COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
+                  COALESCE(s.unit, rq.pending_unit) AS unit,
+                  COALESCE(st.name, rq.pending_station_name) AS station,
+                  cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
+                  (SELECT u.full_name FROM calibration_review_history rh
+                   JOIN users u ON u.user_id=rh.reviewed_by
+                   WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by,
+                  (SELECT u.full_name FROM users u WHERE u.user_id=c.certificate_issued_by) AS certificate_issued_by_name
+           FROM calibrations c
+           LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
+           WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'""", (cert,)
+    ).fetchone()
+    if not r:
+        abort(404)
+    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+                     (r["cal_id"],)).fetchall()
+    details = json.loads(r["standard_details"]) if r["standard_details"] else None
+    standard = None
+    if r["standard_id"]:
+        standard = db.execute(
+            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
+            (r["standard_id"],)
+        ).fetchone()
+    return render_template("certificate_full.html", r=r, pts=pts, det=details, standard=standard)
 
 
