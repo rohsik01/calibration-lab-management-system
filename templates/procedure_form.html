@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}{{ tr("Calibration procedure") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
+<div class="card"><h1>{{ tr("Edit calibration procedure") if editing else tr("New calibration procedure") }}</h1>
+<p class="sub">{{ tr("A procedure controls the calibration method, measurement points and acceptance tolerances. Technicians should work from the assigned approved procedure rather than inventing points manually.") }}</p>
+<form method="post">{{ csrf_input() }}<div class="grid">
+<div><label>{{ tr("Procedure code") }}</label><input name="code" value="{{ x.code if x else '' }}" required></div>
+<div><label>{{ tr("Title") }}</label><input name="title" value="{{ x.title if x else '' }}" required></div>
+<div><label>{{ tr("Instrument type") }}</label><input name="instrument_type" value="{{ x.instrument_type if x else '' }}" placeholder="{{ tr('e.g. Temperature sensor') }}" required></div>
+<div><label>{{ tr("Method") }}</label><input name="method" value="{{ x.method if x else '' }}" placeholder="{{ tr('e.g. Comparison method') }}" required></div>
+<div><label>{{ tr("Revision") }}</label><input name="revision" value="{{ x.revision if x else '1.0' }}" required></div>
+<div><label>{{ tr("Effective date") }}</label><input type="date" name="effective_date" value="{{ x.effective_date if x else today }}" required></div>
+<div><label>{{ tr("Tolerance unit") }}</label><input name="tolerance_unit" value="{{ x.tolerance_unit if x else '' }}"></div>
+</div>
+<div style="margin-top:14px"><label>{{ tr("Environmental requirements") }}</label><textarea name="environmental_requirements" rows="3">{{ x.environmental_requirements if x else '' }}</textarea></div>
+<div style="margin-top:14px"><label>{{ tr("Procedure instructions") }}</label><textarea name="instructions" rows="5">{{ x.instructions if x else '' }}</textarea></div>
+<h2 style="margin-top:22px">{{ tr("Required calibration points") }}</h2>
+<p class="hint">{{ tr("Enter the reference value and allowed tolerance for every required point.") }}</p>
+<div class="scroll"><table id="points"><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("Tolerance (±)") }}</th><th></th></tr><tbody>
+{% for p in points %}<tr><td class="no">{{ loop.index }}</td><td><input name="reference_value" type="number" step="any" value="{{ p.reference_value }}" required></td><td><input name="tolerance" type="number" min="0" step="any" value="{{ p.tolerance }}" required></td><td><button type="button" class="btn alt remove">✕</button></td></tr>{% endfor %}
+</tbody></table></div><p><button type="button" class="btn alt" id="add">+ {{ tr("Add point") }}</button></p>
+<button class="btn">{{ tr("Update procedure") if editing else tr("Create procedure") }}</button> <a class="btn alt" href="{{ url_for('procedures') }}">{{ tr("Cancel") }}</a></form></div>
+<script>
+const body=document.querySelector('#points tbody');
+function renumber(){[...body.rows].forEach((r,i)=>r.querySelector('.no').textContent=i+1);}
+function addRow(ref='',tol=''){const r=document.createElement('tr');r.innerHTML='<td class="no"></td><td><input name="reference_value" type="number" step="any" value="'+ref+'" required></td><td><input name="tolerance" type="number" min="0" step="any" value="'+tol+'" required></td><td><button type="button" class="btn alt remove">✕</button></td>';r.querySelector('.remove').onclick=()=>{if(body.rows.length>1){r.remove();renumber()}};body.appendChild(r);renumber()}
+document.getElementById('add').onclick=()=>addRow(); if(!body.rows.length)addRow();
+[...body.querySelectorAll('.remove')].forEach(b=>b.onclick=()=>{if(body.rows.length>1){b.closest('tr').remove();renumber()}});
+</script>{% endblock %}
