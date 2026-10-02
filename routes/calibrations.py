@@ -281,6 +281,17 @@ def calibrate_pending_request(request_id):
     wo=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(request_id,)).fetchone()
     if not wo or wo["assigned_technician_id"]!=g.user["user_id"]: abort(403)
     procedure_id = wo["procedure_id"]
+    procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
+    procedure_points = db.execute(
+        "SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",
+        (procedure_id,)
+    ).fetchall() if procedure_id else []
+    if procedure_id and (not procedure or not procedure["active"]):
+        flash("The assigned calibration procedure is no longer active.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
+    if procedure_id and not procedure_points:
+        flash("The assigned calibration procedure has no required measurement points.", "error")
+        return redirect(url_for("work_order_detail", work_order_id=wo["work_order_id"]))
     if wo["status"] in ("AWAITING REVIEW","COMPLETED","CANCELLED"):
         flash("This work order is already submitted or closed.","error")
         return redirect(url_for("work_order_detail",work_order_id=wo["work_order_id"]))
@@ -324,10 +335,16 @@ def calibrate_pending_request(request_id):
             left_raw=request.form.getlist("as_left_value")
             as_left=[float(x) if x.strip() else None for x in left_raw] if left_raw else [None]*len(refs)
             tols=[float(x) for x in request.form.getlist("tolerance")]
-            if not refs or len(refs)!=len(meass) or len(refs)!=len(tols) or len(as_left)!=len(refs): raise ValueError("Enter complete measurement points.")
+            if (not refs or len(refs)>30 or len(refs)!=len(meass) or len(refs)!=len(tols) or len(as_left)!=len(refs)
+                    or not all(math.isfinite(x) for x in refs + meass + tols + [x for x in as_left if x is not None])
+                    or any(t < 0 for t in tols)):
+                raise ValueError("Enter complete, valid measurement points.")
             if procedure_id:
-                proc_points=db.execute("SELECT reference_value, tolerance FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no",(procedure_id,)).fetchall()
-                if len(proc_points)!=len(refs) or any(abs(refs[i]-proc_points[i]["reference_value"])>1e-9 or abs(tols[i]-proc_points[i]["tolerance"])>1e-9 for i in range(len(refs))):
+                if len(procedure_points)!=len(refs) or any(
+                    abs(refs[i]-procedure_points[i]["reference_value"])>1e-9
+                    or abs(tols[i]-procedure_points[i]["tolerance"])>1e-9
+                    for i in range(len(refs))
+                ):
                     raise ValueError("Measurement points must match the assigned controlled calibration procedure.")
             pts=[]
             for r,m,left,t in zip(refs,meass,as_left,tols):
@@ -407,8 +424,6 @@ def calibrate_pending_request(request_id):
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
-    procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
-    procedure_points = db.execute("SELECT * FROM calibration_procedure_points WHERE procedure_id=? ORDER BY point_no", (procedure_id,)).fetchall() if procedure_id else []
     return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,procedure=procedure,procedure_points=procedure_points)
 
 
