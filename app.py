@@ -94,7 +94,11 @@ CREATE TABLE IF NOT EXISTS calibration_points (
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
     point_no INTEGER NOT NULL,
     reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
-    result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')));
+    as_found_value REAL, as_found_error REAL,
+    as_left_value REAL, as_left_error REAL,
+    result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
+    as_found_result TEXT CHECK (as_found_result IN ('PASS','FAIL')),
+    as_left_result TEXT CHECK (as_left_result IN ('PASS','FAIL')));
 CREATE TABLE IF NOT EXISTS calibration_requests (
     request_id INTEGER PRIMARY KEY AUTOINCREMENT,
     request_no TEXT UNIQUE NOT NULL,
@@ -427,6 +431,19 @@ with sqlite3.connect(DB, timeout=30) as _c:
     _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, measured_value, error, result)
                    SELECT cal_id, 1, reference_value, measured_value, error, result FROM calibrations c
                    WHERE NOT EXISTS (SELECT 1 FROM calibration_points p WHERE p.cal_id = c.cal_id)""")
+    # upgrade older databases: preserve both as-found and as-left readings.
+    _point_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]
+    for _col,_ddl in (("as_found_value","REAL"),("as_found_error","REAL"),("as_left_value","REAL"),("as_left_error","REAL"),("as_found_result","TEXT"),("as_left_result","TEXT")):
+        if _col not in _point_cols:
+            _c.execute(f"ALTER TABLE calibration_points ADD COLUMN {_col} {_ddl}")
+    _c.execute("""UPDATE calibration_points
+                  SET as_found_value=COALESCE(as_found_value, measured_value),
+                      as_found_error=COALESCE(as_found_error, error),
+                      as_left_value=COALESCE(as_left_value, measured_value),
+                      as_left_error=COALESCE(as_left_error, error),
+                      as_found_result=COALESCE(as_found_result, result),
+                      as_left_result=COALESCE(as_left_result, result)
+                  WHERE as_found_value IS NULL OR as_left_value IS NULL""")
     # upgrade older databases: tolerance per measurement point
     if "tolerance" not in [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]:
         _c.execute("ALTER TABLE calibration_points ADD COLUMN tolerance REAL")
