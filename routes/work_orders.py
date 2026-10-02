@@ -276,10 +276,23 @@ def update_work_order_status(work_order_id):
         db.execute("UPDATE calibration_work_orders SET status=?, updated_at=? WHERE work_order_id=?",
                    (new_status, now, work_order_id))
         if new_status == "IN PROGRESS":
-            transition_request_status(
-                db, row["request_id"], "IN CALIBRATION", g.user["user_id"],
-                "Technician started calibration"
-            )
+            # Calibration data entry may already have moved the linked request
+            # from ASSIGNED to IN CALIBRATION. Keep the request/work-order
+            # workflow in sync without attempting the same transition twice.
+            req_state = db.execute(
+                "SELECT status FROM calibration_requests WHERE request_id=?",
+                (row["request_id"],)
+            ).fetchone()
+            if req_state and req_state["status"] == "ASSIGNED":
+                transition_request_status(
+                    db, row["request_id"], "IN CALIBRATION", g.user["user_id"],
+                    "Technician started calibration"
+                )
+            elif req_state and req_state["status"] != "IN CALIBRATION":
+                raise ValueError(
+                    "Cannot start this work order because the linked request is already "
+                    + req_state["status"] + "."
+                )
         elif new_status == "CANCELLED":
             transition_request_status(
                 db, row["request_id"], "CANCELLED", g.user["user_id"],
