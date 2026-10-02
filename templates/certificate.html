@@ -7,7 +7,7 @@
 
   .certificate-page {
     width: 148mm; height: 105mm; max-width: 148mm; margin: 8mm auto;
-    padding: 5mm; position: relative; overflow: hidden;
+    padding: 5mm 5mm 9mm 11mm; position: relative; overflow: hidden;
     background: #fff; color: #172b43;
     border: .45mm solid #174b7b; border-radius: 3mm;
     box-shadow: 0 3px 16px rgba(20,45,80,.14);
@@ -19,18 +19,18 @@
      The QR side remains a clean white area for reliable scanning. */
   .gov-watermark {
     position: absolute; z-index: 0;
-    left: 9mm; top: 23mm; width: 92mm; height: 67mm;
+    left: 13mm; top: 21mm; width: 96mm; height: 75mm;
     display: grid; place-items: center;
     pointer-events: none; overflow: hidden;
   }
   .gov-watermark img {
-    width: 66mm; height: auto;
-    opacity: .065; filter: grayscale(1);
+    width: 74mm; height: auto;
+    opacity: .15; filter: grayscale(1);
   }
   .certificate-content { position: relative; z-index: 1; height: 100%; }
 
   .card-header {
-    display: grid; grid-template-columns: 1fr 35mm;
+    display: grid; grid-template-columns: 1fr 42mm;
     gap: 3mm; align-items: center;
     padding-bottom: 2.2mm; border-bottom: .55mm solid #174b7b;
   }
@@ -45,7 +45,7 @@
   }
 
   .card-body {
-    display: grid; grid-template-columns: minmax(0,1fr) 35mm;
+    display: grid; grid-template-columns: minmax(0,1fr) 42mm;
     gap: 3.5mm; height: 76mm; padding-top: 2.5mm;
   }
 
@@ -99,11 +99,11 @@
     border-radius: 1.5mm;
   }
   .qr-side img {
-    width: 31mm; height: 31mm; display: block;
+    width: 38mm; height: 38mm; display: block;
     image-rendering: pixelated; background: #fff;
   }
   .qr-placeholder {
-    width: 31mm; height: 31mm; display: grid; place-items: center;
+    width: 38mm; height: 38mm; display: grid; place-items: center;
     border: .25mm dashed #aab8c8; background: #fff; text-align: center;
     color: #718096; font-size: 5.8pt;
   }
@@ -117,7 +117,7 @@
   }
 
   .card-footer {
-    position: absolute; left: 5mm; right: 5mm; bottom: 3mm;
+    position: absolute; left: 11mm; right: 5mm; bottom: 3mm;
     padding-top: 1mm; border-top: .3mm solid #d7e1ec;
     display: flex; justify-content: space-between; gap: 3mm;
     color: #607187; font-size: 5.2pt;
