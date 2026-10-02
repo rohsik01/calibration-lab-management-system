@@ -39,7 +39,8 @@ def review_calibration_details(review_id):
         """SELECT h.review_id, h.cal_id, h.submitted_at,
                   c.certificate_no, c.cal_date, c.reference_standard,
                   c.reference_value, c.measured_value, c.error, c.result,
-                  c.performed_by, c.n_points,
+                  c.performed_by, c.n_points, c.mean_error, c.max_error,
+                  c.adjustment_status, c.adjustment_notes, c.technician_remarks,
                   rq.request_no, rq.client_name, rq.instrument_description,
                   rq.requested_range, rq.condition_received, rq.remarks,
                   COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
@@ -79,7 +80,11 @@ def review_calibration_details(review_id):
         "condition_received": row["condition_received"],
         "remarks": row["remarks"],
         "overall_result": row["result"],
-        "max_error": row["error"],
+        "max_error": row["max_error"] if row["max_error"] is not None else abs(row["error"]),
+        "mean_error": row["mean_error"] if row["mean_error"] is not None else row["error"],
+        "adjustment_status": row["adjustment_status"] or "NOT REQUIRED",
+        "adjustment_notes": row["adjustment_notes"] or "",
+        "technician_remarks": row["technician_remarks"] or "",
         "points": [dict(p) for p in points],
     }
 
