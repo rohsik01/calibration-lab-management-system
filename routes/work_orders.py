@@ -247,7 +247,7 @@ def assign_calibration_request(request_id):
                     target_date, calibration_method, procedure_id, standard_id, instructions, status, created_at, updated_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?, 'ASSIGNED',?,?)""",
                 (work_order_no, request_id, technician["user_id"], g.user["user_id"], now,
-                 target, method, standard_id, request.form.get("instructions", "").strip(), now, now)
+                 target, method, procedure_id, standard_id, request.form.get("instructions", "").strip(), now, now)
             )
         if req["status"] == "REVIEWED":
             transition_request_status(db, request_id, "ASSIGNED", g.user["user_id"], "Technician assigned")
