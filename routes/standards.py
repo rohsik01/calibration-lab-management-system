@@ -87,7 +87,7 @@ def standard(sid):
         abort(404)
     used = db.execute(
         """SELECT c.cal_id, c.cal_date, c.sensor_id, c.result, c.certificate_no,
-                  c.lifecycle_status, w.work_order_id, w.work_order_no,
+                  c.lifecycle_status, c.revision_no, c.standard_details, w.work_order_id, w.work_order_no,
                   u.full_name AS technician_name
            FROM calibrations c
            LEFT JOIN calibration_work_orders w ON w.request_id=c.request_id
