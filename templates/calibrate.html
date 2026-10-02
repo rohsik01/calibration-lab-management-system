@@ -144,6 +144,6 @@ function stdChange() { const other = std.value === ''; stdtext.style.display = o
 std.onchange = stdChange; stdChange();
 {% if edit_mode %}
 const existingPoints = [{% for p in points %}{ref: {{ p.reference_value }}, meas: {{ p.as_found_value if p.as_found_value is not none else p.measured_value }}, left: {{ p.as_left_value if p.as_left_value is not none else "null" }}, tol: {{ p.tolerance if p.tolerance is not none else s.tolerance }}},{% endfor %}];
-existingPoints.forEach(p => addRow(p.ref, p.tol, p.meas, p.left === null ? '' : p.left));
+existingPoints.forEach(p => addRow(p.ref, p.tol, p.meas, p.left === null ? '' : p.left, {{ 'true' if procedure else 'false' }}));
 {% else %}{% if procedure_points %}const controlledPoints = [{% for p in procedure_points %}{ref: {{ p.reference_value }}, tol: {{ p.tolerance }}},{% endfor %}]; controlledPoints.forEach(p => addRow(p.ref, p.tol, '', '', true));{% else %}addRow();{% endif %}{% endif %}
 </script>{% endblock %}
