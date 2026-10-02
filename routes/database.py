@@ -3,7 +3,7 @@ from app import *
 
 
 @app.route("/database-maintenance", methods=["GET", "POST"])
-@admin_required
+@superadmin_required
 def database_maintenance():
     db = get_db()
 
