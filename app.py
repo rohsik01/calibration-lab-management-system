@@ -167,12 +167,27 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
 
+CREATE TABLE IF NOT EXISTS calibration_revisions (
+    revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
+    revision_no INTEGER NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN ('CREATED','SUBMITTED','RETURNED','CORRECTED','APPROVED')),
+    snapshot_json TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    review_id INTEGER,
+    comments TEXT,
+    UNIQUE(cal_id, revision_no)
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_revisions_cal ON calibration_revisions(cal_id, revision_no DESC);
+
 CREATE TABLE IF NOT EXISTS calibration_review_history (
     review_id INTEGER PRIMARY KEY AUTOINCREMENT,
     work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id),
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id),
     submitted_by INTEGER NOT NULL REFERENCES users(user_id),
     submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_revision INTEGER NOT NULL DEFAULT 1,
     reviewed_by INTEGER REFERENCES users(user_id),
     reviewed_at TEXT,
     decision TEXT NOT NULL DEFAULT 'PENDING'
@@ -415,6 +430,38 @@ with sqlite3.connect(DB, timeout=30) as _c:
         pending_station_name=(SELECT st.name FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id),
         pending_station_location=(SELECT st.location FROM sensors s JOIN stations st ON st.station_id=s.station_id WHERE s.sensor_id=calibration_requests.sensor_id)
         WHERE sensor_id IS NOT NULL AND pending_sensor_type IS NULL""")
+    # upgrade older databases: calibration lifecycle and revision control
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    if "revision_no" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN revision_no INTEGER NOT NULL DEFAULT 1")
+    if "lifecycle_status" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'DRAFT'")
+    if "created_at" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN created_at TEXT")
+        _c.execute("UPDATE calibrations SET created_at=COALESCE(created_at, CURRENT_TIMESTAMP)")
+    if "updated_at" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN updated_at TEXT")
+        _c.execute("UPDATE calibrations SET updated_at=COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)")
+    if "approved_by" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN approved_by INTEGER")
+    if "approved_at" not in _cal_cols:
+        _c.execute("ALTER TABLE calibrations ADD COLUMN approved_at TEXT")
+    _c.execute("UPDATE calibrations SET lifecycle_status=CASE
+        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='APPROVED') THEN 'APPROVED'
+        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='PENDING') THEN 'SUBMITTED'
+        WHEN EXISTS (SELECT 1 FROM calibration_review_history h WHERE h.cal_id=calibrations.cal_id AND h.decision='RETURNED') THEN 'RETURNED'
+        ELSE COALESCE(lifecycle_status,'DRAFT') END")
+    _review_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_review_history)")]
+    if "submitted_revision" not in _review_cols:
+        _c.execute("ALTER TABLE calibration_review_history ADD COLUMN submitted_revision INTEGER NOT NULL DEFAULT 1")
+    _c.execute("""
+        INSERT OR IGNORE INTO calibration_revisions
+            (cal_id, revision_no, event_type, snapshot_json, created_by, created_at)
+        SELECT c.cal_id, c.revision_no, 'CREATED', '{}', NULL,
+               COALESCE(c.created_at, CURRENT_TIMESTAMP)
+        FROM calibrations c
+    """)
+
     # upgrade older databases: extended measurement/result summary
     _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
     for _col,_ddl in (("mean_error","REAL"),("max_error","REAL"),("adjustment_status","TEXT NOT NULL DEFAULT 'NOT REQUIRED'"),("adjustment_notes","TEXT"),("technician_remarks","TEXT"),("standard_uncertainty","REAL"),("resolution","REAL"),("repeatability","REAL"),("environmental_uncertainty","REAL"),("other_uncertainty","REAL"),("combined_standard_uncertainty","REAL"),("coverage_factor","REAL DEFAULT 2.0"),("expanded_uncertainty","REAL"),("uncertainty_method","TEXT DEFAULT 'RSS'")):
@@ -468,6 +515,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
     CREATE INDEX IF NOT EXISTS idx_calibrations_result ON calibrations(result);
     CREATE INDEX IF NOT EXISTS idx_calibrations_standard_id ON calibrations(standard_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_request_id ON calibrations(request_id);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_lifecycle ON calibrations(lifecycle_status);
+    CREATE INDEX IF NOT EXISTS idx_calibration_revisions_cal ON calibration_revisions(cal_id, revision_no DESC);
     CREATE INDEX IF NOT EXISTS idx_calibration_points_cal_id ON calibration_points(cal_id);
     CREATE INDEX IF NOT EXISTS idx_calibration_points_result ON calibration_points(result);
     CREATE INDEX IF NOT EXISTS idx_requests_status_updated ON calibration_requests(status, updated_at DESC);
@@ -511,6 +560,32 @@ with sqlite3.connect(DB, timeout=30) as _c:
             SELECT 1 FROM calibration_request_status_history h
             WHERE h.request_id = r.request_id
         )""")
+
+
+
+def calibration_snapshot(db, cal_id):
+    """Capture the complete editable calibration state for immutable revision history."""
+    cal = db.execute("SELECT * FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if not cal:
+        raise ValueError("Calibration record not found.")
+    points = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (cal_id,)).fetchall()
+    return {"calibration": dict(cal), "points": [dict(p) for p in points]}
+
+
+def record_calibration_revision(db, cal_id, event_type, created_by=None, review_id=None, comments=None):
+    """Persist an immutable snapshot of the current calibration revision."""
+    cal = db.execute("SELECT revision_no FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if not cal:
+        raise ValueError("Calibration record not found.")
+    snapshot = calibration_snapshot(db, cal_id)
+    db.execute(
+        """INSERT OR REPLACE INTO calibration_revisions
+           (cal_id, revision_no, event_type, snapshot_json, created_by, created_at, review_id, comments)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (cal_id, cal["revision_no"], event_type, json.dumps(snapshot, ensure_ascii=False, default=str),
+         created_by, datetime.now().isoformat(timespec="seconds"), review_id, comments)
+    )
+    return cal["revision_no"]
 
 
 def status(row):
