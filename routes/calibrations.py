@@ -492,10 +492,12 @@ def calibrate_pending_request(request_id):
                 (cal_id,point_no,reference_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                [(cur.lastrowid,i,p[0],p[5] if adjustment_status=="PERFORMED" else p[1],
-                  final_errors[i-1],"PASS" if abs(final_errors[i-1])<=p[4] else "FAIL",p[4],
-                  p[1],p[2],p[3],p[5],p[6] if p[5] is not None else None,
-                  p[7] if p[5] is not None else None) for i,p in enumerate(pts,1)])
+                [(cur.lastrowid,i,p[0],final_errors[i-1],
+                   "PASS" if abs(final_errors[i-1])<=p[4] else "FAIL",p[4],
+                   p[1],p[2],p[3],
+                   (p[5] if adjustment_status=="PERFORMED" else p[1]),
+                   (p[6] if adjustment_status=="PERFORMED" else p[2]),
+                   (p[7] if adjustment_status=="PERFORMED" else p[3])) for i,p in enumerate(pts,1)])
             record_calibration_revision(db, cur.lastrowid, "CREATED", g.user["user_id"])
             # Saving the calibration is also the technician's submission to the administrator.
             validate_calibration_record_for_submission(db, cur.lastrowid, wo["work_order_id"])
