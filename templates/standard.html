@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% block title %}{{ x.code }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ x.code }} — {{ x.name }}</h1>
 {% set st = std_status(x) %}<p><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></p>
-<div class="actions">{% if g.user.role == 'admin' %}<a class="btn" href="{{ url_for('edit_standard', sid=x.standard_id) }}">{{ tr("Edit / recalibrated") }}</a><form method="post" action="{{ url_for('delete_standard', sid=x.standard_id) }}" style="display:inline" onsubmit="return confirm('Delete this reference standard? It cannot be deleted if used by a calibration.')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>{% endif %}
+<div class="actions">{% if g.user.role == 'admin' %}<a class="btn" href="{{ url_for('edit_standard', sid=x.standard_id) }}">{{ tr("Edit / recalibrated") }}</a><form method="post" action="{{ url_for('delete_standard', sid=x.standard_id) }}" style="display:inline" onsubmit="return confirm('Deactivate this reference standard? The record will be retained for traceability.')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Deactivate") }}</button></form>{% endif %}
+<a class="btn alt" href="{{ url_for('standard_history', sid=x.standard_id) }}">{{ tr("View standard history") }}</a>
 <a class="btn alt" href="{{ url_for('standards') }}">← {{ tr("All reference standards") }}</a></div>
 <table>
 <tr><th>{{ tr("Type") }}</th><td>{{ x.standard_type or '—' }}</td></tr>
@@ -25,3 +26,9 @@
 <td><a href="{{ url_for('sensor', sensor_id=u.sensor_id) }}">{{ u.sensor_id }}</a></td><td>{{ u.technician_name or '—' }}</td>
 <td><span class="badge {{ 'green' if u.result=='PASS' else 'red' }}">{{ tr(u.result) }}</span></td><td>{% if u.certificate_no %}<a href="{{ url_for('certificate', cert=u.certificate_no) }}">{{ u.certificate_no }}</a>{% else %}—{% endif %}</td></tr>
 {% else %}<tr><td colspan="6">{{ tr("Not used in any calibration yet.") }}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<div class="card"><h2>{{ tr("Reference standard history") }}</h2>
+<p class="sub">{{ tr("Each state change is retained as an immutable snapshot.") }}</p>
+<div class="scroll"><table><tr><th>{{ tr("Event") }}</th><th>{{ tr("Date") }}</th><th>{{ tr("Changed by") }}</th><th>{{ tr("Details") }}</th></tr>
+{% for h in history %}<tr><td>{{ h.event_type }}</td><td>{{ h.changed_at }}</td><td>{{ h.changed_by_name or 'System / migration' }}</td><td>{{ h.details or '—' }}</td></tr>
+{% else %}<tr><td colspan="4">{{ tr("No history recorded.") }}</td></tr>{% endfor %}</table></div>
+<p><a class="btn alt" href="{{ url_for('standard_history', sid=x.standard_id) }}">{{ tr("Open full history") }}</a></p></div>
