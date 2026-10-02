@@ -661,7 +661,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
         _c.execute("""CREATE TABLE calibrations_new (
             cal_id INTEGER PRIMARY KEY AUTOINCREMENT, sensor_id TEXT REFERENCES sensors(sensor_id),
             cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
-            reference_value REAL NOT NULL, error REAL NOT NULL,
+            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
             result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
             certificate_no TEXT UNIQUE NOT NULL, next_due TEXT NOT NULL,
             performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1,
@@ -782,7 +782,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
             cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
             sensor_id TEXT REFERENCES sensors(sensor_id),
             cal_date TEXT NOT NULL, reference_standard TEXT NOT NULL,
-            reference_value REAL NOT NULL, error REAL NOT NULL,
+            reference_value REAL NOT NULL, measured_value REAL NOT NULL, error REAL NOT NULL,
             result TEXT NOT NULL CHECK (result IN ('PASS','FAIL')),
             certificate_no TEXT UNIQUE, next_due TEXT NOT NULL,
             mean_error REAL, max_error REAL,
@@ -816,10 +816,13 @@ with sqlite3.connect(DB, timeout=30) as _c:
             FROM calibrations""")
         _c.execute("DROP TABLE calibrations")
         _c.execute("ALTER TABLE calibrations_new RENAME TO calibrations")
-    # older single-point calibrations become calibrations with one point
-    _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, as_found_value, as_found_error, as_found_result, as_left_value, as_left_error, as_left_result, error, result)
-                   SELECT cal_id, 1, reference_value, measured_value, error, result, measured_value, error, result, error, result FROM calibrations c
-                   WHERE NOT EXISTS (SELECT 1 FROM calibration_points p WHERE p.cal_id = c.cal_id)""")
+    # Older single-point calibrations: copy the legacy measured reading into
+    # the point table before removing the legacy column later in this migration.
+    _point_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]
+    if "measured_value" in _point_cols:
+        _c.execute("""INSERT INTO calibration_points(cal_id, point_no, reference_value, measured_value, error, result)
+                       SELECT cal_id, 1, reference_value, measured_value, error, result FROM calibrations c
+                       WHERE NOT EXISTS (SELECT 1 FROM calibration_points p WHERE p.cal_id = c.cal_id)""")
     # upgrade older databases: preserve both as-found and as-left readings.
     _point_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibration_points)")]
     for _col,_ddl in (("as_found_value","REAL"),("as_found_error","REAL"),("as_left_value","REAL"),("as_left_error","REAL"),("as_found_result","TEXT"),("as_left_result","TEXT")):
