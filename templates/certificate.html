@@ -3,109 +3,250 @@
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  @page { size: A6 portrait; margin: 0; }
+  @page { size: A6 landscape; margin: 0; }
+
   .certificate-page {
-    width: 105mm; min-height: 148mm; max-width: 105mm; margin: 8mm auto;
-    padding: 5mm; background: #fff; color: #16263e; border: .35mm solid #24466c;
-    box-shadow: 0 3px 16px rgba(20,45,80,.12); overflow: hidden; position: relative;
-    font: 8pt/1.28 Arial, "Segoe UI", sans-serif;
+    width: 148mm; height: 105mm; max-width: 148mm; margin: 8mm auto;
+    padding: 5mm; position: relative; overflow: hidden;
+    background: #fff; color: #172b43;
+    border: .45mm solid #174b7b; border-radius: 3mm;
+    box-shadow: 0 3px 16px rgba(20,45,80,.14);
+    font: 7.4pt/1.22 Arial, "Segoe UI", sans-serif;
   }
   .certificate-page * { box-sizing: border-box; }
-  .certificate-page .brandline { display:flex; align-items:center; justify-content:space-between; gap:2mm; border-bottom:.5mm solid #1e4775; padding-bottom:2mm; }
-  .certificate-page .brandname { font-size:11pt; font-weight:800; color:#174b7b; letter-spacing:.04em; }
-  .certificate-page .branddesc { font-size:6.5pt; text-align:right; max-width:34mm; }
-  .certificate-page .banner { font-size:6.5pt; line-height:1.15; padding:0 0 1.5mm; margin:0 0 1.5mm; border-bottom:.25mm solid #d9e2ed; text-align:center; }
-  .certificate-page .banner .b1,.certificate-page .banner .b2,.certificate-page .banner .b3,.certificate-page .banner .b4 { font-size:inherit; color:#233f60; margin:0; }
-  .certificate-page .certificate-title { text-align:center; font-size:12pt; line-height:1.1; margin:2.2mm 0 .8mm; font-weight:800; letter-spacing:.035em; }
-  .certificate-page .certno { text-align:center; color:#405a76; font-size:7pt; margin:0 0 2.5mm; }
-  .certificate-page .main-grid { display:grid; grid-template-columns:minmax(0,1fr) 25mm; gap:2.5mm; align-items:start; }
-  .certificate-page .info { margin:0; display:grid; grid-template-columns:23mm minmax(0,1fr); gap:1.5mm 1.5mm; }
-  .certificate-page .info dt { color:#52657b; margin:0; }
-  .certificate-page .info dd { margin:0; font-weight:600; overflow-wrap:anywhere; }
-  .certificate-page .qrbox { text-align:center; border:.25mm solid #d7e1ec; border-radius:1.5mm; padding:1.5mm 1mm; }
-  .certificate-page .qrbox img { width:21mm; height:21mm; display:block; margin:0 auto 1mm; image-rendering:pixelated; }
-  .certificate-page .qrbox .qrlabel { font-size:6pt; font-weight:700; color:#174b7b; }
-  .certificate-page .resultbar { display:flex; align-items:center; justify-content:space-between; gap:2mm; margin-top:3mm; padding:2mm 3mm; border-radius:1.5mm; background:#e8f7ee; border:.25mm solid #b8e0c6; }
-  .certificate-page .resultbar.fail { background:#fff0ef; border-color:#efc3c0; }
-  .certificate-page .result-label { font-size:7pt; color:#34566f; }
-  .certificate-page .result-value { font-size:15pt; line-height:1; font-weight:900; color:#087443; letter-spacing:.04em; }
-  .certificate-page .fail .result-value { color:#b42318; }
-  .certificate-page .summary { display:grid; grid-template-columns:1fr 1fr 1fr; border: .25mm solid #d7e1ec; border-radius:1.2mm; margin-top:2mm; }
-  .certificate-page .summary>div { padding:1.4mm 1mm; text-align:center; min-width:0; }
-  .certificate-page .summary>div+div { border-left:.25mm solid #d7e1ec; }
-  .certificate-page .summary span { display:block; color:#65768b; font-size:6pt; }
-  .certificate-page .summary strong { display:block; font-size:7.5pt; margin-top:.4mm; overflow-wrap:anywhere; }
-  .certificate-page .bottom { display:grid; grid-template-columns:1fr 1.15fr; gap:3mm; align-items:end; margin-top:4mm; }
-  .certificate-page .signature { border-top:.25mm solid #52657b; padding-top:1.5mm; min-height:9mm; }
-  .certificate-page .signature strong { font-size:7pt; }
-  .certificate-page .signature small { display:block; font-size:6.2pt; color:#52657b; }
-  .certificate-page .validity { text-align:right; font-size:6.2pt; color:#52657b; }
-  .certificate-page .footer { border-top:.5mm solid #174b7b; margin-top:3mm; padding-top:1.2mm; text-align:center; font-size:5.8pt; letter-spacing:.08em; color:#52657b; }
-  .certificate-page .preview-watermark { position:absolute; left:2mm; right:2mm; top:48%; text-align:center; transform:rotate(-28deg); font-size:20pt; font-weight:900; color:rgba(180,35,24,.12); pointer-events:none; }
-  .certificate-page .preview-note { margin:0 0 3mm; padding:1.5mm; border:.3mm solid #b42318; color:#b42318; text-align:center; font-weight:700; font-size:7pt; }
-  @media screen and (max-width:560px) { .certificate-page { width:100%; max-width:105mm; margin:4mm auto; } }
+
+  /* The watermark is deliberately confined to the information side.
+     The QR side remains a clean white area for reliable scanning. */
+  .gov-watermark {
+    position: absolute; z-index: 0;
+    left: 9mm; top: 23mm; width: 92mm; height: 67mm;
+    display: grid; place-items: center;
+    pointer-events: none; overflow: hidden;
+  }
+  .gov-watermark img {
+    width: 66mm; height: auto;
+    opacity: .065; filter: grayscale(1);
+  }
+  .certificate-content { position: relative; z-index: 1; height: 100%; }
+
+  .card-header {
+    display: grid; grid-template-columns: 1fr 35mm;
+    gap: 3mm; align-items: center;
+    padding-bottom: 2.2mm; border-bottom: .55mm solid #174b7b;
+  }
+  .agency { color: #174b7b; font-weight: 900; font-size: 9.5pt; line-height: 1.05; }
+  .agency-sub { font-size: 6.4pt; color: #52657b; margin-top: .7mm; }
+  .certificate-heading { text-align: right; color: #174b7b; }
+  .certificate-heading .title {
+    font-size: 11pt; font-weight: 900; letter-spacing: .035em;
+  }
+  .certificate-heading .number {
+    margin-top: .8mm; font-size: 6.8pt; color: #52657b;
+  }
+
+  .card-body {
+    display: grid; grid-template-columns: minmax(0,1fr) 35mm;
+    gap: 3.5mm; height: 76mm; padding-top: 2.5mm;
+  }
+
+  .info-side { min-width: 0; }
+  .info-grid {
+    display: grid; grid-template-columns: 22mm minmax(0,1fr) 22mm minmax(0,1fr);
+    column-gap: 1.6mm; row-gap: 1.4mm;
+  }
+  .label { color: #607187; font-size: 6.2pt; white-space: nowrap; }
+  .value {
+    font-weight: 700; min-width: 0; overflow-wrap: anywhere;
+    border-bottom: .2mm solid rgba(96,113,135,.24); padding-bottom: .55mm;
+  }
+  .wide-label { grid-column: 1 / 2; }
+  .wide-value { grid-column: 2 / 5; }
+
+  .result-row {
+    margin-top: 2.5mm; display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border: .25mm solid #d7e1ec; border-radius: 1.5mm; overflow: hidden;
+    background: rgba(255,255,255,.88);
+  }
+  .result-cell { padding: 1.4mm 1.2mm; text-align: center; min-width: 0; }
+  .result-cell + .result-cell { border-left: .25mm solid #d7e1ec; }
+  .result-cell span { display: block; color: #607187; font-size: 5.8pt; }
+  .result-cell strong { display: block; margin-top: .35mm; font-size: 7pt; overflow-wrap: anywhere; }
+  .pass { color: #087443; }
+  .fail { color: #b42318; }
+
+  .approval {
+    margin-top: 2.5mm; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 3mm; align-items: end;
+  }
+  .approval-box {
+    background: rgba(255,255,255,.9);
+    border-left: 1.1mm solid #174b7b; padding: 1.5mm 2mm;
+    min-height: 11mm;
+  }
+  .approval-box .caption { font-size: 5.8pt; color: #607187; }
+  .approval-box .name { font-size: 8pt; font-weight: 900; color: #172b43; margin-top: .5mm; }
+  .approval-box .date { font-size: 5.8pt; color: #607187; margin-top: .4mm; }
+
+  .scope-note {
+    font-size: 5.7pt; color: #607187; line-height: 1.25;
+    text-align: right; align-self: end;
+  }
+
+  .qr-side {
+    border-left: .3mm solid #d7e1ec; padding-left: 3mm;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.96);
+    border-radius: 1.5mm;
+  }
+  .qr-side img {
+    width: 31mm; height: 31mm; display: block;
+    image-rendering: pixelated; background: #fff;
+  }
+  .qr-placeholder {
+    width: 31mm; height: 31mm; display: grid; place-items: center;
+    border: .25mm dashed #aab8c8; background: #fff; text-align: center;
+    color: #718096; font-size: 5.8pt;
+  }
+  .qr-label {
+    margin-top: 1.3mm; text-align: center; color: #174b7b;
+    font-size: 6.3pt; font-weight: 900; letter-spacing: .04em;
+  }
+  .qr-hint {
+    margin-top: .7mm; text-align: center; color: #607187;
+    font-size: 5.3pt; line-height: 1.2;
+  }
+
+  .card-footer {
+    position: absolute; left: 5mm; right: 5mm; bottom: 3mm;
+    padding-top: 1mm; border-top: .3mm solid #d7e1ec;
+    display: flex; justify-content: space-between; gap: 3mm;
+    color: #607187; font-size: 5.2pt;
+  }
+
+  .preview-watermark {
+    position:absolute; z-index:4; left:4mm; right:39mm; top:44%;
+    text-align:center; transform:rotate(-22deg);
+    font-size:17pt; font-weight:900; color:rgba(180,35,24,.12);
+    pointer-events:none;
+  }
+  .preview-note {
+    margin:0 0 3mm; padding:1.5mm;
+    border:.3mm solid #b42318; color:#b42318;
+    text-align:center; font-weight:700; font-size:7pt;
+  }
+
+  @media screen and (max-width:700px) {
+    .certificate-page { width:100%; max-width:148mm; margin:4mm auto; }
+  }
   @media print {
-    html,body { width:105mm!important; min-width:0!important; margin:0!important; padding:0!important; background:#fff!important; }
-    main { width:105mm!important; max-width:none!important; margin:0!important; padding:0!important; }
-    .certificate-page { width:105mm!important; min-height:148mm!important; max-width:none!important; margin:0!important; padding:5mm!important; border:0!important; box-shadow:none!important; }
+    html,body { width:148mm!important; height:105mm!important; min-width:0!important; margin:0!important; padding:0!important; background:#fff!important; }
+    main { width:148mm!important; max-width:none!important; margin:0!important; padding:0!important; }
+    .certificate-page {
+      width:148mm!important; height:105mm!important; max-width:none!important;
+      margin:0!important; padding:5mm!important;
+      border:0!important; border-radius:0!important; box-shadow:none!important;
+    }
     .certificate-page .noprint { display:none!important; }
     .side,.topbar,.langbar,.flash { display:none!important; }
   }
 </style>
+
 {% if preview %}
 <div class="preview-note noprint">UNVERIFIED PREVIEW — NOT AN OFFICIAL CERTIFICATE</div>
 {% endif %}
+
 <div class="certificate-page">
   {% if preview %}<div class="preview-watermark" aria-hidden="true">UNVERIFIED PREVIEW</div>{% endif %}
-  <div class="brandline">
-    <div><div class="brandname">{{ banner[2] or "DHM" }}</div><div>{{ banner[3] or "Calibration Laboratory" }}</div></div>
-    <div class="branddesc">{{ banner[0] }}<br>{{ banner[1] }}</div>
-  </div>
-  <h1 class="certificate-title">{{ tr("Calibration Certificate") }}</h1>
-  <p class="certno">{{ tr("Certificate No.") }}: <strong>{{ r.certificate_no or "NOT ISSUED" }}</strong></p>
 
-  <div class="main-grid">
-    <dl class="info">
-      <dt>{{ tr("Instrument") }}</dt><dd>{{ r.sensor_type or "—" }}</dd>
-      <dt>{{ tr("Serial number") }}</dt><dd>{{ r.serial_number or "—" }}</dd>
-      <dt>{{ tr("Station") }}</dt><dd>{{ r.station or "—" }}</dd>
-      <dt>{{ tr("Calibration date") }}</dt><dd>{{ r.cal_date or "—" }}</dd>
-      <dt>{{ tr("Next due") }}</dt><dd>{{ r.next_due or "—" }}</dd>
-      <dt>{{ tr("Reference standard") }}</dt><dd>{{ (standard.code ~ " — " ~ standard.name) if standard else (r.reference_standard or "—") }}</dd>
-    </dl>
-    <div class="qrbox">
-      {% if qr_code and not preview %}
-      <img src="{{ qr_code }}" alt="QR code to verify the full calibration certificate">
-      <div class="qrlabel">SCAN FOR<br>FULL REPORT</div>
-      {% else %}
-      <div style="height:21mm;display:flex;align-items:center;justify-content:center;font-size:6pt;color:#8b98a9">QR available<br>after approval</div>
-      <div class="qrlabel">FULL REPORT</div>
-      {% endif %}
+  <div class="gov-watermark" aria-hidden="true">
+    <img src="https://commons.wikimedia.org/wiki/Special:Redirect/file/Emblem_of_Nepal.svg" alt="">
+  </div>
+
+  <div class="certificate-content">
+    <header class="card-header">
+      <div>
+        <div class="agency">{{ banner[2] or "DHM" }}</div>
+        <div class="agency-sub">{{ banner[3] or "Calibration Laboratory" }}</div>
+        <div class="agency-sub">{{ banner[0] }} · {{ banner[1] }}</div>
+      </div>
+      <div class="certificate-heading">
+        <div class="title">{{ tr("CALIBRATION CERTIFICATE") }}</div>
+        <div class="number">{{ tr("Certificate No.") }} <strong>{{ r.certificate_no or "NOT ISSUED" }}</strong></div>
+      </div>
+    </header>
+
+    <div class="card-body">
+      <section class="info-side">
+        <div class="info-grid">
+          <span class="label">{{ tr("Instrument") }}</span><span class="value">{{ r.sensor_type or "—" }}</span>
+          <span class="label">{{ tr("Serial number") }}</span><span class="value">{{ r.serial_number or "—" }}</span>
+
+          <span class="label">{{ tr("Station") }}</span><span class="value">{{ r.station or "—" }}</span>
+          <span class="label">{{ tr("Unit") }}</span><span class="value">{{ r.unit or "—" }}</span>
+
+          <span class="label">{{ tr("Calibration date") }}</span><span class="value">{{ r.cal_date or "—" }}</span>
+          <span class="label">{{ tr("Next due") }}</span><span class="value">{{ r.next_due or "—" }}</span>
+
+          <span class="label">{{ tr("Reference standard") }}</span>
+          <span class="value wide-value">{{ (standard.code ~ " — " ~ standard.name) if standard else (r.reference_standard or "—") }}</span>
+
+          <span class="label">{{ tr("Procedure") }}</span>
+          <span class="value wide-value">{{ r.procedure_code or "—" }}{% if r.procedure_title %} — {{ r.procedure_title }}{% endif %}</span>
+        </div>
+
+        <div class="result-row">
+          <div class="result-cell">
+            <span>{{ tr("Overall result") }}</span>
+            <strong class="{{ 'fail' if r.result == 'FAIL' else 'pass' }}">{{ tr(r.result) }}</strong>
+          </div>
+          <div class="result-cell">
+            <span>{{ tr("Measurement points") }}</span>
+            <strong>{{ pts|length }}</strong>
+          </div>
+          <div class="result-cell">
+            <span>{{ tr("Maximum absolute error") }}</span>
+            <strong>{{ '%+.5g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</strong>
+          </div>
+        </div>
+
+        <div class="approval">
+          <div class="approval-box">
+            <div class="caption">{{ tr("Approved by") }}</div>
+            <div class="name">{{ r.approved_by or "—" }}</div>
+            <div class="date">{% if r.approved_at %}{{ tr("Approved") }}: {{ r.approved_at[:10] }}{% elif r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}{% endif %}</div>
+          </div>
+          <div class="scope-note">
+            This certificate applies only to the instrument identified above.<br>
+            Scan the QR code for the complete certificate, measurement data,<br>
+            uncertainty, procedure and traceability information.
+          </div>
+        </div>
+      </section>
+
+      <aside class="qr-side">
+        {% if qr_code and not preview %}
+          <img src="{{ qr_code }}" alt="QR code to verify the full calibration certificate">
+        {% else %}
+          <div class="qr-placeholder">QR available<br>after approval</div>
+        {% endif %}
+        <div class="qr-label">SCAN FOR FULL REPORT</div>
+        <div class="qr-hint">Verify the complete<br>calibration record</div>
+      </aside>
     </div>
   </div>
 
-  <div class="resultbar {{ 'fail' if r.result == 'FAIL' else '' }}">
-    <div><div class="result-label">{{ tr("Overall calibration result") }}</div><div style="font-size:6.5pt;color:#52657b">{{ tr("Approved certificate status") if not preview else "Preview only" }}</div></div>
-    <div class="result-value">{{ tr(r.result) }}</div>
+  <div class="card-footer">
+    <span>DHM CALIBRATION LABORATORY</span>
+    <span>{{ tr("Accuracy · Traceability · Trust") }}</span>
+    {% if r.certificate_issued_at %}<span>{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}</span>{% endif %}
   </div>
 
-  <div class="summary">
-    <div><span>{{ tr("Measurement points") }}</span><strong>{{ pts|length }}</strong></div>
-    <div><span>{{ tr("Maximum absolute error") }}</span><strong>{{ '%+.5g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</strong></div>
-    <div><span>{{ tr("Adjustment") }}</span><strong>{{ tr(r.adjustment_status or "NOT REQUIRED") }}</strong></div>
-  </div>
-
-  <div class="bottom">
-    <div class="signature"><strong>{{ tr("Approved by") }}</strong><small>{{ r.approved_by or "—" }}</small><small>{{ r.approved_at[:10] if r.approved_at else "" }}</small></div>
-    <div class="validity">
-      {% if r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}<br>{% endif %}
-      This certificate applies only to the instrument identified above.<br>
-      Scan the QR code to view measurement data, uncertainty, procedure and traceability.
-    </div>
-  </div>
-  <div class="footer">DHM CALIBRATION LABORATORY · ACCURACY · TRACEABILITY · TRUST</div>
-  <div class="noprint" style="margin-top:4mm;text-align:center">
-    {% if not preview %}<button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>{% else %}<span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>{% endif %}
+  <div class="noprint" style="position:absolute;left:5mm;right:5mm;bottom:-13mm;text-align:center">
+    {% if not preview %}
+      <button class="btn" onclick="window.print()">{{ tr("Print / Save as PDF") }}</button>
+    {% else %}
+      <span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
