@@ -915,7 +915,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
     _revision_rows = _c.execute("SELECT revision_id, snapshot_json FROM calibration_revisions").fetchall()
     for _rev_row in _revision_rows:
         try:
-            _snap = json.loads(_rev_row["snapshot_json"])
+            _snap = json.loads(_rev_row[1])
         except (TypeError, ValueError, json.JSONDecodeError):
             continue
         _changed = False
@@ -943,7 +943,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
                     _changed = True
         if _changed:
             _c.execute("UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
-                       (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row["revision_id"]))
+                       (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row[0]))
 
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
