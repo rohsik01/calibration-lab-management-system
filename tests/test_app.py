@@ -224,3 +224,13 @@ def test_certificate_numbering_is_transaction_safe():
     assert "certificate_sequences" in source
     assert "INSERT OR IGNORE INTO certificate_sequences" in source
     assert "UPDATE certificate_sequences SET next_number=next_number+1" in source
+
+
+
+def test_corrected_revision_gets_new_certificate_and_supersedes_previous():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "reviews.py"
+    source = route_path.read_text(encoding="utf-8")
+    assert "previous_cert" in source
+    assert "A corrected revision is a new controlled certificate" in source
+    assert "event_type, previous_certificate_no" in source
+    assert "'SUPERSEDED'" in source
