@@ -115,6 +115,151 @@
   </div>
 </div>
 
+<div class="card">
+  <h2>{{ tr("My operational dashboard") }}</h2>
+  <div class="hint">{{ tr("The sections below are based on your assigned roles. Multiple roles are shown together.") }}</div>
+
+  {% if role_dashboard.general_user is defined %}
+  <div class="two" style="margin-top:16px">
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <h2>📝 {{ tr("My requests") }}</h2>
+        <a class="btn alt" href="{{ url_for('new_calibration_request') }}">{{ tr("New request") }}</a>
+      </div>
+      <div class="stats" style="margin-top:12px">
+        <div class="stat brand"><span class="n">{{ role_dashboard.general_user.counts["RECEIVED"] }}</span><span class="sub">{{ tr("Received") }}</span></div>
+        <div class="stat amber"><span class="n">{{ role_dashboard.general_user.counts["IN CALIBRATION"] + role_dashboard.general_user.counts["UNDER REVIEW"] }}</span><span class="sub">{{ tr("In progress") }}</span></div>
+        <div class="stat green"><span class="n">{{ role_dashboard.general_user.counts["COMPLETED"] }}</span><span class="sub">{{ tr("Completed") }}</span></div>
+      </div>
+      {% if role_dashboard.general_user.requests %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Request") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Received") }}</th></tr>
+        {% for r in role_dashboard.general_user.requests %}
+        <tr><td><a href="{{ url_for('calibration_request', request_id=r.request_id) }}">{{ r.request_no }}</a></td>
+            <td>{{ r.instrument_description }}</td>
+            <td><span class="badge {{ 'green' if r.status == 'COMPLETED' else 'amber' if r.status not in ['CANCELLED','COMPLETED'] else 'red' }}">{{ tr(r.status) }}</span></td>
+            <td>{{ date_pair(r.received_date) }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("You have not submitted any calibration requests yet.") }}</div>{% endif %}
+    </div>
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>📜 {{ tr("My calibration results") }}</h2>
+      {% if role_dashboard.general_user.calibrations %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Request") }}</th><th>{{ tr("Certificate") }}</th><th>{{ tr("Date") }}</th><th>{{ tr("Result") }}</th></tr>
+        {% for c in role_dashboard.general_user.calibrations %}
+        <tr><td>{{ c.request_no }}</td><td>{% if c.certificate_no %}<a href="{{ url_for('certificate', cert=c.certificate_no) }}">{{ c.certificate_no }}</a>{% else %}—{% endif %}</td>
+            <td>{{ date_pair(c.cal_date) }}</td>
+            <td><span class="badge {{ 'green' if c.result == 'PASS' else 'red' }}">{{ tr(c.result) }}</span></td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No calibration result is available yet.") }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if role_dashboard.technician is defined %}
+  <div class="two" style="margin-top:20px">
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>🧪 {{ tr("My calibration work") }}</h2>
+      <div class="stats">
+        <div class="stat amber"><span class="n">{{ role_dashboard.technician.work_orders|length }}</span><span class="sub">{{ tr("Open work orders") }}</span></div>
+        <div class="stat red"><span class="n">{{ role_dashboard.technician.pending_measurements }}</span><span class="sub">{{ tr("Pending measurements") }}</span></div>
+        <div class="stat green"><span class="n">{{ role_dashboard.technician.completed }}</span><span class="sub">{{ tr("Completed by me") }}</span></div>
+      </div>
+      {% if role_dashboard.technician.work_orders %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Target") }}</th></tr>
+        {% for w in role_dashboard.technician.work_orders %}
+        <tr><td><a href="{{ url_for('work_order_detail', work_order_id=w.work_order_id) }}">{{ w.work_order_no }}</a></td>
+            <td>{{ w.request_no }}</td><td><span class="badge {{ 'amber' if w.status == 'ASSIGNED' else 'green' if w.status == 'COMPLETED' else 'grey' }}">{{ tr(w.status) }}</span></td>
+            <td>{{ date_pair(w.target_date) if w.target_date else '—' }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No open work orders are assigned to you.") }}</div>{% endif %}
+    </div>
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>↩️ {{ tr("Returned calibrations") }}</h2>
+      {% if role_dashboard.technician.returned %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Request") }}</th><th>{{ tr("Revision") }}</th><th>{{ tr("Returned") }}</th><th>{{ tr("Comments") }}</th></tr>
+        {% for r in role_dashboard.technician.returned %}
+        <tr><td><a href="{{ url_for('calibration_request', request_id=r.cal_id) }}">{{ r.request_no }}</a></td><td>v{{ r.revision_no }}</td><td>{{ r.reviewed_at or '—' }}</td><td>{{ r.comments or '—' }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No returned calibrations.") }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if role_dashboard.reviewer is defined %}
+  <div class="two" style="margin-top:20px">
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <h2>🔎 {{ tr("Review queue") }}</h2>
+        <a class="btn alt" href="{{ url_for('calibration_reviews') }}">{{ tr("Open reviews") }}</a>
+      </div>
+      <div class="stats" style="margin-top:12px">
+        <div class="stat amber"><span class="n">{{ role_dashboard.reviewer.pending_count }}</span><span class="sub">{{ tr("Awaiting review") }}</span></div>
+        <div class="stat red"><span class="n">{{ role_dashboard.reviewer.returned_count }}</span><span class="sub">{{ tr("Returned") }}</span></div>
+      </div>
+      {% if role_dashboard.reviewer.pending %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Request") }}</th><th>{{ tr("Work order") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Submitted") }}</th></tr>
+        {% for r in role_dashboard.reviewer.pending %}
+        <tr><td>{{ r.request_no }}</td><td>{{ r.work_order_no }}</td><td>{{ r.technician_name }}</td><td>{{ r.submitted_at }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No calibrations are waiting for review.") }}</div>{% endif %}
+    </div>
+    <div class="card" style="border:1px solid var(--line);padding:16px">
+      <h2>{{ tr("Recent review decisions") }}</h2>
+      {% if role_dashboard.reviewer.recent %}
+      <div class="scroll"><table>
+        <tr><th>{{ tr("Request") }}</th><th>{{ tr("Decision") }}</th><th>{{ tr("Reviewed") }}</th></tr>
+        {% for r in role_dashboard.reviewer.recent %}
+        <tr><td>{{ r.request_no }}</td><td><span class="badge {{ 'green' if r.decision == 'APPROVED' else 'red' }}">{{ tr(r.decision) }}</span></td><td>{{ r.reviewed_at or '—' }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% else %}<div class="empty">{{ tr("No review decisions recorded yet.") }}</div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if role_dashboard.admin is defined %}
+  <div class="card" style="margin-top:20px;border:1px solid var(--line);padding:16px">
+    <h2>🏢 {{ tr("Laboratory administration") }}</h2>
+    <div class="stats">
+      <a class="stat amber" href="{{ url_for('calibration_requests') }}"><span class="n">{{ role_dashboard.admin.active_requests }}</span><span class="sub">{{ tr("Active requests") }}</span></a>
+      <a class="stat amber" href="{{ url_for('calibration_requests', status='REVIEWED') }}"><span class="n">{{ role_dashboard.admin.unassigned_reviewed }}</span><span class="sub">{{ tr("Reviewed & unassigned") }}</span></a>
+      <a class="stat brand" href="{{ url_for('stations') }}"><span class="n">{{ role_dashboard.admin.stations }}</span><span class="sub">{{ tr("Stations") }}</span></a>
+      <a class="stat red" href="{{ url_for('standards') }}"><span class="n">{{ role_dashboard.admin.standards_attention }}</span><span class="sub">{{ tr("Standards needing attention") }}</span></a>
+      <div class="stat grey"><span class="n">{{ role_dashboard.admin.active_technicians }}</span><span class="sub">{{ tr("Active technicians") }}</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if role_dashboard.superadmin is defined %}
+  <div class="card" style="margin-top:20px;border:1px solid var(--line);padding:16px">
+    <h2>🛡️ {{ tr("System administration & security") }}</h2>
+    <div class="stats">
+      <a class="stat brand" href="{{ url_for('users') }}"><span class="n">{{ role_dashboard.superadmin.active_users }}</span><span class="sub">{{ tr("Active users") }}</span></a>
+      <div class="stat grey"><span class="n">{{ role_dashboard.superadmin.inactive_users }}</span><span class="sub">{{ tr("Inactive users") }}</span></div>
+      <a class="stat amber" href="{{ url_for('audit_log') }}"><span class="n">{{ role_dashboard.superadmin.audit_24h }}</span><span class="sub">{{ tr("Audit events (24h)") }}</span></a>
+    </div>
+    {% if role_dashboard.superadmin.recent_security %}
+    <div class="scroll"><table>
+      <tr><th>{{ tr("Action") }}</th><th>{{ tr("Entity") }}</th><th>{{ tr("Time") }}</th></tr>
+      {% for a in role_dashboard.superadmin.recent_security %}
+      <tr><td>{{ a.action }}</td><td>{{ a.entity_type or '—' }} {{ a.entity_id or '' }}</td><td>{{ a.created_at }}</td></tr>
+      {% endfor %}
+    </table></div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
 <div class="card"><h2>{{ tr("Quick actions") }}</h2>
   <div class="actions" style="margin-bottom:0">
     {% if sensors %}<select id="quick" style="width:auto;min-width:230px" aria-label="{{ tr('Record calibration') }}"
