@@ -203,7 +203,7 @@ def assign_calibration_request(request_id):
         return redirect(url_for("calibration_request", request_id=request_id))
     technician_text = request.form.get("technician_id", "").strip()
     technician = db.execute(
-        "SELECT user_id, full_name FROM users WHERE user_id=? AND role='technician' AND active=1",
+        "SELECT user_id, full_name FROM users WHERE user_id=? AND active=1 AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=users.user_id AND ur.role='technician')",
         (technician_text,)
     ).fetchone() if technician_text.isdigit() else None
     if not technician:
