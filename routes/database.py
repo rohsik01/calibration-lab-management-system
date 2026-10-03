@@ -54,6 +54,7 @@ def database_maintenance():
         ("audit_log", "Audit log"),
         ("notifications", "Notifications"),
         ("users", "Users"),
+        ("user_roles", "User roles"),
     ]
     counts = [
         (label, table, db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
