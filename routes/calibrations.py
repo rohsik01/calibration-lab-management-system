@@ -863,7 +863,10 @@ def calibration_certificate_preview(cal_id):
         (cal_id,)
     ).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    return render_template("certificate.html", r=r, pts=pts, det=details, preview=True)
+    standards = calibration_reference_standards(db, cal_id)
+    standard = standards[0] if standards else None
+    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard,
+                           standards=standards, preview=True)
 
 
 @app.route("/certificate/<cert>")
@@ -910,12 +913,8 @@ def certificate(cert):
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    standard = None
-    if r["standard_id"]:
-        standard = db.execute(
-            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
-            (r["standard_id"],)
-        ).fetchone()
+    standards = calibration_reference_standards(db, r["cal_id"])
+    standard = standards[0] if standards else None
 
     # Official QR contains only a signed verification URL. The complete report
     # remains server-side so withdrawal/supersession is reflected immediately.
@@ -923,7 +922,7 @@ def certificate(cert):
     verification_url = certificate_verification_url(cert, token)
     qr_code = _qr_data_uri(verification_url)
     return render_template(
-        "certificate.html", r=r, pts=pts, det=details, standard=standard,
+        "certificate.html", r=r, pts=pts, det=details, standard=standard, standards=standards,
         preview=False, qr_code=qr_code, verification_url=verification_url,
     )
 
@@ -961,6 +960,8 @@ def certificate_pdf(cert):
         abort(503, "PDF generation requires reportlab.")
 
     verification_url = certificate_verification_url(cert)
+    standards = calibration_reference_standards(db, r["cal_id"])
+    standard = standards[0] if standards else None
     qr = qrcode.make(verification_url)
     qr_bytes = io.BytesIO()
     qr.save(qr_bytes, format="PNG")
@@ -1022,6 +1023,7 @@ def certificate_pdf(cert):
     pdf.drawString(left_x, y, "INSTRUMENT DETAILS")
     y -= 12
 
+    standard_summary = "; ".join(std["code"] for std in standards) if standards else "—"
     fields = (
         ("Instrument", r["sensor_type"] or "—"),
         ("Serial number", r["serial_number"] or "—"),
@@ -1029,6 +1031,7 @@ def certificate_pdf(cert):
         ("Unit", r["unit"] or "—"),
         ("Calibration date", r["cal_date"] or "—"),
         ("Next due", r["next_due"] or "—"),
+        ("Ref. standards", standard_summary),
     )
     label_x = left_x
     value_x = left_x + 62
@@ -1310,12 +1313,8 @@ def verify_certificate(cert, token):
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    standard = None
-    if r["standard_id"]:
-        standard = db.execute(
-            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
-            (r["standard_id"],)
-        ).fetchone()
-    return render_template("certificate_full.html", r=r, pts=pts, det=details, standard=standard)
+    standards = calibration_reference_standards(db, r["cal_id"])
+    standard = standards[0] if standards else None
+    return render_template("certificate_full.html", r=r, pts=pts, det=details, standard=standard, standards=standards)
 
 
