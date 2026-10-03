@@ -18,18 +18,18 @@
 {% if q or status_filter %}<a class="btn alt" href="{{ url_for('work_orders') }}">{{ tr("Clear") }}</a>{% endif %}
 </form>
 <div class="scroll"><table class="js-table">
-<tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument / service") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Assigned") }}</th><th>{{ tr("Target date") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
+<tr><th>{{ tr("Work order") }}</th><th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument / service") }}</th><th>{{ tr("Technician") }}</th><th>{{ tr("Reference standards") }}</th><th>{{ tr("Assigned") }}</th><th>{{ tr("Target date") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
 {% for w in rows %}
 <tr>
 <td><a href="{{ url_for('work_order_detail', work_order_id=w.work_order_id) }}"><b>{{ w.work_order_no }}</b></a></td>
 <td><a href="{{ url_for('calibration_request', request_id=w.request_id) }}">{{ w.request_no }}</a></td>
 <td>{{ w.client_name }}</td>
 <td>{{ w.instrument_description }}<small class="hint">{{ w.requested_service }}</small></td>
-<td>{{ w.technician_name }}</td><td>{{ date_pair(w.assigned_at[:10]) }}</td><td>{{ date_pair(w.target_date) }}</td>
+<td>{{ w.technician_name }}</td><td>{{ w.standard_codes or '—' }}</td><td>{{ date_pair(w.assigned_at[:10]) }}</td><td>{{ date_pair(w.target_date) }}</td>
 <td><span class="badge {{ 'red' if w.priority == 'Urgent' else 'amber' if w.priority == 'High' else 'grey' }}">{{ w.priority }}</span></td>
 <td><span class="badge {{ 'green' if w.status == 'COMPLETED' else 'amber' if w.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ w.status }}</span></td>
 </tr>
-{% else %}<tr><td colspan="9" class="empty">{{ tr("No work orders found.") }}</td></tr>{% endfor %}
+{% else %}<tr><td colspan="10" class="empty">{{ tr("No work orders found.") }}</td></tr>{% endfor %}
 </table></div>
 </div>
 {% endblock %}
