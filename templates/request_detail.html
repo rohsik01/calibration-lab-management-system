@@ -63,6 +63,7 @@
 <div><label>{{ tr("Assigned technician") }}</label><div>{{ work_order.technician_name }}</div></div>
 <div><label>{{ tr("Assigned at") }}</label><div>{{ work_order.assigned_at }}</div></div>
 <div><label>{{ tr("Work order status") }}</label><div><span class="badge {{ 'green' if work_order.status == 'COMPLETED' else 'amber' if work_order.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ work_order.status }}</span></div></div>
+<div><label>{{ tr("Reference standards") }}</label><div>{% if work_order_standards %}{% for st in work_order_standards %}<span class="chip">{{ st.code }} — {{ st.name }}{% if loop.first %} · {{ tr("Primary") }}{% endif %}</span>{% endfor %}{% else %}—{% endif %}</div></div>
 </div>
 {% else %}
 <p class="sub">{{ tr("No technician has been assigned to this request yet.") }}</p>
@@ -91,10 +92,11 @@
 </select>
 <small class="hint">{{ tr("Use an approved laboratory procedure for this calibration.") }}</small></div>
 <div><label>{{ tr("Calibration method / procedure reference") }}</label><input name="calibration_method" value="{{ work_order.calibration_method if work_order else '' }}" placeholder="{{ tr('Optional additional method reference') }}"></div>
-<div><label>{{ tr("Reference standard") }}</label>
-<select name="standard_id"><option value="">{{ tr("Select later / not specified") }}</option>
-{% for st in standards %}<option value="{{ st.standard_id }}" {{ 'selected' if work_order and work_order.standard_id == st.standard_id }}>{{ st.code }} — {{ st.name }} ({{ tr("valid until") }} {{ st.valid_until }})</option>{% endfor %}
-</select></div>
+<div><label>{{ tr("Reference standards") }}</label>
+<select name="standard_id" class="multi-select" multiple size="6" required>
+{% for st in standards %}<option value="{{ st.standard_id }}" {{ 'selected' if work_order_standards and st.standard_id in work_order_standards|map(attribute='standard_id')|list else '' }}>{{ st.code }} — {{ st.name }} ({{ tr("valid until") }} {{ st.valid_until }})</option>{% endfor %}
+</select>
+<small class="hint">{{ tr("Select every reference standard designated for this work order. The first selected standard is the primary standard.") }}</small></div>
 </div>
 <div style="margin-top:12px"><label>{{ tr("Technician instructions") }}</label><textarea name="instructions" rows="3">{{ work_order.instructions if work_order else '' }}</textarea></div>
 <div class="actions" style="margin-top:14px"><button class="btn" {{ 'disabled' if not technicians }}>{{ tr("Create / update work order") }}</button></div>
