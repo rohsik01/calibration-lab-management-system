@@ -49,7 +49,7 @@ def build_operational_alerts(db):
                                 JOIN calibration_requests r ON r.request_id=c.request_id
                                 WHERE rh.decision='PENDING'
                                 ORDER BY rh.submitted_at DESC""").fetchall()
-    if g.user["role"] == "admin":
+    if user_has_role("admin") or user_has_role("superadmin"):
         for r in review_rows:
             add_alert("review", "critical", "Calibration awaiting review",
                       f"{r['request_no']} / {r['certificate_no']} is waiting for administrator review.",
