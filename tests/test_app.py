@@ -634,3 +634,54 @@ def test_general_users_can_access_notification_center():
     assert 'href="{{ url_for(\'alerts\') }}"' in base_source
     assert 'if not has_role(\'general_user\')' in base_source
     assert 'user_has_role("general_user")' in notifications_source
+
+
+def test_multiple_reference_standards_schema_and_backfill_are_defined():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS calibration_reference_standards" in app_source
+    assert "INSERT OR IGNORE INTO calibration_reference_standards" in app_source
+    assert "idx_calibration_reference_standards_standard" in app_source
+    assert "idx_calibration_reference_standards_cal" in app_source
+
+
+def test_calibration_routes_validate_and_persist_multiple_reference_standards():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/calibrations.py").read_text(encoding="utf-8")
+    assert "def selected_reference_standards" in route_source
+    assert 'form.getlist("standard_id")' in route_source
+    assert "persist_calibration_reference_standards" in route_source
+    assert "selection_order" in route_source
+    assert "is_primary" in route_source
+    assert "At least one registered reference standard" in route_source
+
+
+def test_calibration_forms_use_multi_select_registered_standards():
+    for name in ("calibrate.html", "calibrate_pending.html"):
+        source = Path(__file__).resolve().parents[1].joinpath("templates", name).read_text(encoding="utf-8")
+        assert 'name="standard_id"' in source
+        assert 'multiple size="6"' in source
+        assert "selected_standard_ids" in source
+        assert "Select every reference standard used for this calibration" in source
+        assert "Other — not in the register" not in source
+
+
+def test_revision_snapshots_and_certificate_fingerprints_include_all_reference_standards():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/calibrations.py").read_text(encoding="utf-8")
+    assert '"reference_standards": [dict(s) for s in standards]' in app_source
+    assert '"reference_standards": [dict(s) for s in calibration_reference_standards(db, cal_id)]' in app_source
+    assert "standards = calibration_reference_standards(db, cal_id)" in route_source
+    assert "standards=standards" in route_source
+
+
+def test_reference_standard_usage_includes_secondary_standards():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/standards.py").read_text(encoding="utf-8")
+    assert "calibration_reference_standards crs" in route_source
+    assert "SELECT COUNT(*) FROM calibration_reference_standards" in route_source
+
+
+def test_reference_standard_ui_uses_multi_role_admin_permissions():
+    for name in ("standard.html", "standards.html"):
+        source = Path(__file__).resolve().parents[1].joinpath("templates", name).read_text(encoding="utf-8")
+        assert "has_role('admin') or has_role('superadmin')" in source
+        assert "g.user.role == 'admin'" not in source
+        assert 'g.user.role == "admin"' not in source
