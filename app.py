@@ -1498,7 +1498,7 @@ def gate():
         return redirect(url_for("login", next=request.full_path.rstrip("?")))
     if g.user and g.user["role"] == "general_user":
         allowed = {"index", "calibration_requests", "new_calibration_request",
-                   "calibration_request", "certificate", "verify_certificate", "account", "logout",
+                   "calibration_request", "certificate", "certificate_pdf", "verify_certificate", "account", "logout",
                    "set_lang", "static"}
         if request.endpoint not in allowed:
             abort(403)
