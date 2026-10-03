@@ -1323,6 +1323,14 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id, actor_
     if cal["request_id"] != wo["request_id"]:
         raise ValueError("Calibration does not belong to this work order.")
     if wo["status"] != "IN PROGRESS":
+        if actor_id is not None:
+            audit_calibration_workflow_rejection(
+                "CALIBRATION_SUBMISSION_REJECTED",
+                work_order_id,
+                cal_id,
+                {"reason": "Work order is not IN PROGRESS.", "actor_id": actor_id,
+                 "work_order_status": wo["status"]},
+            )
         raise ValueError("A calibration can only be submitted from an IN PROGRESS work order.")
     if actor_id is not None and wo["assigned_technician_id"] != actor_id:
         audit_calibration_workflow_rejection(
@@ -1333,6 +1341,14 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id, actor_
         )
         raise ValueError("Only the technician assigned to this work order can submit the calibration.")
     if cal["lifecycle_status"] not in ("DRAFT", "RETURNED"):
+        if actor_id is not None:
+            audit_calibration_workflow_rejection(
+                "CALIBRATION_SUBMISSION_REJECTED",
+                work_order_id,
+                cal_id,
+                {"reason": "Calibration lifecycle does not allow submission.",
+                 "actor_id": actor_id, "lifecycle_status": cal["lifecycle_status"]},
+            )
         raise ValueError("Only a draft or returned calibration can be submitted.")
     if not cal["revision_no"] or cal["revision_no"] < 1:
         raise ValueError("Calibration revision is invalid.")
@@ -1378,7 +1394,15 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id, actor_
     expected_result = "FAIL" if any(abs(final_errors[i]) > points[i]["tolerance"] for i in range(len(points))) else "PASS"
     expected_mean = round(sum(final_errors) / len(final_errors), 6)
     expected_max = round(max(abs(x) for x in final_errors), 6)
-    if cal["result"] != expected_result or not math.isclose(float(cal["mean_error"]), expected_mean, abs_tol=1e-6) or not math.isclose(float(cal["max_error"]), expected_max, abs_tol=1e-6):
+    try:
+        summary_matches = (
+            cal["result"] == expected_result
+            and math.isclose(float(cal["mean_error"]), expected_mean, abs_tol=1e-6)
+            and math.isclose(float(cal["max_error"]), expected_max, abs_tol=1e-6)
+        )
+    except (TypeError, ValueError):
+        summary_matches = False
+    if not summary_matches:
         raise ValueError("Stored calibration summary does not match the measurement points.")
     if not cal["standard_id"]:
         raise ValueError("A registered reference standard is required for a controlled calibration.")
