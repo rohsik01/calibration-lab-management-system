@@ -7,8 +7,14 @@ from app import _qr_data_uri
 def selected_reference_standards(db, form, cal_date, required_standard_ids=None):
     """Validate and snapshot one or more registered reference standards for a calibration."""
     required_standard_ids = [int(x) for x in (required_standard_ids or [])]
+    if hasattr(form, "getlist"):
+        raw_ids = form.getlist("standard_id")
+    else:
+        raw_ids = form.get("standard_id", [])
+        if not isinstance(raw_ids, (list, tuple)):
+            raw_ids = [raw_ids]
     ids = []
-    for raw in form.getlist("standard_id"):
+    for raw in raw_ids:
         raw = str(raw).strip()
         if not raw:
             continue
