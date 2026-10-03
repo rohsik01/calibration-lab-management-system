@@ -71,7 +71,14 @@ def work_orders():
     sql = """
         SELECT w.*, r.request_no, r.client_name, r.instrument_description,
                r.requested_service, r.priority, r.sensor_id,
-               u.full_name AS technician_name, a.full_name AS assigned_by_name, cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision
+               u.full_name AS technician_name, a.full_name AS assigned_by_name, cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
+               (SELECT GROUP_CONCAT(code, '; ') FROM (
+                    SELECT rs.code
+                    FROM work_order_reference_standards crs
+                    JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+                    WHERE crs.work_order_id=w.work_order_id
+                    ORDER BY crs.selection_order
+                )) AS standard_codes
         FROM calibration_work_orders w
         JOIN calibration_requests r ON r.request_id=w.request_id
         JOIN users u ON u.user_id=w.assigned_technician_id
