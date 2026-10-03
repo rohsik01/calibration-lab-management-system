@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS calibrations (
     uncertainty_calculation_json TEXT,
     environment_temperature REAL,
     environment_humidity REAL,
-    certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER);
+    certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER,
+    certificate_status TEXT NOT NULL DEFAULT 'NONE' CHECK (certificate_status IN ('NONE','ACTIVE','WITHDRAWN','SUPERSEDED')),
+    certificate_fingerprint TEXT, certificate_reissued_from TEXT, certificate_reissued_at TEXT);
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -246,6 +248,20 @@ CREATE TABLE IF NOT EXISTS calibration_review_history (
         CHECK (decision IN ('PENDING','APPROVED','RETURNED')),
     comments TEXT
 );
+
+CREATE TABLE IF NOT EXISTS certificate_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id),
+    certificate_no TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN ('ISSUED','REISSUED','WITHDRAWN','SUPERSEDED')),
+    previous_certificate_no TEXT,
+    fingerprint TEXT,
+    reason TEXT,
+    changed_by INTEGER REFERENCES users(user_id),
+    changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_certificate_history_cert ON certificate_history(certificate_no, history_id DESC);
+CREATE INDEX IF NOT EXISTS idx_certificate_history_cal ON certificate_history(cal_id, history_id DESC);
 
 CREATE TABLE IF NOT EXISTS notifications (
     notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -945,6 +961,32 @@ with sqlite3.connect(DB, timeout=30) as _c:
             _c.execute("UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
                        (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row[0]))
 
+    # Backfill certificate status/history metadata for legacy approved certificates.
+    _approved_for_integrity = _c.execute(
+        "SELECT cal_id, certificate_no, approved_revision FROM calibrations "
+        "WHERE lifecycle_status='APPROVED' AND certificate_no IS NOT NULL"
+    ).fetchall()
+    for _row in _approved_for_integrity:
+        _c.execute(
+            "UPDATE calibrations SET certificate_status=CASE WHEN certificate_status='NONE' THEN 'ACTIVE' ELSE certificate_status END "
+            "WHERE cal_id=?",
+            (_row["cal_id"],),
+        )
+        if not _c.execute(
+            "SELECT 1 FROM certificate_history WHERE cal_id=? AND event_type='ISSUED' LIMIT 1",
+            (_row["cal_id"],),
+        ).fetchone():
+            try:
+                _fp = build_certificate_fingerprint(_c, _row["cal_id"])
+            except Exception:
+                _fp = None
+            _c.execute(
+                "INSERT INTO certificate_history(cal_id,certificate_no,event_type,fingerprint,changed_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)",
+                (_row["cal_id"], _row["certificate_no"], "ISSUED", _fp),
+            )
+            if _fp:
+                _c.execute("UPDATE calibrations SET certificate_fingerprint=? WHERE cal_id=?", (_fp, _row["cal_id"]))
+
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
@@ -961,6 +1003,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
     CREATE INDEX IF NOT EXISTS idx_calibrations_procedure_id ON calibrations(procedure_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_request_id ON calibrations(request_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_lifecycle ON calibrations(lifecycle_status);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_certificate_status ON calibrations(certificate_status);
+    CREATE INDEX IF NOT EXISTS idx_calibrations_certificate_fingerprint ON calibrations(certificate_fingerprint);
     CREATE INDEX IF NOT EXISTS idx_calibration_revisions_cal ON calibration_revisions(cal_id, revision_no DESC);
     CREATE INDEX IF NOT EXISTS idx_calibration_points_cal_id ON calibration_points(cal_id);
     CREATE INDEX IF NOT EXISTS idx_calibration_points_result ON calibration_points(result);
@@ -1381,6 +1425,60 @@ def _qr_data_uri(uri):
     out = io.BytesIO()
     img.save(out, format="PNG")
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+
+def build_certificate_fingerprint(db, cal_id):
+    """Create a stable SHA-256 fingerprint of the approved certificate record."""
+    cal = db.execute("SELECT * FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if not cal:
+        raise ValueError("Calibration record not found.")
+    points = db.execute(
+        "SELECT point_no, reference_value, tolerance, as_found_value, as_found_error, "
+        "as_found_result, as_left_value, as_left_error, as_left_result, result "
+        "FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+        (cal_id,),
+    ).fetchall()
+    payload = {
+        "certificate_no": cal["certificate_no"],
+        "approved_revision": cal["approved_revision"],
+        "cal_id": cal["cal_id"],
+        "cal_date": cal["cal_date"],
+        "sensor_id": cal["sensor_id"],
+        "reference_standard": cal["reference_standard"],
+        "standard_id": cal["standard_id"],
+        "standard_details": cal["standard_details"],
+        "procedure_id": cal["procedure_id"],
+        "result": cal["result"],
+        "next_due": cal["next_due"],
+        "mean_error": cal["mean_error"],
+        "max_error": cal["max_error"],
+        "adjustment_status": cal["adjustment_status"],
+        "adjustment_notes": cal["adjustment_notes"],
+        "technician_remarks": cal["technician_remarks"],
+        "standard_uncertainty": cal["standard_uncertainty"],
+        "resolution": cal["resolution"],
+        "repeatability": cal["repeatability"],
+        "environmental_uncertainty": cal["environmental_uncertainty"],
+        "other_uncertainty": cal["other_uncertainty"],
+        "combined_standard_uncertainty": cal["combined_standard_uncertainty"],
+        "coverage_factor": cal["coverage_factor"],
+        "expanded_uncertainty": cal["expanded_uncertainty"],
+        "uncertainty_method": cal["uncertainty_method"],
+        "environment_temperature": cal["environment_temperature"],
+        "environment_humidity": cal["environment_humidity"],
+        "points": [dict(p) for p in points],
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def certificate_verification_url(certificate_no, token=None):
+    """Build the QR verification URL, using a deployment-configurable public base URL."""
+    token = token or certificate_verification_token(certificate_no)
+    base = os.environ.get("CALIBRATION_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if base:
+        return f"{base}{url_for('verify_certificate', cert=certificate_no, token=token)}"
+    return url_for("verify_certificate", cert=certificate_no, token=token, _external=True)
 
 
 def certificate_verification_token(certificate_no):
