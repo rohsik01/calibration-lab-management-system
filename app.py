@@ -1666,7 +1666,7 @@ def create_superadmin_cli():
     db.row_factory = sqlite3.Row
     _configure_connection(db)
     try:
-        if db.execute("SELECT COUNT(*) FROM users WHERE role='superadmin' AND active=1").fetchone()[0]:
+        if db.execute("SELECT COUNT(*) FROM user_roles ur JOIN users u ON u.user_id=ur.user_id WHERE ur.role='superadmin' AND u.active=1").fetchone()[0]:
             print("An active superadmin already exists.", flush=True)
             return 1
         username = input("Superadmin username: ").strip()
@@ -1681,10 +1681,11 @@ def create_superadmin_cli():
             print("Username is required.", flush=True)
             return 1
         try:
-            db.execute(
+            cur = db.execute(
                 "INSERT INTO users(username, full_name, password_hash, role) VALUES (?,?,?,'superadmin')",
                 (username, full_name, generate_password_hash(password))
             )
+            db.execute("INSERT INTO user_roles(user_id, role) VALUES (?, 'superadmin')", (cur.lastrowid,))
             db.commit()
         except sqlite3.IntegrityError:
             print("That username already exists.", flush=True)
