@@ -643,6 +643,9 @@ def test_multiple_reference_standards_schema_and_backfill_are_defined():
     assert "INSERT OR IGNORE INTO calibration_reference_standards" in app_source
     assert "idx_calibration_reference_standards_standard" in app_source
     assert "idx_calibration_reference_standards_cal" in app_source
+    assert "idx_calibration_reference_standards_one_primary" in app_source
+    assert "CREATE TABLE IF NOT EXISTS work_order_reference_standards" in app_source
+    assert "idx_work_order_reference_standards_one_primary" in app_source
 
 
 def test_calibration_routes_validate_and_persist_multiple_reference_standards():
