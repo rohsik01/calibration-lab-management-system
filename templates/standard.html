@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% block title %}{{ x.code }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ x.code }} — {{ x.name }}</h1>
 {% set st = std_status(x) %}<p><span class="badge {{ st[1] }}">{{ stl(st[0]) }}</span></p>
-<div class="actions">{% if g.user.role == 'admin' %}<a class="btn" href="{{ url_for('edit_standard', sid=x.standard_id) }}">{{ tr("Edit / recalibrated") }}</a><form method="post" action="{{ url_for('delete_standard', sid=x.standard_id) }}" style="display:inline" onsubmit="return confirm('Deactivate this reference standard? The record will be retained for traceability.')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Deactivate") }}</button></form>{% endif %}
+<div class="actions">{% if has_role('admin') or has_role('superadmin') %}<a class="btn" href="{{ url_for('edit_standard', sid=x.standard_id) }}">{{ tr("Edit / recalibrated") }}</a><form method="post" action="{{ url_for('delete_standard', sid=x.standard_id) }}" style="display:inline" onsubmit="return confirm('Deactivate this reference standard? The record will be retained for traceability.')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Deactivate") }}</button></form>{% endif %}
 <a class="btn alt" href="{{ url_for('standard_history', sid=x.standard_id) }}">{{ tr("View standard history") }}</a>
 <a class="btn alt" href="{{ url_for('standards') }}">← {{ tr("All reference standards") }}</a></div>
 <table>
