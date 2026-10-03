@@ -29,12 +29,13 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:center
 <body>
 <div class="page">
 <header class="masthead"><div><div class="brand">{{ banner[2] or "DHM" }}</div><div>{{ banner[3] or "Calibration Laboratory" }}</div><div class="note">{{ banner[0] }} · {{ banner[1] }}</div></div><div class="right-title">CERTIFICATE VERIFICATION<small>Trusted · Accurate · Traceable</small></div></header>
-<div class="verified"><div class="check">✓</div><div><strong>Certificate Verified</strong><small>This certificate is recorded as officially approved by the DHM Calibration Laboratory.</small></div><span class="status">VALID · APPROVED</span></div>
+<div class="verified"><div class="check">✓</div><div><strong>Certificate Verified</strong><small>This certificate is recorded as officially approved and its stored fingerprint matches the current controlled laboratory record.</small></div><span class="status">VALID · APPROVED</span></div>
 
 <section class="section"><h2>Certificate Information</h2><div class="body fields">
 <div class="field"><span class="label">Certificate No.</span><span class="value">{{ r.certificate_no }}</span></div><div class="field"><span class="label">Lifecycle status</span><span class="value">Approved</span></div>
 <div class="field"><span class="label">Calibration date</span><span class="value">{{ r.cal_date }}</span></div><div class="field"><span class="label">Next due date</span><span class="value">{{ r.next_due }}</span></div>
 <div class="field"><span class="label">Certificate issue date</span><span class="value">{{ r.certificate_issued_at[:10] if r.certificate_issued_at else "—" }}</span></div><div class="field"><span class="label">Approved revision</span><span class="value">{{ r.approved_revision or "—" }}</span></div>
+<div class="field"><span class="label">Certificate fingerprint</span><span class="value">{{ r.certificate_fingerprint or "—" }}</span></div>
 <div class="field"><span class="label">Approved by</span><span class="value">{{ r.approved_by or "—" }}</span></div><div class="field"><span class="label">Issued by</span><span class="value">{{ r.certificate_issued_by_name or "—" }}</span></div>
 </div></section>
 
