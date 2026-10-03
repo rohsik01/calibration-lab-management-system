@@ -177,17 +177,18 @@ def decide_calibration_review(review_id):
                 "SELECT certificate_no FROM calibrations WHERE cal_id=?",
                 (review["cal_id"],)
             ).fetchone()
-            official_cert = existing_cert["certificate_no"] if existing_cert else None
-            if not official_cert:
-                cal_row = db.execute(
-                    "SELECT cal_date FROM calibrations WHERE cal_id=?",
-                    (review["cal_id"],)
-                ).fetchone()
-                if not cal_row:
-                    db.rollback()
-                    flash("Cannot approve: calibration record not found.", "error")
-                    return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
-                official_cert = next_certificate(db, cal_row["cal_date"])
+            previous_cert = existing_cert["certificate_no"] if existing_cert else None
+            cal_row = db.execute(
+                "SELECT cal_date FROM calibrations WHERE cal_id=?",
+                (review["cal_id"],)
+            ).fetchone()
+            if not cal_row:
+                db.rollback()
+                flash("Cannot approve: calibration record not found.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+            # A corrected revision is a new controlled certificate. The previous
+            # certificate remains discoverable but becomes SUPERSEDED.
+            official_cert = next_certificate(db, cal_row["cal_date"])
             submitted_revision = review["submitted_revision"]
             cal_state = db.execute(
                 "SELECT revision_no, lifecycle_status FROM calibrations WHERE cal_id=?",
@@ -219,10 +220,17 @@ def decide_calibration_review(review_id):
             )
             db.execute(
                 """INSERT INTO certificate_history
-                   (cal_id, certificate_no, event_type, fingerprint, changed_by, changed_at)
-                   VALUES (?,?,'ISSUED',?,?,?)""",
-                (review["cal_id"], official_cert, fingerprint, g.user["user_id"], now),
+                   (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, changed_by, changed_at)
+                   VALUES (?,?,'ISSUED',?,?,?,?)""",
+                (review["cal_id"], official_cert, previous_cert, fingerprint, g.user["user_id"], now),
             )
+            if previous_cert and previous_cert != official_cert:
+                db.execute(
+                    """INSERT INTO certificate_history
+                       (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, changed_by, changed_at)
+                       VALUES (?,?,'SUPERSEDED',?,?,?,?,?)""",
+                    (review["cal_id"], previous_cert, official_cert, None, g.user["user_id"], now),
+                )
             audit_event(
                 "CALIBRATION_CERTIFICATE_ISSUED",
                 "calibration", review["cal_id"],
