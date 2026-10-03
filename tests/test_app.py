@@ -5,6 +5,7 @@ import pytest
 
 from app import app as flask_app, calculate_measurement_uncertainty
 from routes.calibrations import calibration_delete_blocked
+from routes.sensors import sensor_delete_blocked
 
 
 @pytest.fixture
@@ -114,3 +115,48 @@ def test_calibration_history_template_only_offers_delete_for_unrevisioned_drafts
     assert "not h.certificate_no" in template
     assert "not h.revision_no" in template
     assert 'tr("Protected")' in template
+
+
+
+@pytest.mark.parametrize(
+    "rows,blocked",
+    [
+        ([], False),
+        ([{"lifecycle_status": "DRAFT", "certificate_no": None, "revision_count": 0, "review_count": 0}], False),
+        ([{"lifecycle_status": "APPROVED", "certificate_no": "CAL-2026-0001", "revision_count": 1, "review_count": 1}], True),
+        ([{"lifecycle_status": "SUBMITTED", "certificate_no": None, "revision_count": 1, "review_count": 1}], True),
+        ([{"lifecycle_status": "RETURNED", "certificate_no": None, "revision_count": 2, "review_count": 1}], True),
+        ([{"lifecycle_status": "DRAFT", "certificate_no": "CAL-2026-0002", "revision_count": 0, "review_count": 0}], True),
+        ([{"lifecycle_status": "DRAFT", "certificate_no": None, "revision_count": 1, "review_count": 0}], True),
+        ([{"lifecycle_status": "DRAFT", "certificate_no": None, "revision_count": 0, "review_count": 1}], True),
+        (
+            [
+                {"lifecycle_status": "DRAFT", "certificate_no": None, "revision_count": 0, "review_count": 0},
+                {"lifecycle_status": "APPROVED", "certificate_no": "CAL-2026-0003", "revision_count": 1, "review_count": 1},
+            ],
+            True,
+        ),
+    ],
+)
+def test_sensor_delete_protection_preserves_any_controlled_calibration_history(rows, blocked):
+    assert sensor_delete_blocked(rows) is blocked
+
+
+def test_sensor_delete_route_checks_calibration_history_and_audits_blocked_attempts():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "sensors.py"
+    route_source = route_path.read_text(encoding="utf-8")
+
+    assert "def sensor_delete_blocked(calibration_rows):" in route_source
+    assert "calibration_revisions cr WHERE cr.cal_id=c.cal_id" in route_source
+    assert "calibration_review_history rh WHERE rh.cal_id=c.cal_id" in route_source
+    assert 'audit_event(' in route_source
+    assert '"SENSOR_DELETE_BLOCKED"' in route_source
+    assert "Retain the sensor and calibration records for traceability." in route_source
+
+
+def test_sensor_history_ui_does_not_offer_sensor_deletion_when_calibrations_exist():
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "sensor.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    assert 'g.user.role == "admin" and not hist' in template
+    assert "Sensor protected by calibration history" in template
