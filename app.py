@@ -1106,8 +1106,7 @@ def bs_date_pair(iso_value):
         return str(iso_value)
 
 app.jinja_env.globals.update(tr=tr, stl=status_label, status_key=status_key,
-                             std_status=standard_status, date_pair=bs_date_pair,
-                             has_role=user_has_role)
+                             std_status=standard_status, date_pair=bs_date_pair)
 
 
 @app.context_processor
@@ -1594,6 +1593,8 @@ def user_roles_for(user_id):
         "WHEN 'technician' THEN 4 ELSE 5 END", (user_id,)
     ).fetchall()]
 
+
+app.jinja_env.globals["has_role"] = user_has_role
 
 def admin_required(f):
     """Require a laboratory administrator or superadministrator role."""
