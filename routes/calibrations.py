@@ -861,6 +861,18 @@ def certificate(cert):
 
     if r["lifecycle_status"] != "APPROVED":
         abort(404)
+    if r["certificate_status"] != "ACTIVE":
+        latest = db.execute(
+            "SELECT reason, previous_certificate_no FROM certificate_history "
+            "WHERE certificate_no=? ORDER BY history_id DESC LIMIT 1", (cert,)
+        ).fetchone()
+        return render_template(
+            "certificate_status.html",
+            certificate_no=cert,
+            status=r["certificate_status"] or "INVALID",
+            reason=latest["reason"] if latest else None,
+            replacement=latest["previous_certificate_no"] if latest else None,
+        )
 
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
