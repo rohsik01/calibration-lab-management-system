@@ -4,8 +4,9 @@ from app import _qr_data_uri
 
 
 
-def selected_reference_standards(db, form, cal_date):
+def selected_reference_standards(db, form, cal_date, required_standard_ids=None):
     """Validate and snapshot one or more registered reference standards for a calibration."""
+    required_standard_ids = [int(x) for x in (required_standard_ids or [])]
     ids = []
     for raw in form.getlist("standard_id"):
         raw = str(raw).strip()
@@ -18,6 +19,11 @@ def selected_reference_standards(db, form, cal_date):
             ids.append(sid)
     if not ids:
         raise ValueError("At least one registered reference standard must be selected.")
+    if required_standard_ids:
+        if any(sid not in ids for sid in required_standard_ids):
+            raise ValueError("The calibration must include every reference standard designated on the work order.")
+        if ids[0] != required_standard_ids[0]:
+            raise ValueError("The work order primary reference standard must remain the primary calibration standard.")
     standards = []
     for sid in ids:
         std = db.execute(
@@ -198,6 +204,11 @@ def calibrate(sensor_id):
             "SELECT work_order_id, assigned_technician_id, status, procedure_id FROM calibration_work_orders WHERE request_id=?",
             (int(linked_request_id),)
         ).fetchone()
+        linked_order_standard_rows = db.execute(
+            "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+            (linked_order["work_order_id"],)
+        ).fetchall() if linked_order else []
+        linked_order_standard_ids = [r["standard_id"] for r in linked_order_standard_rows]
         if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
         procedure_id = linked_order["procedure_id"]
@@ -248,7 +259,7 @@ def calibrate(sensor_id):
             flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
         try:
-            standards_selected = selected_reference_standards(db, f, cal_date)
+            standards_selected = selected_reference_standards(db, f, cal_date, linked_order_standard_ids)
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
@@ -419,7 +430,8 @@ def calibrate(sensor_id):
         "WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY request_id DESC"
     ).fetchall()
     return render_template("calibrate.html", s=s, today=date.today().isoformat(),
-                           standards=standards_, selected_standard_ids=[], requests=requests_, procedure=procedure, procedure_points=procedure_points)
+                           standards=standards_, selected_standard_ids=linked_order_standard_ids,
+                           requests=requests_, procedure=procedure, procedure_points=procedure_points)
 
 
 @app.route("/calibrate-request/<int:request_id>", methods=["GET", "POST"])
@@ -429,6 +441,11 @@ def calibrate_pending_request(request_id):
     if not req or req["sensor_id"]: abort(404)
     wo=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(request_id,)).fetchone()
     if not wo or wo["assigned_technician_id"]!=g.user["user_id"]: abort(403)
+    work_order_standard_rows = db.execute(
+        "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+        (wo["work_order_id"],)
+    ).fetchall()
+    work_order_standard_ids = [r["standard_id"] for r in work_order_standard_rows]
     procedure_id = wo["procedure_id"]
     procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
     procedure_points = db.execute(
@@ -512,7 +529,7 @@ def calibrate_pending_request(request_id):
             technician_remarks=request.form.get("technician_remarks","").strip()
             if adjustment_status=="PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
-            standards_selected = selected_reference_standards(db, request.form, cal_date)
+            standards_selected = selected_reference_standards(db, request.form, cal_date, work_order_standard_ids)
             std = standards_selected[0]
             std_id = std["standard_id"]
             std_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
