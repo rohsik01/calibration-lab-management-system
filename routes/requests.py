@@ -28,7 +28,7 @@ def calibration_requests():
     rows = db.execute(sql, params).fetchall()
     counts = {st: db.execute("SELECT COUNT(*) FROM calibration_requests WHERE status=?", (st,)).fetchone()[0]
               for st in REQUEST_STATUSES}
-    technicians = db.execute("SELECT user_id, full_name, username FROM users WHERE role='technician' AND active=1 ORDER BY full_name").fetchall()
+    technicians = db.execute("SELECT user_id, full_name, username FROM users WHERE active=1 AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=users.user_id AND ur.role='technician') ORDER BY full_name").fetchall()
     standards = db.execute("SELECT standard_id, code, name, valid_until FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     procedures = db.execute("SELECT procedure_id, code, title, revision FROM calibration_procedures WHERE active=1 ORDER BY code").fetchall()
     return render_template("requests.html", rows=rows, counts=counts,
@@ -38,7 +38,7 @@ def calibration_requests():
 
 @app.route("/requests/new", methods=["GET", "POST"])
 def new_calibration_request():
-    if g.user["role"] != "general_user":
+    if not user_has_role("general_user"):
         abort(403)
     db = get_db()
     sensors_ = db.execute(
@@ -122,7 +122,7 @@ def calibration_request(request_id):
     ).fetchall()
     technicians = db.execute(
         "SELECT user_id, full_name, username FROM users "
-        "WHERE role='technician' AND active=1 ORDER BY full_name"
+        "WHERE active=1 AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=users.user_id AND ur.role='technician') ORDER BY full_name"
     ).fetchall()
     procedures = db.execute(
         "SELECT procedure_id, code, title, instrument_type, method, revision, effective_date FROM calibration_procedures WHERE active=1 ORDER BY instrument_type, code"
