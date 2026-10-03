@@ -123,12 +123,13 @@
         </div>
       </details>
 
-      {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <details class="menu-group" {% if ep in ('alerts','due') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('alerts','due') }}">{{ tr("Attention") }}</summary>
         <div class="submenu">
           <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Notifications") }}{% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
+          {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
           <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}{% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
+          {% endif %}
         </div>
       </details>
 
