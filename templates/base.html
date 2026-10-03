@@ -123,7 +123,7 @@
         </div>
       </details>
 
-      {% if g.user.role != 'general_user' %}
+      {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <details class="menu-group" {% if ep in ('alerts','due') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('alerts','due') }}">{{ tr("Attention") }}</summary>
         <div class="submenu">
