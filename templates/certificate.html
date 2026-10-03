@@ -270,13 +270,13 @@
       <aside class="qr-side">
         {% if qr_code and not preview %}
           <div class="qr-frame">
-            <img src="{{ qr_code }}" alt="QR code containing complete calibration certificate data">
+            <img src="{{ qr_code }}" alt="QR code for official certificate verification">
           </div>
         {% else %}
           <div class="qr-placeholder">QR available<br>after approval</div>
         {% endif %}
-        <div class="qr-label">SCAN FOR COMPLETE DATA</div>
-        <div class="qr-hint">All calibration information is embedded directly in this QR code. No web or localhost link is required.</div>
+        <div class="qr-label">SCAN TO VERIFY</div>
+        <div class="qr-hint">Scan to verify this certificate against the controlled DHM laboratory record and open the complete report.</div>
       </aside>
     </div>
   </div>
