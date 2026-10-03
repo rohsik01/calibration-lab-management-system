@@ -1125,6 +1125,7 @@ def nav_counts():
     sensor_alerts = sum(1 for r in rows if status(r)[0] != "OK")
     standard_alerts = sum(1 for x in stds if standard_status(x)[0] != "Valid")
     pending_reviews = db.execute("SELECT COUNT(*) FROM calibration_review_history WHERE decision='PENDING'").fetchone()[0]
+    calibration_review_count = pending_reviews if (user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")) else 0
     if user_has_role("admin") or user_has_role("superadmin"):
         unassigned = db.execute("""SELECT COUNT(*) FROM calibration_requests r
                                    WHERE r.status='REVIEWED'
