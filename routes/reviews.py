@@ -312,6 +312,10 @@ def decide_calibration_review(review_id):
                     if existing_station:
                         station_id = existing_station["station_id"]
                     else:
+                        if not (user_has_role("admin") or user_has_role("superadmin")):
+                            db.rollback()
+                            flash("Cannot approve: the pending station must be created by an administrator before approval.", "error")
+                            return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                         station_id = db.execute(
                             "INSERT INTO stations(name,location,type,updated_at) VALUES (?,?,?,?)",
                             (req["pending_station_name"], req["pending_station_location"] or "",
