@@ -6,6 +6,7 @@ import pytest
 from app import app as flask_app, calculate_measurement_uncertainty, certificate_verification_token
 from routes.calibrations import calibration_delete_blocked
 from routes.sensors import sensor_delete_blocked
+from routes.users import is_last_active_superadmin
 
 
 @pytest.fixture
@@ -241,3 +242,49 @@ def test_general_users_can_access_certificate_pdf_endpoint():
     app_path = Path(__file__).resolve().parents[1] / "app.py"
     source = app_path.read_text(encoding="utf-8")
     assert '"certificate_pdf"' in source
+
+
+
+def test_last_active_superadmin_cannot_be_deactivated():
+    import sqlite3
+
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.execute("INSERT INTO users VALUES (1, 'superadmin', 1)")
+    user = db.execute("SELECT user_id, role, active FROM users WHERE user_id=1").fetchone()
+
+    assert is_last_active_superadmin(db, user) is True
+
+
+def test_superadmin_can_be_deactivated_when_another_active_superadmin_exists():
+    import sqlite3
+
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.executemany(
+        "INSERT INTO users VALUES (?, 'superadmin', 1)",
+        [(1,), (2,)],
+    )
+    user = db.execute("SELECT user_id, role, active FROM users WHERE user_id=1").fetchone()
+
+    assert is_last_active_superadmin(db, user) is False
+
+
+def test_inactive_or_non_superadmin_does_not_trigger_last_superadmin_guard():
+    import sqlite3
+
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.execute("INSERT INTO users VALUES (1, 'superadmin', 0)")
+    inactive_superadmin = db.execute(
+        "SELECT user_id, role, active FROM users WHERE user_id=1"
+    ).fetchone()
+
+    assert is_last_active_superadmin(db, inactive_superadmin) is False
+
+    db.execute("INSERT INTO users VALUES (2, 'technician', 1)")
+    technician = db.execute("SELECT user_id, role, active FROM users WHERE user_id=2").fetchone()
+    assert is_last_active_superadmin(db, technician) is False

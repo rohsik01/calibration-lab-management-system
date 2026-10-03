@@ -1,6 +1,16 @@
 """Route module: users."""
 from app import *
 
+
+def is_last_active_superadmin(db, user):
+    """Return True when deactivating this user would remove the last active superadmin."""
+    if user["role"] != "superadmin" or not user["active"]:
+        return False
+    active_count = db.execute(
+        "SELECT COUNT(*) FROM users WHERE role='superadmin' AND active=1"
+    ).fetchone()[0]
+    return active_count <= 1
+
 @app.route("/users", methods=["GET", "POST"])
 @superadmin_required
 def users():
@@ -53,12 +63,32 @@ def delete_user(uid):
 @superadmin_required
 def toggle_user(uid):
     if uid == g.user["user_id"]:
-        flash("You cannot deactivate your own account.")
-    else:
-        db = get_db()
-        db.execute("UPDATE users SET active = 1 - active WHERE user_id=?", (uid,))
-        db.commit()
-        flash("User updated.")
+        flash("You cannot deactivate your own account.", "error")
+        return redirect(url_for("users"))
+
+    db = get_db()
+    user = db.execute(
+        "SELECT user_id, username, role, active FROM users WHERE user_id=?", (uid,)
+    ).fetchone()
+    if not user:
+        abort(404)
+
+    if is_last_active_superadmin(db, user):
+        flash("The last active superadministrator cannot be deactivated.", "error")
+        return redirect(url_for("users"))
+
+    new_active = 0 if user["active"] else 1
+    with db:
+        db.execute("UPDATE users SET active=? WHERE user_id=?", (new_active, uid))
+        audit_event(
+            "USER_ACTIVATED" if new_active else "USER_DEACTIVATED",
+            "user",
+            uid,
+            old_value={"active": bool(user["active"])},
+            new_value={"active": bool(new_active)},
+            details={"username": user["username"], "role": user["role"]},
+        )
+    flash("User activated." if new_active else "User deactivated.")
     return redirect(url_for("users"))
 
 
