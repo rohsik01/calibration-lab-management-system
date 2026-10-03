@@ -824,12 +824,12 @@ def calibration_certificate_preview(cal_id):
     ).fetchone()
     if not r:
         abort(404)
-    if g.user["role"] not in ("admin", "superadmin"):
+    if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer")):
         wo = db.execute(
             "SELECT assigned_technician_id FROM calibration_work_orders WHERE request_id=?",
             (r["request_id"],)
         ).fetchone()
-        if not wo or g.user["role"] != "technician" or wo["assigned_technician_id"] != g.user["user_id"]:
+        if not wo or not user_has_role("technician") or wo["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
     pts = db.execute(
         "SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
