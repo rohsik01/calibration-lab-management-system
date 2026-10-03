@@ -15,7 +15,7 @@
 </div>
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ calibration.cal_date if edit_mode else today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="cal-bs">{{ date_pair(today) }}</span></small></div>
 <div><label>{{ tr("Reference standards") }}</label>
-  <select name="standard_id" id="std" multiple size="6" required>
+  <select name="standard_id" id="std" class="multi-select" multiple size="6" required>
     {% for x in standards %}{% set st = std_status(x) %}
     <option value="{{ x.standard_id }}" {{ 'disabled' if st[0] == 'Expired' }} {{ 'selected' if x.standard_id in selected_standard_ids }}>{{ x.code }} — {{ x.name }} ({{ tr("EXPIRED {d}" if st[0] == 'Expired' else "valid until {d}").format(d=x.valid_until) }})</option>{% endfor %}
   </select>
