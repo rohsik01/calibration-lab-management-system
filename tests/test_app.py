@@ -595,3 +595,39 @@ def test_multi_role_authorization_decorators_use_assigned_roles():
         assert admin_action() == "admin-ok"
         assert review_action() == "review-ok"
         assert superadmin_action() == "superadmin-ok"
+
+
+
+def test_role_based_operational_dashboard_data_and_multi_role_sections_are_present():
+    dashboard_source = Path(__file__).resolve().parents[1].joinpath("routes/dashboard.py").read_text(encoding="utf-8")
+    home_source = Path(__file__).resolve().parents[1].joinpath("templates/home.html").read_text(encoding="utf-8")
+
+    assert 'role_dashboard = {}' in dashboard_source
+    assert 'role_dashboard["general_user"]' in dashboard_source
+    assert 'role_dashboard["technician"]' in dashboard_source
+    assert 'role_dashboard["reviewer"]' in dashboard_source
+    assert 'role_dashboard["admin"]' in dashboard_source
+    assert 'role_dashboard["superadmin"]' in dashboard_source
+    assert 'assigned_technician_id=?' in dashboard_source
+    assert "lifecycle_status='RETURNED'" in dashboard_source
+    assert "decision='PENDING'" in dashboard_source
+    assert 'role_dashboard=role_dashboard' in dashboard_source
+
+    assert 'role_dashboard.general_user' in home_source
+    assert 'role_dashboard.technician' in home_source
+    assert 'role_dashboard.reviewer' in home_source
+    assert 'role_dashboard.admin' in home_source
+    assert 'role_dashboard.superadmin' in home_source
+    assert 'My requests' in home_source
+    assert 'My calibration work' in home_source
+    assert 'Review queue' in home_source
+    assert 'Laboratory administration' in home_source
+    assert 'System administration & security' in home_source
+
+
+def test_dashboard_role_sections_are_capability_based_not_exclusive():
+    home_source = Path(__file__).resolve().parents[1].joinpath("templates/home.html").read_text(encoding="utf-8")
+    dashboard_source = Path(__file__).resolve().parents[1].joinpath("routes/dashboard.py").read_text(encoding="utf-8")
+    assert 'if user_has_role("technician")' in dashboard_source
+    assert 'if user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")' in dashboard_source
+    assert "Multiple roles are shown together." in home_source
