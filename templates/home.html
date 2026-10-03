@@ -110,7 +110,7 @@
         {% endfor %}
       </table></div>
       {% else %}<div class="empty">{{ tr("No activity recorded yet.") }}</div>{% endif %}
-      {% if has_role('reviewer') or has_role('admin') or has_role('superadmin') %}<p style="margin:12px 0 0"><a href="{{ url_for('audit_log') }}">{{ tr("Open full audit log →") }}</a></p>{% endif %}
+      {% if has_role('superadmin') %}<p style="margin:12px 0 0"><a href="{{ url_for('audit_log') }}">{{ tr("Open full audit log →") }}</a></p>{% endif %}
     </div>
   </div>
 </div>
