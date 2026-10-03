@@ -163,7 +163,8 @@ def test_sensor_history_ui_does_not_offer_sensor_deletion_when_calibrations_exis
     template_path = Path(__file__).resolve().parents[1] / "templates" / "sensor.html"
     template = template_path.read_text(encoding="utf-8")
 
-    assert 'g.user.role == "admin" and not hist' in template
+    assert "has_role('admin') or has_role('superadmin')" in template
+    assert "not hist" in template
     assert "Sensor protected by calibration history" in template
 
 
