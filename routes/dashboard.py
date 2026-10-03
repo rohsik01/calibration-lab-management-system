@@ -111,6 +111,143 @@ def index():
     std_issues = [x for x in db.execute(
         "SELECT * FROM reference_standards WHERE active=1 ORDER BY valid_until")
         if standard_status(x)[0] != "Valid"]
+    # Role-based operational dashboard data. A user can hold multiple roles, so
+    # each capability section is populated independently and can be shown together.
+    role_dashboard = {}
+    if user_has_role("general_user"):
+        own_requests = db.execute(
+            """SELECT request_id, request_no, status, instrument_description,
+                      received_date, requested_due_date, priority
+               FROM calibration_requests
+               WHERE created_by=?
+               ORDER BY request_id DESC LIMIT 8""",
+            (g.user["full_name"],)
+        ).fetchall()
+        own_counts = {st: db.execute(
+            "SELECT COUNT(*) FROM calibration_requests WHERE created_by=? AND status=?",
+            (g.user["full_name"], st)
+        ).fetchone()[0] for st in REQUEST_STATUSES}
+        own_calibrations = db.execute(
+            """SELECT c.cal_id, c.certificate_no, c.cal_date, c.result,
+                      c.lifecycle_status, c.certificate_status, r.request_no
+               FROM calibrations c JOIN calibration_requests r ON r.request_id=c.request_id
+               WHERE r.created_by=? ORDER BY c.cal_id DESC LIMIT 6""",
+            (g.user["full_name"],)
+        ).fetchall()
+        role_dashboard["general_user"] = {
+            "requests": own_requests, "counts": own_counts, "calibrations": own_calibrations
+        }
+
+    if user_has_role("technician"):
+        my_work_orders = db.execute(
+            """SELECT w.work_order_id, w.work_order_no, w.status, w.target_date,
+                      r.request_no, r.client_name, r.instrument_description,
+                      c.cal_id, c.lifecycle_status, c.revision_no
+               FROM calibration_work_orders w
+               JOIN calibration_requests r ON r.request_id=w.request_id
+               LEFT JOIN calibrations c ON c.request_id=r.request_id
+                  AND c.cal_id=(SELECT MAX(c2.cal_id) FROM calibrations c2 WHERE c2.request_id=r.request_id)
+               WHERE w.assigned_technician_id=?
+                 AND w.status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')
+               ORDER BY CASE w.status WHEN 'IN PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 ELSE 3 END,
+                        w.target_date, w.work_order_id
+               LIMIT 10""",
+            (g.user["user_id"],)
+        ).fetchall()
+        returned_jobs = db.execute(
+            """SELECT c.cal_id, c.certificate_no, c.cal_date, c.revision_no,
+                      r.request_no, r.client_name, h.reviewed_at, h.comments
+               FROM calibrations c
+               JOIN calibration_requests r ON r.request_id=c.request_id
+               JOIN calibration_review_history h ON h.cal_id=c.cal_id
+               WHERE c.lifecycle_status='RETURNED' AND h.decision='RETURNED'
+                 AND c.performed_by=?
+               ORDER BY h.reviewed_at DESC, h.review_id DESC LIMIT 8""",
+            (g.user["full_name"],)
+        ).fetchall()
+        pending_measurements = db.execute(
+            """SELECT COUNT(*) FROM calibration_work_orders w
+               JOIN calibration_requests r ON r.request_id=w.request_id
+               JOIN calibrations c ON c.request_id=r.request_id
+               WHERE w.assigned_technician_id=? AND w.status='IN PROGRESS'
+                 AND c.lifecycle_status IN ('DRAFT','RETURNED')""",
+            (g.user["user_id"],)
+        ).fetchone()[0]
+        completed_by_me = db.execute(
+            """SELECT COUNT(*) FROM calibration_work_orders
+               WHERE assigned_technician_id=? AND status='COMPLETED'""",
+            (g.user["user_id"],)
+        ).fetchone()[0]
+        role_dashboard["technician"] = {
+            "work_orders": my_work_orders, "returned": returned_jobs,
+            "pending_measurements": pending_measurements, "completed": completed_by_me,
+        }
+
+    if user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin"):
+        pending_review_rows = db.execute(
+            """SELECT h.review_id, h.submitted_at, w.work_order_no, r.request_no,
+                      r.client_name, u.full_name AS technician_name
+               FROM calibration_review_history h
+               JOIN calibration_work_orders w ON w.work_order_id=h.work_order_id
+               JOIN calibration_requests r ON r.request_id=w.request_id
+               JOIN users u ON u.user_id=h.submitted_by
+               WHERE h.decision='PENDING'
+               ORDER BY h.submitted_at, h.review_id LIMIT 10"""
+        ).fetchall()
+        recent_review_rows = db.execute(
+            """SELECT h.review_id, h.reviewed_at, h.decision, h.comments,
+                      w.work_order_no, r.request_no, r.client_name
+               FROM calibration_review_history h
+               JOIN calibration_work_orders w ON w.work_order_id=h.work_order_id
+               JOIN calibration_requests r ON r.request_id=w.request_id
+               WHERE h.decision!='PENDING'
+               ORDER BY h.reviewed_at DESC, h.review_id DESC LIMIT 8"""
+        ).fetchall()
+        role_dashboard["reviewer"] = {
+            "pending": pending_review_rows, "recent": recent_review_rows,
+            "pending_count": len(pending_review_rows),
+            "returned_count": db.execute(
+                "SELECT COUNT(*) FROM calibration_review_history WHERE decision='RETURNED'"
+            ).fetchone()[0],
+        }
+
+    if user_has_role("admin") or user_has_role("superadmin"):
+        role_dashboard["admin"] = {
+            "active_requests": db.execute(
+                """SELECT COUNT(*) FROM calibration_requests
+                   WHERE status IN ('RECEIVED','REVIEWED','ASSIGNED','IN CALIBRATION','UNDER REVIEW')"""
+            ).fetchone()[0],
+            "unassigned_reviewed": db.execute(
+                """SELECT COUNT(*) FROM calibration_requests r
+                   WHERE r.status='REVIEWED' AND NOT EXISTS (
+                     SELECT 1 FROM calibration_work_orders w
+                     WHERE w.request_id=r.request_id
+                       AND w.status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW'))"""
+            ).fetchone()[0],
+            "stations": len(stations_),
+            "standards_attention": len(std_issues),
+            "active_technicians": db.execute(
+                """SELECT COUNT(*) FROM users u WHERE u.active=1
+                   AND EXISTS (SELECT 1 FROM user_roles ur
+                               WHERE ur.user_id=u.user_id AND ur.role='technician')"""
+            ).fetchone()[0],
+        }
+
+    if user_has_role("superadmin"):
+        role_dashboard["superadmin"] = {
+            "active_users": db.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0],
+            "inactive_users": db.execute("SELECT COUNT(*) FROM users WHERE active=0").fetchone()[0],
+            "audit_24h": db.execute(
+                "SELECT COUNT(*) FROM audit_log WHERE created_at >= datetime('now','-1 day')"
+            ).fetchone()[0],
+            "recent_security": db.execute(
+                """SELECT action, entity_type, entity_id, created_at
+                   FROM audit_log
+                   WHERE action LIKE '%USER%' OR action LIKE '%LOGIN%' OR action LIKE '%PASSWORD%'
+                   ORDER BY audit_id DESC LIMIT 6"""
+            ).fetchall(),
+        }
+
     # KPI dashboard data: workflow pipeline, review queue, workload, turnaround and trends.
     request_counts = {st: db.execute("SELECT COUNT(*) FROM calibration_requests WHERE status=?", (st,)).fetchone()[0]
                       for st in REQUEST_STATUSES}
@@ -170,7 +307,7 @@ def index():
                            attention_total=len(attention), recent=recent, stations=stations_,
                            sensors=[r["sensor_id"] for r in rows], greeting=greeting,
                            today=today, bs_today=bs_today, std_issues=std_issues,
-                           dashboard=dashboard)
+                           dashboard=dashboard, role_dashboard=role_dashboard)
 
 
 # ----------------------- calibration work orders ----------------------------
