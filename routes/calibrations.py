@@ -835,6 +835,7 @@ def calibration_certificate_preview(cal_id):
 
 @app.route("/certificate/<cert>")
 def certificate(cert):
+    """Render the controlled official certificate and its compact verification QR."""
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
@@ -854,26 +855,13 @@ def certificate(cert):
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
            LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
-           WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'""", (cert,)).fetchone()
+           WHERE c.certificate_no=?""", (cert,)).fetchone()
     if not r:
         abort(404)
-    work_order = None
-    if r["request_id"]:
-        work_order = db.execute(
-            "SELECT work_order_id, assigned_technician_id, status FROM calibration_work_orders WHERE request_id=?",
-            (r["request_id"],)
-        ).fetchone()
-    # Release only the exact calibration record approved by an administrator.
-    approved = db.execute(
-        "SELECT 1 FROM calibrations WHERE cal_id=? AND lifecycle_status='APPROVED'",
-        (r["cal_id"],)
-    ).fetchone()
-    if not approved:
-        if not work_order or g.user["role"] != "technician" or work_order["assigned_technician_id"] != g.user["user_id"]:
-            abort(403)
-        preview = True
-    else:
-        preview = False
+
+    if r["lifecycle_status"] != "APPROVED":
+        abort(404)
+
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
@@ -883,81 +871,129 @@ def certificate(cert):
             "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
             (r["standard_id"],)
         ).fetchone()
-    # Self-contained QR: encode the complete calibration record as text.
-    # No localhost, public URL, or network connection is required when scanning.
-    qr_lines = [
-        "DHM CALIBRATION CERTIFICATE",
-        "STATUS|APPROVED",
-        f"Certificate No|{r['certificate_no']}",
-        f"Calibration Date|{r['cal_date'] or '—'}",
-        f"Next Due|{r['next_due'] or '—'}",
-        f"Issued|{r['certificate_issued_at'][:10] if r['certificate_issued_at'] else '—'}",
-        f"Approved By|{r['approved_by'] or '—'}",
-        f"Issued By|{r['certificate_issued_by_name'] or '—'}",
-        "", "INSTRUMENT",
-        f"Type|{r['sensor_type'] or '—'}",
-        f"Manufacturer|{r['manufacturer'] or '—'}",
-        f"Serial No|{r['serial_number'] or '—'}",
-        f"Sensor ID|{r['sensor_id'] or 'Pending registration'}",
-        f"Station|{r['station'] or '—'}",
-        f"Unit|{r['unit'] or '—'}",
-        f"Tolerance|{r['tolerance'] if r['tolerance'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Calibrated By|{r['performed_by'] or '—'}",
-        "", "REFERENCE STANDARD / TRACEABILITY",
-        f"Reference|{r['reference_standard'] or '—'}",
-        f"Standard|{(standard['code'] + ' — ' + standard['name']) if standard else '—'}",
-        f"Standard Serial|{details.get('serial') if details and details.get('serial') else (standard['serial_number'] if standard else '—')}",
-        f"Standard Certificate|{details.get('certificate') if details and details.get('certificate') else (standard['certificate_no'] if standard else '—')}",
-        f"Traceability|{details.get('traceability') if details and details.get('traceability') else (standard['traceability'] if standard else '—')}",
-        f"Calibrated On|{standard['calibrated_on'] if standard else '—'}",
-        f"Valid Until|{details.get('valid_until') if details and details.get('valid_until') else (standard['valid_until'] if standard else '—')}",
-        f"Standard Uncertainty|{details.get('uncertainty') if details and details.get('uncertainty') else (standard['uncertainty'] if standard else '—')}",
-        "", "PROCEDURE / ADJUSTMENT",
-        f"Procedure Code|{r['procedure_code'] or '—'}",
-        f"Procedure Title|{r['procedure_title'] or '—'}",
-        f"Procedure Revision|{r['procedure_revision'] or '—'}",
-        f"Adjustment Status|{r['adjustment_status'] or 'NOT REQUIRED'}",
-        f"Adjustment Notes|{r['adjustment_notes'] or '—'}",
-        f"Technician Remarks|{r['technician_remarks'] or '—'}",
-        "", "RESULT SUMMARY",
-        f"Result|{r['result'] or '—'}",
-        f"Points|{len(pts)}",
-        f"Mean Error|{r['mean_error'] if r['mean_error'] is not None else r['error']} {r['unit'] or ''}".rstrip(),
-        f"Maximum Absolute Error|{r['max_error'] if r['max_error'] is not None else abs(r['error'])} {r['unit'] or ''}".rstrip(),
-        f"Ambient Temperature|{r['environment_temperature']} °C" if r['environment_temperature'] is not None else "Ambient Temperature|—",
-        f"Relative Humidity|{r['environment_humidity']} %" if r['environment_humidity'] is not None else "Relative Humidity|—",
-        "", "MEASUREMENT UNCERTAINTY",
-        f"Method|{r['uncertainty_method'] or 'RSS'}",
-        f"Standard Uncertainty|{r['standard_uncertainty'] if r['standard_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Resolution|{r['resolution'] if r['resolution'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Repeatability|{r['repeatability'] if r['repeatability'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Environmental|{r['environmental_uncertainty'] if r['environmental_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Other|{r['other_uncertainty'] if r['other_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Combined Standard Uncertainty (uc)|{r['combined_standard_uncertainty'] if r['combined_standard_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        f"Coverage Factor (k)|{r['coverage_factor'] if r['coverage_factor'] is not None else '—'}",
-        f"Expanded Uncertainty (U)|{r['expanded_uncertainty'] if r['expanded_uncertainty'] is not None else '—'} {r['unit'] or ''}".rstrip(),
-        "", "MEASUREMENT POINTS",
-        "Point|Reference|Tolerance|As-Found|Error AF|As-Left|Error AL|Result",
-    ]
-    for p in pts:
-        qr_lines.append("|".join([
-            str(p['point_no']), str(p['reference_value']), str(p['tolerance'] if p['tolerance'] is not None else '—'),
-            str(p['as_found_value']),
-            str(p['as_found_error'] if p['as_found_error'] is not None else p['error']),
-            str(p['as_left_value'] if p['as_left_value'] is not None else '—'),
-            str(p['as_left_error'] if p['as_left_error'] is not None else '—'), str(p['result'])
-        ]))
-    qr_lines += ["", "END OF CERTIFICATE DATA", "NO WEB / LOCALHOST LINK"]
-    qr_code = _qr_data_uri("\\n".join(qr_lines)) if not preview else None
-    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard,
-                           preview=preview, qr_code=qr_code)
+
+    # Official QR contains only a signed verification URL. The complete report
+    # remains server-side so withdrawal/supersession is reflected immediately.
+    token = certificate_verification_token(cert)
+    verification_url = certificate_verification_url(cert, token)
+    qr_code = _qr_data_uri(verification_url)
+    return render_template(
+        "certificate.html", r=r, pts=pts, det=details, standard=standard,
+        preview=False, qr_code=qr_code, verification_url=verification_url,
+    )
+
+
+@app.route("/certificates/<cert>/withdraw", methods=["POST"])
+@admin_required
+def withdraw_certificate(cert):
+    """Withdraw an issued certificate without deleting its controlled record."""
+    db = get_db()
+    row = db.execute(
+        "SELECT cal_id, certificate_no, certificate_status, certificate_fingerprint "
+        "FROM calibrations WHERE certificate_no=? AND lifecycle_status='APPROVED'",
+        (cert,),
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row["certificate_status"] != "ACTIVE":
+        flash("Only an active certificate can be withdrawn.", "error")
+        return redirect(url_for("certificate", cert=cert))
+
+    reason = request.form.get("reason", "").strip()
+    if not reason:
+        flash("A reason is required when withdrawing a certificate.", "error")
+        return redirect(url_for("certificate", cert=cert))
+
+    now = datetime.now().isoformat(timespec="seconds")
+    with db:
+        db.execute(
+            "UPDATE calibrations SET certificate_status='WITHDRAWN', updated_at=? WHERE cal_id=? AND certificate_status='ACTIVE'",
+            (now, row["cal_id"]),
+        )
+        db.execute(
+            """INSERT INTO certificate_history
+               (cal_id, certificate_no, event_type, fingerprint, reason, changed_by, changed_at)
+               VALUES (?,?,'WITHDRAWN',?,?,?,?)""",
+            (row["cal_id"], cert, row["certificate_fingerprint"], reason, g.user["user_id"], now),
+        )
+        audit_event(
+            "CERTIFICATE_WITHDRAWN", "certificate", cert,
+            old_value={"status": "ACTIVE"},
+            new_value={"status": "WITHDRAWN"},
+            details={"cal_id": row["cal_id"], "reason": reason},
+        )
+    flash(f"Certificate {cert} has been withdrawn.")
+    return redirect(url_for("calibration_reviews"))
+
+
+@app.route("/certificates/<cert>/reissue", methods=["POST"])
+@admin_required
+def reissue_certificate(cert):
+    """Issue a replacement certificate number while preserving the approved measurements."""
+    db = get_db()
+    row = db.execute(
+        "SELECT cal_id, certificate_no, cal_date, approved_revision, certificate_status, certificate_fingerprint "
+        "FROM calibrations WHERE certificate_no=? AND lifecycle_status='APPROVED'",
+        (cert,),
+    ).fetchone()
+    if not row:
+        abort(404)
+    if row["certificate_status"] not in ("ACTIVE", "WITHDRAWN"):
+        flash("This certificate cannot be reissued in its current state.", "error")
+        return redirect(url_for("certificate", cert=cert))
+
+    reason = request.form.get("reason", "").strip()
+    if not reason:
+        flash("A reason is required when reissuing a certificate.", "error")
+        return redirect(url_for("certificate", cert=cert))
+
+    now = datetime.now().isoformat(timespec="seconds")
+    with db:
+        new_cert = next_certificate(db, row["cal_date"])
+        db.execute(
+            """UPDATE calibrations
+               SET certificate_no=?, certificate_status='ACTIVE',
+                   certificate_reissued_from=?, certificate_reissued_at=?,
+                   certificate_issued_by=?, certificate_issued_at=?, updated_at=?
+               WHERE cal_id=? AND lifecycle_status='APPROVED'""",
+            (new_cert, cert, now, g.user["user_id"], now, now, row["cal_id"]),
+        )
+        # Recalculate because the certificate identifier itself is part of the fingerprint.
+        fingerprint = build_certificate_fingerprint(db, row["cal_id"])
+        db.execute(
+            "UPDATE calibrations SET certificate_fingerprint=? WHERE cal_id=?",
+            (fingerprint, row["cal_id"]),
+        )
+        db.execute(
+            """INSERT INTO certificate_history
+               (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, reason, changed_by, changed_at)
+               VALUES (?,?,'REISSUED',?,?,?,?,?)""",
+            (row["cal_id"], new_cert, " ".join([cert]), fingerprint, reason, g.user["user_id"], now),
+        )
+        # Retain a searchable historical event for the old certificate number.
+        db.execute(
+            """INSERT INTO certificate_history
+               (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, reason, changed_by, changed_at)
+               VALUES (?,?,'SUPERSEDED',?,?,?,?,?)""",
+            (row["cal_id"], cert, new_cert, row["certificate_fingerprint"], reason, g.user["user_id"], now),
+        )
+        audit_event(
+            "CERTIFICATE_REISSUED", "certificate", new_cert,
+            old_value={"certificate_no": cert, "status": row["certificate_status"]},
+            new_value={"certificate_no": new_cert, "status": "ACTIVE", "fingerprint": fingerprint},
+            details={"cal_id": row["cal_id"], "reason": reason, "previous_certificate_no": cert},
+        )
+    flash(f"Certificate {cert} was superseded and replacement certificate {new_cert} was issued.")
+    return redirect(url_for("certificate", cert=new_cert))
+
 
 @app.route("/verify/<cert>/<token>")
 def verify_certificate(cert, token):
-    """Public, read-only full certificate view linked from the printed QR code."""
+    """Public, read-only certificate verification endpoint."""
     expected = certificate_verification_token(cert)
     if not hmac.compare_digest(str(token), expected):
         abort(404)
+
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
@@ -977,10 +1013,58 @@ def verify_certificate(cert, token):
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
            LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
-           WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'""", (cert,)
+           WHERE c.certificate_no=?""", (cert,)
     ).fetchone()
     if not r:
+        # Reissued certificates retain a searchable historical verification result.
+        history = db.execute(
+            "SELECT * FROM certificate_history WHERE certificate_no=? ORDER BY history_id DESC LIMIT 1",
+            (cert,),
+        ).fetchone()
+        if history and history["event_type"] == "SUPERSEDED":
+            return render_template("certificate_status.html", certificate_no=cert,
+                                   status="SUPERSEDED", reason=history["reason"],
+                                   replacement=history["previous_certificate_no"])
         abort(404)
+
+    if r["certificate_status"] != "ACTIVE" or r["lifecycle_status"] != "APPROVED":
+        latest = db.execute(
+            "SELECT event_type, reason, previous_certificate_no FROM certificate_history "
+            "WHERE certificate_no=? ORDER BY history_id DESC LIMIT 1", (cert,)
+        ).fetchone()
+        return render_template(
+            "certificate_status.html",
+            certificate_no=cert,
+            status=r["certificate_status"] or "INVALID",
+            reason=latest["reason"] if latest else None,
+            replacement=latest["previous_certificate_no"] if latest and latest["event_type"] == "SUPERSEDED" else None,
+        )
+
+    actual_fingerprint = build_certificate_fingerprint(db, r["cal_id"])
+    if not r["certificate_fingerprint"]:
+        # Legacy certificate: establish its fingerprint once, without changing
+        # any measurement data.
+        db.execute("UPDATE calibrations SET certificate_fingerprint=? WHERE cal_id=?",
+                   (actual_fingerprint, r["cal_id"]))
+        db.commit()
+    elif not hmac.compare_digest(actual_fingerprint, r["certificate_fingerprint"]):
+        audit_event(
+            "CERTIFICATE_INTEGRITY_FAILURE", "certificate", cert,
+            details={"cal_id": r["cal_id"], "stored_fingerprint": r["certificate_fingerprint"],
+                     "calculated_fingerprint": actual_fingerprint},
+        )
+        db.commit()
+        return render_template("certificate_status.html", certificate_no=cert,
+                               status="INTEGRITY_FAILURE",
+                               reason="The current laboratory record does not match the fingerprint stored when this certificate was issued.",
+                               replacement=None), 409
+
+    audit_event(
+        "CERTIFICATE_VERIFIED", "certificate", cert,
+        details={"cal_id": r["cal_id"], "fingerprint": r["certificate_fingerprint"] or actual_fingerprint},
+    )
+    db.commit()
+
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
