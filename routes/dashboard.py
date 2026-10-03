@@ -155,7 +155,7 @@ def index():
             (g.user["user_id"],)
         ).fetchall()
         returned_jobs = db.execute(
-            """SELECT c.cal_id, c.certificate_no, c.cal_date, c.revision_no,
+            """SELECT c.cal_id, c.request_id, c.certificate_no, c.cal_date, c.revision_no,
                       r.request_no, r.client_name, h.reviewed_at, h.comments
                FROM calibrations c
                JOIN calibration_requests r ON r.request_id=c.request_id
