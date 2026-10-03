@@ -1,15 +1,46 @@
 {% extends "base.html" %}{% block title %}{{ tr("Users") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ tr("Users") }}</h1>
-<p>{{ tr("Superadministrators manage system security, users, audit records and critical database operations. Laboratory administrators focus on calibration workflow and laboratory management.") }}</p>
+<p>{{ tr("Users can have multiple roles. For example, a technician can also be a reviewer, and an administrator can also be a reviewer.") }}</p>
 <form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
 <div><label>{{ tr("Full name") }}</label><input name="full_name"></div>
 <div><label>{{ tr("Username") }}</label><input name="username" required></div>
 <div><label>{{ tr("Password (min. 8 characters)") }}</label><input name="password" type="password" required></div>
-<div><label>{{ tr("Role") }}</label><select name="role"><option value="admin">{{ tr("Administrator") }}</option><option value="technician">{{ tr("Technician") }}</option><option value="general_user">{{ tr("General user") }}</option><option value="superadmin">{{ tr("Superadministrator") }}</option></select></div>
-<div style="align-self:end"><button class="btn">{{ tr("Add user") }}</button></div></form>
-<div class="scroll"><table><tr><th>{{ tr("Username") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Role") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Reset password") }}</th><th></th></tr>
-{% for u in rows %}<tr><td>{{ u.username }}</td><td>{{ u.full_name }}</td><td>{{ tr(u.role|capitalize) }}</td>
+<div>
+<label>{{ tr("Roles") }}</label>
+<div style="display:grid;gap:6px;padding-top:6px">
+{% for role in role_order %}
+<label style="font-weight:normal"><input type="checkbox" name="roles" value="{{ role }}" {% if role == "general_user" %}checked{% endif %}> {{ tr(role_labels[role]) }}</label>
+{% endfor %}
+</div>
+</div>
+<div style="align-self:end"><button class="btn">{{ tr("Add user") }}</button></div>
+</form>
+
+<div class="scroll"><table>
+<tr><th>{{ tr("Username") }}</th><th>{{ tr("Name") }}</th><th>{{ tr("Roles") }}</th><th>{{ tr("Status") }}</th><th>{{ tr("Update roles") }}</th><th>{{ tr("Reset password") }}</th><th></th></tr>
+{% for u in rows %}
+<tr>
+<td>{{ u.username }}</td>
+<td>{{ u.full_name }}</td>
+<td>{% for role in u.roles %}<span class="badge grey" style="margin:2px">{{ tr(role_labels[role]) }}</span>{% endfor %}</td>
 <td><span class="badge {{ 'green' if u.active else 'grey' }}">{{ tr('Active') if u.active else tr('Disabled') }}</span></td>
+<td>
+<form method="post" action="{{ url_for('update_user_roles', uid=u.user_id) }}" style="display:grid;gap:4px">
+{{ csrf_input() }}
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+{% for role in role_order %}
+<label style="font-weight:normal"><input type="checkbox" name="roles" value="{{ role }}" {% if role in u.roles %}checked{% endif %}> {{ tr(role_labels[role]) }}</label>
+{% endfor %}
+</div>
+<button class="btn alt" type="submit">{{ tr("Save roles") }}</button>
+</form>
+</td>
 <td><form method="post" action="{{ url_for('reset_password', uid=u.user_id) }}" style="display:flex;gap:6px">{{ csrf_input() }}
 <input name="password" type="password" placeholder="{{ tr('New password') }}" style="width:160px" required><button class="btn alt">{{ tr("Reset") }}</button></form></td>
-<td>{% if u.user_id != g.user.user_id %}<form method="post" action="{{ url_for('toggle_user', uid=u.user_id) }}" style="display:inline">{{ csrf_input() }}<button class="btn alt">{{ tr('Disable') if u.active else tr('Enable') }}</button></form> <form method="post" action="{{ url_for('delete_user', uid=u.user_id) }}" style="display:inline" onsubmit="return confirm('Delete this user permanently?')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>{% endif %}</td></tr>{% endfor %}</table></div></div>{% endblock %}
+<td>{% if u.user_id != g.user.user_id %}
+<form method="post" action="{{ url_for('toggle_user', uid=u.user_id) }}" style="display:inline">{{ csrf_input() }}<button class="btn alt">{{ tr('Disable') if u.active else tr('Enable') }}</button></form>
+<form method="post" action="{{ url_for('delete_user', uid=u.user_id) }}" style="display:inline" onsubmit="return confirm('Delete this user permanently?')">{{ csrf_input() }}<button class="btn alt" type="submit">{{ tr("Delete") }}</button></form>
+{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div></div>{% endblock %}
