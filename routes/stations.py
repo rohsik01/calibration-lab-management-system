@@ -80,13 +80,19 @@ def stations():
         if g.user["role"] != "admin":
             abort(403)
         try:
+            station_id_raw = request.form.get("station_id", "").strip()
             name = request.form["name"].strip()
             location = request.form.get("location", "").strip()
             station_type = request.form.get("type", "").strip() or "Meteorological"
+            if not station_id_raw or not station_id_raw.isdigit() or int(station_id_raw) <= 0:
+                raise ValueError("A valid positive Station ID is required.")
+            station_id = int(station_id_raw)
             if not name:
                 raise ValueError("Station name is required.")
-            db.execute("INSERT INTO stations(name, location, type, updated_at) VALUES (?,?,?,?)",
-                       (name, location, station_type, datetime.now().isoformat(timespec="seconds")))
+            if db.execute("SELECT 1 FROM stations WHERE station_id=?", (station_id,)).fetchone():
+                raise ValueError(f"Station ID {station_id} is already in use.")
+            db.execute("INSERT INTO stations(station_id, name, location, type, updated_at) VALUES (?,?,?,?,?)",
+                       (station_id, name, location, station_type, datetime.now().isoformat(timespec="seconds")))
             db.commit()
             flash("Station added.")
         except sqlite3.IntegrityError:
