@@ -910,6 +910,7 @@ def certificate_pdf(cert):
         from reportlab.lib.pagesizes import A6
         from reportlab.pdfgen import canvas
         from reportlab.lib.utils import ImageReader
+        from reportlab.lib import colors
     except ImportError:
         abort(503, "PDF generation requires reportlab.")
 
@@ -925,12 +926,12 @@ def certificate_pdf(cert):
     pdf.setTitle("DHM Calibration Certificate " + cert)
     pdf.setAuthor("DHM Calibration Laboratory")
     margin = 18
-    pdf.setStrokeColor("#174b7b")
+    pdf.setStrokeColor(colors.HexColor("#174b7b"))
     pdf.rect(margin, margin, width-2*margin, height-2*margin)
-    pdf.setFillColor("#174b7b")
+    pdf.setFillColor(colors.HexColor("#174b7b"))
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(margin+10, height-40, "DHM CALIBRATION CERTIFICATE")
-    pdf.setFillColor("#172b43")
+    pdf.setFillColor(colors.HexColor("#172b43"))
     pdf.setFont("Helvetica-Bold", 8)
     pdf.drawString(margin+10, height-55, "Certificate No.: " + cert)
 
@@ -947,7 +948,7 @@ def certificate_pdf(cert):
         ("Maximum error", str(r["max_error"] if r["max_error"] is not None else abs(r["error"]))),
         ("Approved by", r["approved_by"] or "—"),
     ):
-        pdf.setFillColor("#607187")
+        pdf.setFillColor(colors.HexColor("#607187"))
         pdf.drawString(margin+10, y, label)
         pdf.setFillColor("#172b43")
         pdf.setFont("Helvetica-Bold", 7)
