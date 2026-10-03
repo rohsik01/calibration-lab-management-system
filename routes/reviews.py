@@ -174,10 +174,11 @@ def decide_calibration_review(review_id):
             # Official certificate issuance happens atomically with approval.
             # The number does not change on return/correction/resubmission.
             existing_cert = db.execute(
-                "SELECT certificate_no FROM calibrations WHERE cal_id=?",
+                "SELECT certificate_no, certificate_fingerprint FROM calibrations WHERE cal_id=?",
                 (review["cal_id"],)
             ).fetchone()
             previous_cert = existing_cert["certificate_no"] if existing_cert else None
+            previous_fingerprint = existing_cert["certificate_fingerprint"] if existing_cert else None
             cal_row = db.execute(
                 "SELECT cal_date FROM calibrations WHERE cal_id=?",
                 (review["cal_id"],)
@@ -229,7 +230,7 @@ def decide_calibration_review(review_id):
                     """INSERT INTO certificate_history
                        (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, changed_by, changed_at)
                        VALUES (?,?,'SUPERSEDED',?,?,?,?,?)""",
-                    (review["cal_id"], previous_cert, official_cert, None, g.user["user_id"], now),
+                    (review["cal_id"], previous_cert, official_cert, previous_fingerprint, g.user["user_id"], now),
                 )
             audit_event(
                 "CALIBRATION_CERTIFICATE_ISSUED",
