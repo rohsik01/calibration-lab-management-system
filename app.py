@@ -1294,6 +1294,107 @@ def nav_counts():
             "unread_notifications": unread_notifications}
 
 
+CALIBRATION_LIFECYCLE_TRANSITIONS = {
+    "DRAFT": {"SUBMITTED"},
+    "RETURNED": {"SUBMITTED"},
+    "SUBMITTED": {"APPROVED", "RETURNED"},
+    "APPROVED": set(),
+}
+
+
+def audit_calibration_workflow_rejection(action, work_order_id, cal_id=None, details=None):
+    """Record rejected workflow actions without mutating the controlled record."""
+    audit_event(
+        action,
+        "calibration" if cal_id is not None else "calibration_work_order",
+        cal_id if cal_id is not None else work_order_id,
+        details=dict({"work_order_id": work_order_id}, **(details or {})),
+    )
+
+
+def validate_calibration_record_for_submission(db, cal_id, work_order_id, actor_id=None):
+    """Validate the complete controlled state immediately before review submission."""
+    cal = db.execute("SELECT * FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    wo = db.execute("SELECT * FROM calibration_work_orders WHERE work_order_id=?", (work_order_id,)).fetchone()
+    if not cal:
+        raise ValueError("Calibration record not found.")
+    if not wo:
+        raise ValueError("Calibration work order not found.")
+    if cal["request_id"] != wo["request_id"]:
+        raise ValueError("Calibration does not belong to this work order.")
+    if wo["status"] != "IN PROGRESS":
+        raise ValueError("A calibration can only be submitted from an IN PROGRESS work order.")
+    if actor_id is not None and wo["assigned_technician_id"] != actor_id:
+        audit_calibration_workflow_rejection(
+            "CALIBRATION_SUBMISSION_REJECTED",
+            work_order_id,
+            cal_id,
+            {"reason": "Technician is not assigned to the work order.", "actor_id": actor_id},
+        )
+        raise ValueError("Only the technician assigned to this work order can submit the calibration.")
+    if cal["lifecycle_status"] not in ("DRAFT", "RETURNED"):
+        raise ValueError("Only a draft or returned calibration can be submitted.")
+    if not cal["revision_no"] or cal["revision_no"] < 1:
+        raise ValueError("Calibration revision is invalid.")
+    if not cal["procedure_id"] or cal["procedure_id"] != wo["procedure_id"]:
+        raise ValueError("The calibration must use the controlled procedure assigned to the work order.")
+
+    procedure = db.execute(
+        "SELECT * FROM calibration_procedures WHERE procedure_id=?",
+        (wo["procedure_id"],),
+    ).fetchone()
+    if not procedure or not procedure["active"]:
+        raise ValueError("The assigned calibration procedure is no longer active.")
+    procedure_points = db.execute(
+        "SELECT point_no, reference_value, tolerance FROM calibration_procedure_points "
+        "WHERE procedure_id=? ORDER BY point_no",
+        (wo["procedure_id"],),
+    ).fetchall()
+    points = db.execute(
+        "SELECT point_no, reference_value, tolerance, as_found_value, as_found_error, "
+        "as_found_result, as_left_value, as_left_error, as_left_result, result "
+        "FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+        (cal_id,),
+    ).fetchall()
+    if not procedure_points or len(points) != len(procedure_points):
+        raise ValueError("Calibration measurements must contain every required procedure point.")
+    for expected, actual in zip(procedure_points, points):
+        if (
+            expected["point_no"] != actual["point_no"]
+            or abs(expected["reference_value"] - actual["reference_value"]) > 1e-9
+            or abs(expected["tolerance"] - actual["tolerance"]) > 1e-9
+        ):
+            raise ValueError("Calibration measurement points no longer match the controlled procedure.")
+        if actual["as_found_value"] is None or actual["as_found_error"] is None or actual["as_found_result"] not in ("PASS", "FAIL"):
+            raise ValueError("Every required calibration point must have a valid As-Found result.")
+        if actual["as_left_value"] is None or actual["as_left_error"] is None or actual["as_left_result"] not in ("PASS", "FAIL"):
+            raise ValueError("Every required calibration point must have a valid As-Left result.")
+
+    if cal["n_points"] != len(points):
+        raise ValueError("Calibration point count does not match the stored calibration summary.")
+    final_errors = [p["as_left_error"] if p["as_left_value"] is not None else p["as_found_error"] for p in points]
+    if any(x is None or not math.isfinite(float(x)) for x in final_errors):
+        raise ValueError("Calibration contains an invalid measurement error.")
+    expected_result = "FAIL" if any(abs(final_errors[i]) > points[i]["tolerance"] for i in range(len(points))) else "PASS"
+    expected_mean = round(sum(final_errors) / len(final_errors), 6)
+    expected_max = round(max(abs(x) for x in final_errors), 6)
+    if cal["result"] != expected_result or not math.isclose(float(cal["mean_error"]), expected_mean, abs_tol=1e-6) or not math.isclose(float(cal["max_error"]), expected_max, abs_tol=1e-6):
+        raise ValueError("Stored calibration summary does not match the measurement points.")
+    if not cal["standard_id"]:
+        raise ValueError("A registered reference standard is required for a controlled calibration.")
+    standard = db.execute(
+        "SELECT * FROM reference_standards WHERE standard_id=? AND active=1",
+        (cal["standard_id"],),
+    ).fetchone()
+    if not standard:
+        raise ValueError("The registered reference standard is no longer active.")
+    if standard["calibrated_on"] > cal["cal_date"] or standard["valid_until"] < cal["cal_date"]:
+        raise ValueError("The registered reference standard was not valid on the calibration date.")
+    if not standard["certificate_no"] or not standard["traceability"]:
+        raise ValueError("The registered reference standard is missing certificate or traceability information.")
+    return True
+
+
 def next_certificate(db, cal_date):
     """Atomically reserve the next official certificate number for the calibration year."""
     year = str(cal_date)[:4]
