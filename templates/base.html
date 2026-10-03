@@ -117,7 +117,7 @@
           {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
           <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
           {% endif %}
-          {% if has_role('admin') or has_role('superadmin') %}
+          {% if has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
           <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
           {% endif %}
         </div>
