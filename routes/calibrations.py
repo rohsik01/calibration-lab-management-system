@@ -521,25 +521,18 @@ def calibrate_pending_request(request_id):
             technician_remarks=request.form.get("technician_remarks","").strip()
             if adjustment_status=="PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
-            std_sel=request.form.get("standard_id","").strip(); std_text=request.form.get("reference_standard","").strip(); std_id=None; std_details=None
-            if std_sel:
-                std=db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",(int(std_sel),)).fetchone()
-                if not std: raise ValueError("Select a valid reference standard.")
-                std_id=std["standard_id"]; std_text=f"{std['code']} – {std['name']}"
-                std_details=json.dumps({"serial":std["serial_number"],"traceability":std["traceability"],"certificate":std["certificate_no"],"valid_until":std["valid_until"],"uncertainty":std["uncertainty"]},ensure_ascii=False)
-            elif not std_text: raise ValueError("Choose a reference standard or type its name.")
-            if procedure_id and not std_id:
-                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
-            if std_id:
-                if std["valid_until"] < cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
-                if std["calibrated_on"] > cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
-                if not std["certificate_no"] or not std["traceability"]:
-                    raise ValueError("The selected reference standard is missing certificate or traceability information.")
-            uncertainty = validate_calibration_controls(
-                request.form, procedure, std, unit
-            )
+            standards_selected = selected_reference_standards(db, request.form, cal_date)
+            std = standards_selected[0]
+            std_id = std["standard_id"]
+            std_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+            std_details = json.dumps([
+                {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+                 "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+                 "serial": x["serial_number"], "traceability": x["traceability"],
+                 "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+                 "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+                for x in standards_selected
+            ], ensure_ascii=False)
             if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
                 raise ValueError("A calibration record already exists for this request.")
             # Keep the sensor unregistered until administrator approval.
@@ -711,29 +704,19 @@ def edit_calibration(cal_id):
             if adjustment_status == "PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
 
-            std = None
-            std_id, std_details = None, None
-            sid = f.get("standard_id", "").strip()
-            if sid.isdigit():
-                std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (int(sid),)).fetchone()
-                if not std:
-                    raise ValueError("Could not use that reference standard. Choose another one.")
-                if std["valid_until"] < cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
-                if std["calibrated_on"] > cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
-                ref_text = f"{std['code']} – {std['name']}"
-                std_id = std["standard_id"]
-                std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
-                                          "certificate": std["certificate_no"], "valid_until": std["valid_until"],
-                                          "uncertainty": std["uncertainty"]}, ensure_ascii=False)
-            else:
-                ref_text = f.get("reference_standard", "").strip()
-                if not ref_text:
-                    raise ValueError("Choose a reference standard or type its name.")
+            standards_selected = selected_reference_standards(db, f, cal_date)
+            std = standards_selected[0]
+            std_id = std["standard_id"]
+            ref_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+            std_details = json.dumps([
+                {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+                 "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+                 "serial": x["serial_number"], "traceability": x["traceability"],
+                 "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+                 "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+                for x in standards_selected
+            ], ensure_ascii=False)
 
-            if procedure_id and not std_id:
-                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
             final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
             worst_index = max(range(len(points_new)), key=lambda i: abs(final_errors[i]))
             worst = points_new[worst_index]
