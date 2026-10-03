@@ -96,7 +96,10 @@ def standard(sid):
            FROM calibrations c
            LEFT JOIN calibration_work_orders w ON w.request_id=c.request_id
            LEFT JOIN users u ON u.user_id=w.assigned_technician_id
-           WHERE c.standard_id=?
+           WHERE EXISTS (
+               SELECT 1 FROM calibration_reference_standards crs
+               WHERE crs.cal_id=c.cal_id AND crs.standard_id=?
+           )
            ORDER BY c.cal_id DESC
            LIMIT 250""",
         (sid,)
