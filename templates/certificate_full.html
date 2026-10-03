@@ -77,6 +77,26 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:center
 <div class="field"><span class="label">Expanded uncertainty (U)</span><span class="value"><strong>{{ r.expanded_uncertainty if r.expanded_uncertainty is not none else "—" }} {{ r.unit or "" }}</strong></span></div>
 </div></section>
 
+{% if g.user and g.user.role in ('admin','superadmin') %}
+<div class="section noprint" style="margin-top:14px">
+  <h2>Certificate Administration</h2>
+  <div class="body" style="display:flex;gap:10px;flex-wrap:wrap">
+    {% if r.certificate_status == 'ACTIVE' %}
+    <form method="post" action="{{ url_for('withdraw_certificate', cert=r.certificate_no) }}" onsubmit="return confirm('Withdraw this certificate? This cannot be undone.');">
+      {{ csrf_input() }}
+      <input type="hidden" name="reason" value="Administrative withdrawal">
+      <button type="submit">Withdraw certificate</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('reissue_certificate', cert=r.certificate_no) }}" onsubmit="return confirm('Issue a replacement certificate number for this approved record?');">
+      {{ csrf_input() }}
+      <input type="hidden" name="reason" value="Administrative reissue">
+      <button type="submit">Reissue certificate</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="footer">Department of Hydrology and Meteorology (DHM) · Calibration Laboratory<br><span class="note">This page shows the current approved record associated with certificate {{ r.certificate_no }}. Retain it with the printed certificate.</span></div>
 </div>
 </body></html>
