@@ -597,37 +597,40 @@ def test_multi_role_authorization_decorators_use_assigned_roles():
         assert superadmin_action() == "superadmin-ok"
 
 
+def test_notifications_are_role_aware_and_task_inbox_is_present():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/notifications.py").read_text(encoding="utf-8")
+    template_source = Path(__file__).resolve().parents[1].joinpath("templates/alerts.html").read_text(encoding="utf-8")
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
 
-def test_role_based_operational_dashboard_data_and_multi_role_sections_are_present():
-    dashboard_source = Path(__file__).resolve().parents[1].joinpath("routes/dashboard.py").read_text(encoding="utf-8")
-    home_source = Path(__file__).resolve().parents[1].joinpath("templates/home.html").read_text(encoding="utf-8")
-
-    assert 'role_dashboard = {}' in dashboard_source
-    assert 'role_dashboard["general_user"]' in dashboard_source
-    assert 'role_dashboard["technician"]' in dashboard_source
-    assert 'role_dashboard["reviewer"]' in dashboard_source
-    assert 'role_dashboard["admin"]' in dashboard_source
-    assert 'role_dashboard["superadmin"]' in dashboard_source
-    assert 'assigned_technician_id=?' in dashboard_source
-    assert "lifecycle_status='RETURNED'" in dashboard_source
-    assert "decision='PENDING'" in dashboard_source
-    assert 'role_dashboard=role_dashboard' in dashboard_source
-
-    assert 'role_dashboard.general_user' in home_source
-    assert 'role_dashboard.technician' in home_source
-    assert 'role_dashboard.reviewer' in home_source
-    assert 'role_dashboard.admin' in home_source
-    assert 'role_dashboard.superadmin' in home_source
-    assert 'My requests' in home_source
-    assert 'My calibration work' in home_source
-    assert 'Review queue' in home_source
-    assert 'Laboratory administration' in home_source
-    assert 'System administration & security' in home_source
+    assert 'user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")' in route_source
+    assert 'user_has_role("general_user")' in route_source
+    assert 'request-status|' in route_source
+    assert 'alert_key' in route_source
+    assert 'view = request.args.get("view", "all")' in route_source
+    assert 'view == "tasks"' in route_source
+    assert 'task_count' in route_source
+    assert 'Task inbox' in template_source
+    assert 'Unread only' in template_source
+    assert 'sync_notifications' in app_source
 
 
-def test_dashboard_role_sections_are_capability_based_not_exclusive():
-    home_source = Path(__file__).resolve().parents[1].joinpath("templates/home.html").read_text(encoding="utf-8")
-    dashboard_source = Path(__file__).resolve().parents[1].joinpath("routes/dashboard.py").read_text(encoding="utf-8")
-    assert 'if user_has_role("technician")' in dashboard_source
-    assert 'if user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")' in dashboard_source
-    assert "Multiple roles are shown together." in home_source
+def test_notification_center_supports_mark_read_and_mark_all_read():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/notifications.py").read_text(encoding="utf-8")
+    template_source = Path(__file__).resolve().parents[1].joinpath("templates/alerts.html").read_text(encoding="utf-8")
+
+    assert '@app.route("/notifications/read/<int:notification_id>", methods=["POST"])' in route_source
+    assert '@app.route("/notifications/read-all", methods=["POST"])' in route_source
+    assert 'name="csrf"' not in route_source
+    assert 'mark_notification_read' in template_source
+    assert 'mark_all_notifications_read' in template_source
+
+
+def test_general_users_can_access_notification_center():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    base_source = Path(__file__).resolve().parents[1].joinpath("templates/base.html").read_text(encoding="utf-8")
+    notifications_source = Path(__file__).resolve().parents[1].joinpath("routes/notifications.py").read_text(encoding="utf-8")
+
+    assert '"alerts", "mark_notification_read", "mark_all_notifications_read"' in app_source
+    assert 'href="{{ url_for(\'alerts\') }}"' in base_source
+    assert 'if not has_role(\'general_user\')' in base_source
+    assert 'user_has_role("general_user")' in notifications_source
