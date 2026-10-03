@@ -216,7 +216,7 @@
           <span class="label">{{ tr("Next due") }}</span><span class="value">{{ r.next_due or "—" }}</span>
 
           <span class="label">{{ tr("Reference standard") }}</span>
-          <span class="value wide-value">{{ (standard.code ~ " — " ~ standard.name) if standard else (r.reference_standard or "—") }}</span>
+          <span class="value wide-value">{% if standards %}{% for std in standards %}{{ std.code }} — {{ std.name }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}{{ r.reference_standard or "—" }}{% endif %}</span>
 
           <span class="label">{{ tr("Procedure") }}</span>
           <span class="value wide-value">{{ r.procedure_code or "—" }}{% if r.procedure_title %} — {{ r.procedure_title }}{% endif %}</span>
@@ -248,7 +248,7 @@
           </div>
           <div class="trace-box">
             <div class="box-caption">{{ tr("Traceability") }}</div>
-            <div class="box-value">{{ standard.code if standard else (r.reference_standard or "—") }}</div>
+            <div class="box-value">{% if standards %}{% for std in standards %}{{ std.code }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}{{ r.reference_standard or "—" }}{% endif %}</div>
             <div class="box-note">Complete measurement data, uncertainty, procedure and reference details are embedded in the QR.</div>
           </div>
         </div>
