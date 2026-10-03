@@ -1,5 +1,20 @@
 {% extends "base.html" %}
-{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no or "PREVIEW" }}{% endblock %}
+{% block title %}{{ tr("Calibration Certificate") }} {{ r.certificate_no or "PREVIEW" }}{% if g.user and g.user.role in ('admin','superadmin') and not preview %}
+<div class="noprint" style="max-width:148mm;margin:10px auto;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+  {% if r.certificate_status == 'ACTIVE' %}
+  <form method="post" action="{{ url_for('withdraw_certificate', cert=r.certificate_no) }}" onsubmit="var x=prompt('Reason for withdrawal:'); if(!x || !x.trim()) return false; this.reason.value=x; return true;">
+    {{ csrf_input() }}<input type="hidden" name="reason">
+    <button class="btn" type="submit">Withdraw certificate</button>
+  </form>
+  {% endif %}
+  <form method="post" action="{{ url_for('reissue_certificate', cert=r.certificate_no) }}" onsubmit="var x=prompt('Reason for reissue:'); if(!x || !x.trim()) return false; this.reason.value=x; return true;">
+    {{ csrf_input() }}<input type="hidden" name="reason">
+    <button class="btn" type="submit">Reissue certificate</button>
+  </form>
+</div>
+{% endif %}
+
+{% endblock %}
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
