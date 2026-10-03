@@ -2,6 +2,51 @@
 from app import *
 from app import _qr_data_uri
 
+
+
+def selected_reference_standards(db, form, cal_date):
+    """Validate and snapshot one or more registered reference standards for a calibration."""
+    ids = []
+    for raw in form.getlist("standard_id"):
+        raw = str(raw).strip()
+        if not raw:
+            continue
+        if not raw.isdigit():
+            raise ValueError("Select valid registered reference standards.")
+        sid = int(raw)
+        if sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise ValueError("Select at least one registered reference standard.")
+    standards = []
+    for sid in ids:
+        std = db.execute(
+            "SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (sid,)
+        ).fetchone()
+        if not std:
+            raise ValueError("One of the selected reference standards is unavailable or inactive.")
+        if std["calibrated_on"] > cal_date:
+            raise ValueError(f"Cannot use {std['code']}: it was calibrated on {std['calibrated_on']}, after this calibration date.")
+        if std["valid_until"] < cal_date:
+            raise ValueError(f"Cannot use {std['code']}: its validity ended on {std['valid_until']}.")
+        if not std["certificate_no"] or not std["traceability"]:
+            raise ValueError(f"Reference standard {std['code']} is missing certificate or traceability information.")
+        standards.append(std)
+    return standards
+
+
+def persist_calibration_reference_standards(db, cal_id, standards):
+    """Replace the controlled standard links for a calibration."""
+    db.execute("DELETE FROM calibration_reference_standards WHERE cal_id=?", (cal_id,))
+    db.executemany(
+        """INSERT INTO calibration_reference_standards
+           (cal_id, standard_id, selection_order, is_primary, usage_role)
+           VALUES (?,?,?,?,?)""",
+        [(cal_id, std["standard_id"], i, 1 if i == 1 else 0, "REFERENCE")
+         for i, std in enumerate(standards, 1)],
+    )
+
+
 def calibration_delete_blocked(row, revision_count, review_count):
     """Return whether a calibration record must be retained for traceability."""
     return bool(
@@ -202,24 +247,22 @@ def calibrate(sensor_id):
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
-        std = None
-        std_id, std_details = None, None
-        sid = f.get("standard_id", "")
-        if sid.isdigit():
-            std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",
-                             (int(sid),)).fetchone()
-            problem = None
-            if not std:
-                problem = tr("Could not use that reference standard. Choose another one.")
-            elif std["valid_until"] < cal_date:
-                problem = tr("Cannot save: {code} expired on {d}. Use a standard that was valid "
-                             "on the calibration date.").format(code=std["code"], d=std["valid_until"])
-            elif std["calibrated_on"] > cal_date:
-                problem = tr("Cannot save: {code} was only calibrated on {d}, after this "
-                             "calibration date.").format(code=std["code"], d=std["calibrated_on"])
-            if problem:
-                flash(problem, "error")
-                return redirect(url_for("calibrate", sensor_id=sensor_id))
+        try:
+            standards_selected = selected_reference_standards(db, f, cal_date)
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
+        std = standards_selected[0]
+        std_id = std["standard_id"]
+        ref_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+        std_details = json.dumps([
+            {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+             "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+             "serial": x["serial_number"], "traceability": x["traceability"],
+             "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+             "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+            for x in standards_selected
+        ], ensure_ascii=False)
             ref_text, std_id = f"{std['code']} – {std['name']}", std["standard_id"]
             std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
                                       "certificate": std["certificate_no"], "valid_until": std["valid_until"],
@@ -304,6 +347,7 @@ def calibrate(sensor_id):
              uncertainty["combined_standard_uncertainty"], uncertainty["coverage_factor"],
              uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], json.dumps(uncertainty["calculation"], ensure_ascii=False),
              uncertainty["environment_temperature"], uncertainty["environment_humidity"], procedure_id))
+        persist_calibration_reference_standards(db, cur.lastrowid, standards_selected)
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,error,result,tolerance,"
             "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
@@ -384,7 +428,7 @@ def calibrate(sensor_id):
         "WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY request_id DESC"
     ).fetchall()
     return render_template("calibrate.html", s=s, today=date.today().isoformat(),
-                           standards=standards_, requests=requests_, procedure=procedure, procedure_points=procedure_points)
+                           standards=standards_, selected_standard_ids=[], requests=requests_, procedure=procedure, procedure_points=procedure_points)
 
 
 @app.route("/calibrate-request/<int:request_id>", methods=["GET", "POST"])
@@ -494,7 +538,7 @@ def calibrate_pending_request(request_id):
                 if not std["certificate_no"] or not std["traceability"]:
                     raise ValueError("The selected reference standard is missing certificate or traceability information.")
             uncertainty = validate_calibration_controls(
-                request.form, procedure, std if std_id else None, unit
+                request.form, procedure, std, unit
             )
             if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
                 raise ValueError("A calibration record already exists for this request.")
@@ -587,7 +631,7 @@ def calibrate_pending_request(request_id):
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
-    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,procedure=procedure,procedure_points=procedure_points)
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,selected_standard_ids=[],procedure=procedure,procedure_points=procedure_points)
 
 
 @app.route("/calibrations/<int:cal_id>/edit", methods=["GET", "POST"])
@@ -795,11 +839,11 @@ def edit_calibration(cal_id):
     stations_ = db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
     if sensor:
         return render_template("calibrate.html", s=sensor, today=cal["cal_date"], standards=standards_,
-                               requests=[], calibration=cal, points=points, edit_mode=True,
+                               requests=[], calibration=cal, selected_standard_ids=[r["standard_id"] for r in calibration_reference_standards(db, cal_id)], points=points, edit_mode=True,
                                work_order_id=wo["work_order_id"], procedure=procedure,
                                procedure_points=procedure_points)
     return render_template("calibrate_pending.html", req=req, today=cal["cal_date"], standards=standards_,
-                           stations=stations_, calibration=cal, points=points, edit_mode=True,
+                           stations=stations_, calibration=cal, selected_standard_ids=[r["standard_id"] for r in calibration_reference_standards(db, cal_id)], points=points, edit_mode=True,
                            work_order_id=wo["work_order_id"], procedure=procedure, procedure_points=procedure_points)
 
 @app.route("/calibrations/<int:cal_id>/certificate-preview")
