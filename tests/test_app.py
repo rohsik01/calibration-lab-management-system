@@ -522,6 +522,9 @@ def test_multi_role_user_model_and_review_permissions_are_defined():
     assert "role IN ('superadmin','admin','technician','reviewer','general_user')" in app_source
     assert "def user_has_role(role" in app_source
     assert "def reviewer_required" in app_source
-    assert "@reviewer_required" in review_source
+    assert '@reviewer_required' in review_source
+    assert '@app.route("/reviews/<int:review_id>/calibration")' in review_source
+    assert '@app.route("/reviews/<int:review_id>/decision", methods=["POST"])' in review_source
+    assert "the pending station must be created by an administrator" in review_source
     assert 'name="roles"' in users_template
     assert "update_user_roles" in users_source
