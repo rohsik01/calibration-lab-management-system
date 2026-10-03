@@ -115,6 +115,21 @@ CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
     ON calibration_reference_standards(standard_id, cal_id);
 CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
     ON calibration_reference_standards(cal_id, selection_order);
+CREATE TABLE IF NOT EXISTS work_order_reference_standards (
+    work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id) ON DELETE CASCADE,
+    standard_id INTEGER NOT NULL REFERENCES reference_standards(standard_id),
+    selection_order INTEGER NOT NULL DEFAULT 1,
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+    usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+    PRIMARY KEY (work_order_id, standard_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_order_reference_standards_one_primary
+    ON work_order_reference_standards(work_order_id)
+    WHERE is_primary = 1;
+CREATE INDEX IF NOT EXISTS idx_work_order_reference_standards_standard
+    ON work_order_reference_standards(standard_id, work_order_id);
+CREATE INDEX IF NOT EXISTS idx_work_order_reference_standards_work_order
+    ON work_order_reference_standards(work_order_id, selection_order);
 
 CREATE TABLE IF NOT EXISTS calibration_points (
     point_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -913,6 +928,32 @@ with sqlite3.connect(DB, timeout=30) as _c:
         SELECT cal_id, standard_id, 1, 1, 'REFERENCE'
         FROM calibrations
         WHERE standard_id IS NOT NULL""")
+
+    # Upgrade older databases: allow each work order to designate multiple controlled reference standards.
+    _c.execute("""CREATE TABLE IF NOT EXISTS work_order_reference_standards (
+        work_order_id INTEGER NOT NULL REFERENCES calibration_work_orders(work_order_id) ON DELETE CASCADE,
+        standard_id INTEGER NOT NULL REFERENCES reference_standards(standard_id),
+        selection_order INTEGER NOT NULL DEFAULT 1,
+        is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+        usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+        PRIMARY KEY (work_order_id, standard_id)
+    )""")
+    _c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_work_order_reference_standards_one_primary
+        ON work_order_reference_standards(work_order_id)
+        WHERE is_primary = 1""")
+    _c.execute("""CREATE INDEX IF NOT EXISTS idx_work_order_reference_standards_standard
+        ON work_order_reference_standards(standard_id, work_order_id)""")
+    _c.execute("""CREATE INDEX IF NOT EXISTS idx_work_order_reference_standards_work_order
+        ON work_order_reference_standards(work_order_id, selection_order)""")
+    _c.execute("""INSERT OR IGNORE INTO work_order_reference_standards
+        (work_order_id, standard_id, selection_order, is_primary, usage_role)
+        SELECT work_order_id, standard_id, 1, 1, 'REFERENCE'
+        FROM calibration_work_orders
+        WHERE standard_id IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM reference_standards rs
+              WHERE rs.standard_id = calibration_work_orders.standard_id
+          )""")
 
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
