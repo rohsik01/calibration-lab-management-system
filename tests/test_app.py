@@ -178,7 +178,7 @@ def test_certificate_verification_uses_compact_signed_url_not_embedded_measureme
     assert "certificate_verification_url" in source
     assert "qr_code = _qr_data_uri(verification_url)" in source
     assert "NO WEB / LOCALHOST LINK" not in source
-    assert "@app.route("/verify/<cert>/<token>")" in source
+    assert '@app.route("/verify/<cert>/<token>")' in source
 
 
 def test_certificate_integrity_and_lifecycle_controls_are_present():
@@ -215,7 +215,7 @@ def test_certificate_pdf_endpoint_and_dependency_are_present():
     req_path = Path(__file__).resolve().parents[1] / "requirements.txt"
     route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
     assert "reportlab" in req_path.read_text(encoding="utf-8")
-    assert "@app.route("/certificate/<cert>/pdf")" in route_path.read_text(encoding="utf-8")
+    assert '@app.route("/certificate/<cert>/pdf")' in route_path.read_text(encoding="utf-8")
 
 
 def test_certificate_numbering_is_transaction_safe():
