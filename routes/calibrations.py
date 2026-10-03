@@ -81,7 +81,7 @@ def calibration_revision_detail(cal_id, revision_no):
     ).fetchone()
     if not cal:
         abort(404)
-    if g.user["role"] not in ("admin", "superadmin"):
+    if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer")):
         if not cal["work_order_id"] or cal["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
 
@@ -133,8 +133,8 @@ def calibrate(sensor_id):
     if not s:
         abort(404)
     linked_request_id = request.values.get("request_id", "").strip()
-    if g.user["role"] == "admin":
-        flash("Administrators verify calibration data but do not enter technician measurements.", "error")
+    if not user_has_role("technician"):
+        flash("Calibration measurements can only be entered by a user with the Technician role.", "error")
         return redirect(url_for("sensor", sensor_id=sensor_id))
     if not linked_request_id.isdigit():
         flash("Calibration measurements must be entered from an assigned calibration work order.", "error")
