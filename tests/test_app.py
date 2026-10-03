@@ -104,3 +104,13 @@ def test_approved_calibration_edit_and_delete_paths_are_protected():
     assert "CALIBRATION_DELETE_BLOCKED" in route_source
     assert "calibration_revisions WHERE cal_id=?" in route_source
     assert "calibration_review_history WHERE cal_id=?" in route_source
+
+
+def test_calibration_history_template_only_offers_delete_for_unrevisioned_drafts():
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "sensor.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    assert 'h.lifecycle_status == "DRAFT"' in template
+    assert "not h.certificate_no" in template
+    assert "not h.revision_no" in template
+    assert 'tr("Protected")' in template
