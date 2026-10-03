@@ -1033,12 +1033,14 @@ def calibration_reference_standards(db, cal_id):
     if rows:
         return rows
     # Compatibility for a legacy calibration created before the junction table.
+    # Lightweight legacy databases may contain only lifecycle fields in
+    # reference_standards, so select only columns guaranteed by the validator.
     cal = db.execute("SELECT standard_id FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
     if cal and cal["standard_id"]:
         row = db.execute(
             """SELECT 1 AS selection_order, 1 AS is_primary, 'REFERENCE' AS usage_role,
-                      standard_id, code, name, standard_type, manufacturer, serial_number,
-                      uncertainty, traceability, certificate_no, calibrated_on, valid_until, active
+                      standard_id, calibrated_on, valid_until, certificate_no,
+                      traceability, active
                FROM reference_standards WHERE standard_id=?""",
             (cal["standard_id"],),
         ).fetchone()
