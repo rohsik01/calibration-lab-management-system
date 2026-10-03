@@ -897,7 +897,7 @@ def certificate(cert):
 
 @app.route("/certificate/<cert>/pdf")
 def certificate_pdf(cert):
-    """Generate an A6 official certificate PDF with the compact verification QR."""
+    """Generate the compact A6 official certificate with the same visual hierarchy as the browser certificate."""
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
@@ -918,6 +918,7 @@ def certificate_pdf(cert):
     ).fetchone()
     if not r:
         abort(404)
+
     try:
         from reportlab.lib.pagesizes import A6
         from reportlab.pdfgen import canvas
@@ -937,46 +938,152 @@ def certificate_pdf(cert):
     width, height = A6
     pdf.setTitle("DHM Calibration Certificate " + cert)
     pdf.setAuthor("DHM Calibration Laboratory")
-    margin = 18
-    pdf.setStrokeColor(colors.HexColor("#174b7b"))
-    pdf.rect(margin, margin, width-2*margin, height-2*margin)
-    pdf.setFillColor(colors.HexColor("#174b7b"))
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(margin+10, height-40, "DHM CALIBRATION CERTIFICATE")
-    pdf.setFillColor(colors.HexColor("#172b43"))
-    pdf.setFont("Helvetica-Bold", 8)
-    pdf.drawString(margin+10, height-55, "Certificate No.: " + cert)
 
-    y = height-80
-    pdf.setFont("Helvetica", 7)
-    for label, value in (
+    navy = colors.HexColor("#174b7b")
+    ink = colors.HexColor("#172b43")
+    muted = colors.HexColor("#607187")
+    light = colors.HexColor("#eef4f8")
+    white = colors.white
+    margin = 18
+    right = width - margin
+    top = height - margin
+    qr_panel_w = 112
+    gap = 12
+    left_w = right - margin - qr_panel_w - gap
+
+    # A6 card frame and header.
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(1.0)
+    pdf.roundRect(margin, margin, width - 2 * margin, height - 2 * margin, 6, stroke=1, fill=0)
+
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(0.7)
+    pdf.circle(margin + 22, top - 22, 15, stroke=1, fill=0)
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.drawCentredString(margin + 22, top - 24, "DHM")
+
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.drawString(margin + 44, top - 15, "DEPARTMENT OF HYDROLOGY")
+    pdf.drawString(margin + 44, top - 26, "AND METEOROLOGY")
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 6.5)
+    pdf.drawString(margin + 44, top - 36, "Calibration Laboratory")
+
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawRightString(right - 8, top - 16, "CALIBRATION CERTIFICATE")
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.drawRightString(right - 8, top - 28, "Certificate No. " + cert)
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(1.0)
+    pdf.line(margin + 8, top - 46, right - 8, top - 46)
+
+    # Left-side essential certificate information.
+    left_x = margin + 8
+    y = top - 62
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.setFillColor(navy)
+    pdf.drawString(left_x, y, "INSTRUMENT DETAILS")
+    y -= 12
+
+    fields = (
         ("Instrument", r["sensor_type"] or "—"),
         ("Serial number", r["serial_number"] or "—"),
         ("Station", r["station"] or "—"),
         ("Unit", r["unit"] or "—"),
         ("Calibration date", r["cal_date"] or "—"),
         ("Next due", r["next_due"] or "—"),
-        ("Result", r["result"] or "—"),
-        ("Maximum error", str(r["max_error"] if r["max_error"] is not None else abs(r["error"]))),
-        ("Approved by", r["approved_by"] or "—"),
-    ):
-        pdf.setFillColor(colors.HexColor("#607187"))
-        pdf.drawString(margin+10, y, label)
-        pdf.setFillColor("#172b43")
-        pdf.setFont("Helvetica-Bold", 7)
-        pdf.drawString(margin+75, y, str(value)[:42])
-        pdf.setFont("Helvetica", 7)
-        y -= 16
+    )
+    label_x = left_x
+    value_x = left_x + 62
+    for label, value in fields:
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica", 6.2)
+        pdf.drawString(label_x, y, label)
+        pdf.setFillColor(ink)
+        pdf.setFont("Helvetica-Bold", 6.2)
+        pdf.drawString(value_x, y, str(value)[:32])
+        y -= 13
 
-    qr_size = 92
-    pdf.drawImage(ImageReader(qr_bytes), width-qr_size-margin-8, 42, qr_size, qr_size,
-                  preserveAspectRatio=True, mask="auto")
+    y -= 4
+    pdf.setFillColor(light)
+    pdf.roundRect(left_x, y - 42, left_w - 8, 42, 4, stroke=0, fill=1)
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.drawString(left_x + 7, y - 11, "CALIBRATION RESULT")
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(left_x + 7, y - 25, str(r["result"] or "—"))
+    pdf.setFont("Helvetica", 6)
+    pdf.setFillColor(muted)
+    pdf.drawString(left_x + 72, y - 24, "Maximum absolute error")
+    pdf.setFillColor(ink)
     pdf.setFont("Helvetica-Bold", 7)
-    pdf.setFillColor("#174b7b")
-    pdf.drawCentredString(width-qr_size/2-margin-8, 34, "SCAN TO VERIFY")
+    max_error = r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
+    pdf.drawString(left_x + 72, y - 34, str(max_error))
+
+    y -= 57
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.drawString(left_x, y, "REFERENCE & AUTHORIZATION")
+    y -= 13
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 6)
+    pdf.drawString(left_x, y, "Reference standard")
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 6)
+    pdf.drawString(left_x + 62, y, "Controlled laboratory reference")
+    y -= 14
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 6)
+    pdf.drawString(left_x, y, "Approved by")
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 6)
+    pdf.drawString(left_x + 62, y, str(r["approved_by"] or "—")[:28])
+
+    # Right QR verification panel.
+    panel_x = margin + 8 + left_w + gap
+    panel_y = margin + 28
+    panel_h = height - 2 * margin - 86
+    pdf.setStrokeColor(navy)
+    pdf.setLineWidth(0.7)
+    pdf.roundRect(panel_x, panel_y, qr_panel_w, panel_h, 4, stroke=1, fill=0)
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, top - 62, "VERIFY ONLINE")
+
+    qr_size = 86
+    qr_x = panel_x + (qr_panel_w - qr_size) / 2
+    qr_y = top - 62 - qr_size - 10
+    pdf.drawImage(
+        ImageReader(qr_bytes), qr_x, qr_y, qr_size, qr_size,
+        preserveAspectRatio=True, mask="auto",
+    )
+    pdf.setFillColor(navy)
+    pdf.setFont("Helvetica-Bold", 6.5)
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 12, "SCAN TO VERIFY")
+    pdf.setFillColor(muted)
     pdf.setFont("Helvetica", 5.5)
-    pdf.setFillColor("#607187")
-    pdf.drawCentredString(width/2, 25, "DHM Calibration Laboratory · Accuracy · Traceability · Trust")
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 23, "Opens the complete")
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 31, "digital calibration report.")
+    pdf.setFillColor(ink)
+    pdf.setFont("Helvetica-Bold", 6)
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 38, "STATUS: ACTIVE")
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 5.3)
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 28, "Official verification record")
+    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 20, "retained by DHM.")
+
+    pdf.setStrokeColor(navy)
+    pdf.line(margin + 8, margin + 19, right - 8, margin + 19)
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 5.3)
+    pdf.drawString(margin + 8, margin + 10, "Retain this certificate with the complete digital report.")
+    pdf.drawRightString(right - 8, margin + 10, "DHM Calibration Laboratory")
+
     pdf.showPage()
     pdf.save()
     out.seek(0)
@@ -984,7 +1091,6 @@ def certificate_pdf(cert):
         out.getvalue(), mimetype="application/pdf",
         headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'},
     )
-
 
 @app.route("/certificates/<cert>/withdraw", methods=["POST"])
 @admin_required
