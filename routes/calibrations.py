@@ -883,6 +883,38 @@ def certificate(cert):
     )
 
 
+@app.route("/certificate/<cert>/pdf")
+def certificate_pdf(cert):
+    """Generate an A6 PDF copy of the official certificate."""
+    db = get_db()
+    r = db.execute(
+        "SELECT certificate_no, certificate_status, lifecycle_status FROM calibrations WHERE certificate_no=?",
+        (cert,),
+    ).fetchone()
+    if not r or r["lifecycle_status"] != "APPROVED" or r["certificate_status"] != "ACTIVE":
+        abort(404)
+    try:
+        from reportlab.lib.pagesizes import A6
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        abort(503, "PDF generation requires reportlab.")
+    out = io.BytesIO()
+    pdf = canvas.Canvas(out, pagesize=A6)
+    width, height = A6
+    pdf.setTitle("DHM Calibration Certificate " + cert)
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(20, height - 35, "DHM CALIBRATION CERTIFICATE")
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(20, height - 55, "Certificate No.: " + cert)
+    pdf.drawString(20, height - 72, "Verify using the QR code on the printed certificate.")
+    pdf.showPage()
+    pdf.save()
+    out.seek(0)
+    return Response(out.getvalue(), mimetype="application/pdf",
+                    headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'})
+
+
+
 @app.route("/certificates/<cert>/withdraw", methods=["POST"])
 @admin_required
 def withdraw_certificate(cert):
