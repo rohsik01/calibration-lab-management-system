@@ -5,7 +5,15 @@ import pytest
 
 from flask import g
 
-from app import app as flask_app, calculate_measurement_uncertainty, certificate_verification_token, user_has_role
+from app import (
+    admin_required,
+    app as flask_app,
+    calculate_measurement_uncertainty,
+    certificate_verification_token,
+    reviewer_required,
+    superadmin_required,
+    user_has_role,
+)
 from routes.calibrations import calibration_delete_blocked
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
@@ -528,3 +536,63 @@ def test_multi_role_user_model_and_review_permissions_are_defined():
     assert "the pending station must be created by an administrator" in review_source
     assert 'name="roles"' in users_template
     assert "update_user_roles" in users_source
+
+
+@pytest.mark.parametrize(
+    "roles,capability,expected",
+    [
+        ({"technician", "reviewer"}, "technician", True),
+        ({"technician", "reviewer"}, "reviewer", True),
+        ({"technician", "reviewer"}, "admin", False),
+        ({"technician", "admin"}, "technician", True),
+        ({"technician", "admin"}, "admin", True),
+        ({"admin", "reviewer"}, "reviewer", True),
+        ({"general_user", "technician"}, "technician", True),
+        ({"general_user", "technician"}, "admin", False),
+        ({"general_user"}, "general_user", True),
+    ],
+)
+def test_multi_role_capabilities_are_independent(roles, capability, expected):
+    with flask_app.test_request_context("/"):
+        g.user_roles = roles
+        assert user_has_role(capability) is expected
+
+
+def test_multi_role_authorization_decorators_use_assigned_roles():
+    @admin_required
+    def admin_action():
+        return "admin-ok"
+
+    @reviewer_required
+    def review_action():
+        return "review-ok"
+
+    @superadmin_required
+    def superadmin_action():
+        return "superadmin-ok"
+
+    with flask_app.test_request_context("/"):
+        g.user_roles = {"technician", "reviewer"}
+        assert admin_action.__wrapped__ if False else review_action() == "review-ok"
+        with pytest.raises(Exception):
+            admin_action()
+        with pytest.raises(Exception):
+            superadmin_action()
+
+        g.user_roles = {"technician", "admin"}
+        assert admin_action() == "admin-ok"
+        with pytest.raises(Exception):
+            review_action()
+        with pytest.raises(Exception):
+            superadmin_action()
+
+        g.user_roles = {"admin", "reviewer"}
+        assert admin_action() == "admin-ok"
+        assert review_action() == "review-ok"
+        with pytest.raises(Exception):
+            superadmin_action()
+
+        g.user_roles = {"superadmin", "technician"}
+        assert admin_action() == "admin-ok"
+        assert review_action() == "review-ok"
+        assert superadmin_action() == "superadmin-ok"
