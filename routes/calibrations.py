@@ -968,14 +968,14 @@ def reissue_certificate(cert):
             """INSERT INTO certificate_history
                (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, reason, changed_by, changed_at)
                VALUES (?,?,'REISSUED',?,?,?,?,?)""",
-            (row["cal_id"], new_cert, " ".join([cert]), fingerprint, reason, g.user["user_id"], now),
+            (row["cal_id"], new_cert, "REISSUED", cert, fingerprint, reason, g.user["user_id"], now),
         )
         # Retain a searchable historical event for the old certificate number.
         db.execute(
             """INSERT INTO certificate_history
                (cal_id, certificate_no, event_type, previous_certificate_no, fingerprint, reason, changed_by, changed_at)
                VALUES (?,?,'SUPERSEDED',?,?,?,?,?)""",
-            (row["cal_id"], cert, new_cert, row["certificate_fingerprint"], reason, g.user["user_id"], now),
+            (row["cal_id"], cert, "SUPERSEDED", new_cert, row["certificate_fingerprint"], reason, g.user["user_id"], now),
         )
         audit_event(
             "CERTIFICATE_REISSUED", "certificate", new_cert,
