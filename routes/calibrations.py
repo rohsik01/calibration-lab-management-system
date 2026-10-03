@@ -885,34 +885,92 @@ def certificate(cert):
 
 @app.route("/certificate/<cert>/pdf")
 def certificate_pdf(cert):
-    """Generate an A6 PDF copy of the official certificate."""
+    """Generate an A6 official certificate PDF with the compact verification QR."""
     db = get_db()
     r = db.execute(
-        "SELECT certificate_no, certificate_status, lifecycle_status FROM calibrations WHERE certificate_no=?",
+        """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.unit, rq.pending_unit) AS unit,
+                  COALESCE(st.name, rq.pending_station_name) AS station,
+                  (SELECT u.full_name FROM calibration_review_history rh
+                   JOIN users u ON u.user_id=rh.reviewed_by
+                   WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by
+           FROM calibrations c
+           LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
+           LEFT JOIN stations st ON st.station_id=s.station_id
+           LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'
+                 AND c.certificate_status='ACTIVE'""",
         (cert,),
     ).fetchone()
-    if not r or r["lifecycle_status"] != "APPROVED" or r["certificate_status"] != "ACTIVE":
+    if not r:
         abort(404)
     try:
         from reportlab.lib.pagesizes import A6
         from reportlab.pdfgen import canvas
+        from reportlab.lib.utils import ImageReader
     except ImportError:
         abort(503, "PDF generation requires reportlab.")
+
+    verification_url = certificate_verification_url(cert)
+    qr = qrcode.make(verification_url)
+    qr_bytes = io.BytesIO()
+    qr.save(qr_bytes, format="PNG")
+    qr_bytes.seek(0)
+
     out = io.BytesIO()
     pdf = canvas.Canvas(out, pagesize=A6)
     width, height = A6
     pdf.setTitle("DHM Calibration Certificate " + cert)
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(20, height - 35, "DHM CALIBRATION CERTIFICATE")
-    pdf.setFont("Helvetica", 9)
-    pdf.drawString(20, height - 55, "Certificate No.: " + cert)
-    pdf.drawString(20, height - 72, "Verify using the QR code on the printed certificate.")
+    pdf.setAuthor("DHM Calibration Laboratory")
+    margin = 18
+    pdf.setStrokeColor("#174b7b")
+    pdf.rect(margin, margin, width-2*margin, height-2*margin)
+    pdf.setFillColor("#174b7b")
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(margin+10, height-40, "DHM CALIBRATION CERTIFICATE")
+    pdf.setFillColor("#172b43")
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawString(margin+10, height-55, "Certificate No.: " + cert)
+
+    y = height-80
+    pdf.setFont("Helvetica", 7)
+    for label, value in (
+        ("Instrument", r["sensor_type"] or "—"),
+        ("Serial number", r["serial_number"] or "—"),
+        ("Station", r["station"] or "—"),
+        ("Unit", r["unit"] or "—"),
+        ("Calibration date", r["cal_date"] or "—"),
+        ("Next due", r["next_due"] or "—"),
+        ("Result", r["result"] or "—"),
+        ("Maximum error", str(r["max_error"] if r["max_error"] is not None else abs(r["error"]))),
+        ("Approved by", r["approved_by"] or "—"),
+    ):
+        pdf.setFillColor("#607187")
+        pdf.drawString(margin+10, y, label)
+        pdf.setFillColor("#172b43")
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawString(margin+75, y, str(value)[:42])
+        pdf.setFont("Helvetica", 7)
+        y -= 16
+
+    qr_size = 92
+    pdf.drawImage(ImageReader(qr_bytes), width-qr_size-margin-8, 42, qr_size, qr_size,
+                  preserveAspectRatio=True, mask="auto")
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.setFillColor("#174b7b")
+    pdf.drawCentredString(width-qr_size/2-margin-8, 34, "SCAN TO VERIFY")
+    pdf.setFont("Helvetica", 5.5)
+    pdf.setFillColor("#607187")
+    pdf.drawCentredString(width/2, 25, "DHM Calibration Laboratory · Accuracy · Traceability · Trust")
     pdf.showPage()
     pdf.save()
     out.seek(0)
-    return Response(out.getvalue(), mimetype="application/pdf",
-                    headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'})
-
+    return Response(
+        out.getvalue(), mimetype="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'},
+    )
 
 
 @app.route("/certificates/<cert>/withdraw", methods=["POST"])
