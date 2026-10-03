@@ -3,7 +3,7 @@ from app import *
 from routes.sensors import _station_sensor_id
 
 @app.route("/reviews")
-@admin_required
+@reviewer_required
 def calibration_reviews():
     db = get_db()
     pending = db.execute(
