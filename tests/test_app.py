@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from app import app as flask_app, calculate_measurement_uncertainty
+from routes.calibrations import calibration_delete_blocked
 
 
 @pytest.fixture
@@ -73,3 +74,43 @@ def test_calibration_review_api_selects_as_found_and_as_left_fields():
     assert "as_found_value, as_found_error, as_found_result" in route_source
     assert "as_left_value, as_left_error, as_left_result" in route_source
     assert "SELECT point_no, reference_value, measured_value" not in route_source
+
+
+@pytest.mark.parametrize(
+    "lifecycle_status,certificate_no,revision_count,review_count,blocked",
+    [
+        ("APPROVED", "CAL-2026-0001", 1, 1, True),
+        ("SUBMITTED", None, 1, 1, True),
+        ("RETURNED", None, 2, 1, True),
+        ("DRAFT", "CAL-2026-0002", 0, 0, True),
+        ("DRAFT", None, 1, 0, True),
+        ("DRAFT", None, 0, 1, True),
+        ("DRAFT", None, 0, 0, False),
+    ],
+)
+def test_calibration_delete_protection_preserves_controlled_history(
+    lifecycle_status, certificate_no, revision_count, review_count, blocked
+):
+    row = {"lifecycle_status": lifecycle_status, "certificate_no": certificate_no}
+    assert calibration_delete_blocked(row, revision_count, review_count) is blocked
+
+
+def test_approved_calibration_edit_and_delete_paths_are_protected():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    route_source = route_path.read_text(encoding="utf-8")
+
+    assert 'if cal["lifecycle_status"] == "APPROVED":' in route_source
+    assert "Approved calibration records are immutable." in route_source
+    assert "CALIBRATION_DELETE_BLOCKED" in route_source
+    assert "calibration_revisions WHERE cal_id=?" in route_source
+    assert "calibration_review_history WHERE cal_id=?" in route_source
+
+
+def test_calibration_history_template_only_offers_delete_for_unrevisioned_drafts():
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "sensor.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    assert 'h.lifecycle_status == "DRAFT"' in template
+    assert "not h.certificate_no" in template
+    assert "not h.revision_no" in template
+    assert 'tr("Protected")' in template

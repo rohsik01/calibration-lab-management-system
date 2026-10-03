@@ -2,13 +2,60 @@
 from app import *
 from app import _qr_data_uri
 
+def calibration_delete_blocked(row, revision_count, review_count):
+    """Return whether a calibration record must be retained for traceability."""
+    return bool(
+        row["lifecycle_status"] == "APPROVED"
+        or row["certificate_no"]
+        or revision_count
+        or review_count
+    )
+
+
 @app.route("/calibrations/<int:cal_id>/delete", methods=["POST"])
 @admin_required
 def delete_calibration(cal_id):
     db = get_db()
-    row = db.execute("SELECT certificate_no, sensor_id FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    row = db.execute(
+        """SELECT certificate_no, sensor_id, lifecycle_status, revision_no
+           FROM calibrations WHERE cal_id=?""",
+        (cal_id,),
+    ).fetchone()
     if not row:
         abort(404)
+
+    # Calibration records are part of the laboratory's controlled technical
+    # record. Once a revision, review, certificate, or approval exists, the
+    # record must remain available so its history cannot be destroyed.
+    revision_count = db.execute(
+        "SELECT COUNT(*) FROM calibration_revisions WHERE cal_id=?",
+        (cal_id,),
+    ).fetchone()[0]
+    review_count = db.execute(
+        "SELECT COUNT(*) FROM calibration_review_history WHERE cal_id=?",
+        (cal_id,),
+    ).fetchone()[0]
+
+    if calibration_delete_blocked(row, revision_count, review_count):
+        audit_event(
+            "CALIBRATION_DELETE_BLOCKED",
+            "calibration",
+            cal_id,
+            details={
+                "lifecycle_status": row["lifecycle_status"],
+                "certificate_no": row["certificate_no"],
+                "revision_count": revision_count,
+                "review_count": review_count,
+            },
+        )
+        db.commit()
+        flash(
+            "Calibration records with approval, certificates, reviews, or revision history "
+            "are protected and cannot be deleted. Use the controlled correction/recalibration workflow.",
+            "error",
+        )
+        return redirect(url_for("sensor", sensor_id=row["sensor_id"]))
+
     try:
         with db:
             db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
