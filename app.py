@@ -1011,17 +1011,25 @@ with sqlite3.connect(DB, timeout=30) as _c:
 
 def calibration_reference_standards(db, cal_id):
     """Return all controlled reference standards used by a calibration, in selection order."""
-    rows = db.execute(
-        """SELECT crs.selection_order, crs.is_primary, crs.usage_role,
-                  rs.standard_id, rs.code, rs.name, rs.standard_type, rs.manufacturer,
-                  rs.serial_number, rs.uncertainty, rs.traceability, rs.certificate_no,
-                  rs.calibrated_on, rs.valid_until, rs.active
-           FROM calibration_reference_standards crs
-           JOIN reference_standards rs ON rs.standard_id=crs.standard_id
-           WHERE crs.cal_id=?
-           ORDER BY crs.selection_order, rs.standard_id""",
-        (cal_id,),
-    ).fetchall()
+    # Keep validators/reporting compatible with lightweight legacy test databases
+    # that do not create the junction table.
+    table = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='calibration_reference_standards'"
+    ).fetchone()
+    if not table:
+        rows = []
+    else:
+        rows = db.execute(
+            """SELECT crs.selection_order, crs.is_primary, crs.usage_role,
+                      rs.standard_id, rs.code, rs.name, rs.standard_type, rs.manufacturer,
+                      rs.serial_number, rs.uncertainty, rs.traceability, rs.certificate_no,
+                      rs.calibrated_on, rs.valid_until, rs.active
+               FROM calibration_reference_standards crs
+               JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+               WHERE crs.cal_id=?
+               ORDER BY crs.selection_order, rs.standard_id""",
+            (cal_id,),
+        ).fetchall()
     if rows:
         return rows
     # Compatibility for a legacy calibration created before the junction table.
