@@ -63,7 +63,7 @@ def build_operational_alerts(db):
                               WHERE w.status IN ('ASSIGNED','IN PROGRESS')
                               ORDER BY w.assigned_at ASC, w.work_order_id ASC""").fetchall()
     for r in work_rows:
-        if g.user["role"] == "admin":
+        if user_has_role("admin") or user_has_role("superadmin"):
             title = "Work order awaiting technician" if r["status"] == "ASSIGNED" else "Calibration in progress"
             sev = "warning" if r["status"] == "ASSIGNED" else "info"
             add_alert("work_order", sev, title,
@@ -80,7 +80,7 @@ def build_operational_alerts(db):
                       f"{r['work_order_no']} ({r['request_no']}) remains in progress.",
                       "work_order_detail", work_order_id=r["work_order_id"])
 
-    if g.user["role"] == "admin":
+    if user_has_role("admin") or user_has_role("superadmin"):
         stalled = db.execute("""SELECT request_id, request_no, client_name
                                 FROM calibration_requests
                                 WHERE status='REVIEWED'
