@@ -17,7 +17,7 @@ def selected_reference_standards(db, form, cal_date):
         if sid not in ids:
             ids.append(sid)
     if not ids:
-        raise ValueError("Select at least one registered reference standard.")
+        raise ValueError("At least one registered reference standard must be selected.")
     standards = []
     for sid in ids:
         std = db.execute(
