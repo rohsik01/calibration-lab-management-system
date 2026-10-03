@@ -16,13 +16,18 @@ def build_operational_alerts(db):
     horizon = today + timedelta(days=30)
     items = []
 
-    def add_alert(kind, severity, title, description, endpoint=None, **kwargs):
+    def add_alert(kind, severity, title, description, endpoint=None, alert_key=None, **kwargs):
         items.append({
             "kind": kind, "severity": severity, "title": title,
-            "description": description, "endpoint": endpoint, **kwargs
+            "description": description, "endpoint": endpoint, "alert_key": alert_key, **kwargs
         })
 
-    for r in db.execute(LATEST + " ORDER BY s.sensor_id").fetchall():
+    if not (user_has_role("general_user") and not any(user_has_role(role) for role in ("technician", "reviewer", "admin", "superadmin"))):
+        sensor_rows = db.execute(LATEST + " ORDER BY s.sensor_id").fetchall()
+    else:
+        sensor_rows = []
+
+    for r in sensor_rows:
         if r["result"] == "FAIL":
             add_alert("sensor", "critical", "Failed sensor calibration",
                       f"{r['sensor_id']} has a failed calibration result.",
@@ -49,12 +54,34 @@ def build_operational_alerts(db):
                                 JOIN calibration_requests r ON r.request_id=c.request_id
                                 WHERE rh.decision='PENDING'
                                 ORDER BY rh.submitted_at DESC""").fetchall()
-    if user_has_role("admin") or user_has_role("superadmin"):
+    if user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin"):
         for r in review_rows:
             add_alert("review", "critical", "Calibration awaiting review",
-                      f"{r['request_no']} / {r['certificate_no']} is waiting for administrator review.",
-                      "calibration_reviews", review_id=r["review_id"])
+                      f"{r['request_no']} / {r['certificate_no']} is waiting for review.",
+                      "calibration_reviews", alert_key="review|" + str(r["review_id"]), review_id=r["review_id"])
 
+    if user_has_role("general_user") and not any(user_has_role(role) for role in ("technician", "reviewer", "admin", "superadmin")):
+        request_rows = db.execute(
+            """SELECT request_id, request_no, status, updated_at
+               FROM calibration_requests
+               WHERE created_by=?
+               ORDER BY updated_at DESC LIMIT 20""",
+            (g.user["full_name"],)
+        ).fetchall()
+        for r in request_rows:
+            if r["status"] == "COMPLETED":
+                severity, title = "info", "Calibration request completed"
+            elif r["status"] == "CANCELLED":
+                severity, title = "critical", "Calibration request cancelled"
+            else:
+                severity, title = "info", "Calibration request status updated"
+            add_alert(
+                "request", severity, title,
+                f"{r['request_no']} is now {r['status']}.",
+                "calibration_request",
+                alert_key="request-status|" + str(r["request_id"]) + "|" + r["status"],
+                request_id=r["request_id"]
+            )
     work_rows = db.execute("""SELECT w.work_order_id, w.work_order_no, w.status,
                                      r.request_no, w.assigned_technician_id, u.full_name
                               FROM calibration_work_orders w
@@ -70,7 +97,7 @@ def build_operational_alerts(db):
                       f"{r['work_order_no']} ({r['request_no']}) is assigned to {r['full_name']}."
                       if r["status"] == "ASSIGNED" else
                       f"{r['work_order_no']} ({r['request_no']}) is currently in progress.",
-                      "work_order_detail", work_order_id=r["work_order_id"])
+                      "work_order_detail", alert_key="work-order|" + str(r["work_order_id"]) + "|" + r["status"], work_order_id=r["work_order_id"])
         elif r["assigned_technician_id"] == g.user["user_id"]:
             title = "Assigned work order" if r["status"] == "ASSIGNED" else "Calibration in progress"
             sev = "warning" if r["status"] == "ASSIGNED" else "info"
@@ -78,7 +105,7 @@ def build_operational_alerts(db):
                       f"{r['work_order_no']} ({r['request_no']}) is ready to start."
                       if r["status"] == "ASSIGNED" else
                       f"{r['work_order_no']} ({r['request_no']}) remains in progress.",
-                      "work_order_detail", work_order_id=r["work_order_id"])
+                      "work_order_detail", alert_key="work-order|" + str(r["work_order_id"]) + "|" + r["status"], work_order_id=r["work_order_id"])
 
     if user_has_role("admin") or user_has_role("superadmin"):
         stalled = db.execute("""SELECT request_id, request_no, client_name
@@ -93,7 +120,7 @@ def build_operational_alerts(db):
         for r in stalled:
             add_alert("request", "warning", "Reviewed request not assigned",
                       f"{r['request_no']} for {r['client_name']} is ready for technician assignment.",
-                      "calibration_request", request_id=r["request_id"])
+                      "calibration_request", alert_key="request-assignment|" + str(r["request_id"]), request_id=r["request_id"])
 
     return items
 
@@ -105,7 +132,7 @@ def sync_notifications(db, items):
     for a in items:
         entity = next((a.get(k) for k in ("review_id", "work_order_id", "request_id", "sensor_id")
                        if a.get(k) is not None), "")
-        key = "|".join([a["kind"], a["title"], str(entity)])
+        key = a.get("alert_key") or "|".join([a["kind"], a["title"], str(entity)])
         db.execute("""INSERT OR IGNORE INTO notifications
                       (user_id, alert_key, kind, severity, title, description,
                        endpoint, entity_id, created_at)
@@ -125,7 +152,18 @@ def alerts():
                          WHERE user_id=? ORDER BY notification_id DESC""",
                       (g.user["user_id"],)).fetchall()
     unread = [r for r in rows if r["read_at"] is None]
-    return render_template("alerts.html", alerts=items, notifications=rows, unread=unread)
+    view = request.args.get("view", "all").strip().lower()
+    if view == "unread":
+        visible_notifications = unread
+    elif view == "tasks":
+        visible_notifications = [r for r in unread if r["kind"] in ("review", "work_order", "request")]
+    else:
+        visible_notifications = rows
+    task_count = sum(1 for r in unread if r["kind"] in ("review", "work_order", "request"))
+    return render_template(
+        "alerts.html", alerts=items, notifications=visible_notifications,
+        unread=unread, view=view, task_count=task_count
+    )
 
 
 @app.route("/notifications/read/<int:notification_id>", methods=["POST"])
