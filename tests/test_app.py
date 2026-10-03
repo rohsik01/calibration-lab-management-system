@@ -179,6 +179,8 @@ def test_station_management_requires_administrator_and_explicit_station_id():
     assert "Station ID" in template_source
     assert 'name="station_id"' in template_source
     assert 'name="station_id" type="number"' in template_source
+    assert "Station ID is required." in route_source
+    assert "Station ID: enter the unique positive numeric Station ID" in route_source
 
 
 def test_technician_calibration_form_cannot_create_new_stations():
