@@ -3,8 +3,14 @@ from app import *
 
 def selected_work_order_standards(db, form, target_date):
     """Validate and return one or more controlled reference standards for a work order."""
+    if hasattr(form, "getlist"):
+        raw_ids = form.getlist("standard_id")
+    else:
+        raw_ids = form.get("standard_id", [])
+        if not isinstance(raw_ids, (list, tuple)):
+            raw_ids = [raw_ids]
     ids = []
-    for raw in form.getlist("standard_id"):
+    for raw in raw_ids:
         raw = str(raw).strip()
         if not raw:
             continue
