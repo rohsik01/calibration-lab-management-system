@@ -895,6 +895,8 @@ with sqlite3.connect(DB, timeout=30) as _c:
             expanded_uncertainty REAL, uncertainty_method TEXT DEFAULT 'RSS',
             uncertainty_calculation_json TEXT, environment_temperature REAL, environment_humidity REAL,
             certificate_issued_by INTEGER, certificate_issued_at TEXT, approved_revision INTEGER,
+            certificate_status TEXT NOT NULL DEFAULT 'NONE', certificate_fingerprint TEXT,
+            certificate_reissued_from TEXT, certificate_reissued_at TEXT,
             performed_by TEXT, n_points INTEGER NOT NULL DEFAULT 1, standard_id INTEGER,
             standard_details TEXT, request_id INTEGER, revision_no INTEGER NOT NULL DEFAULT 1,
             lifecycle_status TEXT NOT NULL DEFAULT 'DRAFT', created_at TEXT, updated_at TEXT,
