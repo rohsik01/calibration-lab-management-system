@@ -12,14 +12,15 @@ def client():
         yield client
 
 
-def test_home(client):
+def test_home_redirects_to_login(client):
     response = client.get("/")
-    assert response.status_code == 200
+    assert response.status_code == 302
+    assert "/login" in response.location
 
 
-def test_about(client):
+def test_about_route_is_not_present(client):
     response = client.get("/about")
-    assert response.status_code == 200
+    assert response.status_code == 404
 
 
 def test_uncertainty_calculation_uses_rss_and_coverage_factor():
@@ -72,3 +73,4 @@ def test_calibration_review_api_selects_as_found_and_as_left_fields():
     assert "as_found_value, as_found_error, as_found_result" in route_source
     assert "as_left_value, as_left_error, as_left_result" in route_source
     assert "SELECT point_no, reference_value, measured_value" not in route_source
+}
