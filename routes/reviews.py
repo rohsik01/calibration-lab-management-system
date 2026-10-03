@@ -33,7 +33,7 @@ def calibration_reviews():
 
 
 @app.route("/reviews/<int:review_id>/calibration")
-@admin_required
+@reviewer_required
 def review_calibration_details(review_id):
     db = get_db()
     row = db.execute(
@@ -93,7 +93,7 @@ def review_calibration_details(review_id):
 
 
 @app.route("/reviews/<int:review_id>/decision", methods=["POST"])
-@admin_required
+@reviewer_required
 def decide_calibration_review(review_id):
     db = get_db()
     review = db.execute(
