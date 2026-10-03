@@ -102,7 +102,7 @@ def standard(sid):
         (sid,)
     ).fetchall()
     usage_count = db.execute(
-        "SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)
+        "SELECT COUNT(*) FROM calibration_reference_standards WHERE standard_id=?", (sid,)
     ).fetchone()[0]
     history = db.execute(
         """SELECT h.*, u.full_name AS changed_by_name
