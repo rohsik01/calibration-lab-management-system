@@ -201,13 +201,27 @@ def decide_calibration_review(review_id):
                 db.rollback()
                 flash("Cannot approve: the submitted calibration revision is no longer the current review version.", "error")
                 return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
+            # Build the fingerprint before the transaction is committed so the
+            # issued certificate is permanently tied to the approved data.
             db.execute(
                 """UPDATE calibrations
                    SET lifecycle_status='APPROVED', approved_by=?, approved_at=?,
-                       approved_revision=?, certificate_no=?, certificate_issued_by=?, certificate_issued_at=?, updated_at=?
+                       approved_revision=?, certificate_no=?, certificate_issued_by=?, certificate_issued_at=?,
+                       certificate_status='ACTIVE', updated_at=?
                    WHERE cal_id=? AND lifecycle_status='SUBMITTED' AND revision_no=?""",
                 (g.user["user_id"], now, submitted_revision, official_cert,
                  g.user["user_id"], now, now, review["cal_id"], submitted_revision)
+            )
+            fingerprint = build_certificate_fingerprint(db, review["cal_id"])
+            db.execute(
+                "UPDATE calibrations SET certificate_fingerprint=? WHERE cal_id=?",
+                (fingerprint, review["cal_id"]),
+            )
+            db.execute(
+                """INSERT INTO certificate_history
+                   (cal_id, certificate_no, event_type, fingerprint, changed_by, changed_at)
+                   VALUES (?,?,'ISSUED',?,?,?)""",
+                (review["cal_id"], official_cert, fingerprint, g.user["user_id"], now),
             )
             audit_event(
                 "CALIBRATION_CERTIFICATE_ISSUED",
@@ -215,7 +229,9 @@ def decide_calibration_review(review_id):
                 old_value={"certificate_no": None, "lifecycle_status": "SUBMITTED",
                            "revision_no": submitted_revision},
                 new_value={"certificate_no": official_cert, "lifecycle_status": "APPROVED",
-                           "approved_revision": submitted_revision},
+                           "approved_revision": submitted_revision,
+                           "certificate_status": "ACTIVE",
+                           "certificate_fingerprint": fingerprint},
                 details={"review_id": review_id, "certificate_issued_by": g.user["user_id"],
                          "certificate_issued_at": now}
             )
