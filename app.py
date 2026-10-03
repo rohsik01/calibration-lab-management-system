@@ -249,6 +249,11 @@ CREATE TABLE IF NOT EXISTS calibration_review_history (
     comments TEXT
 );
 
+CREATE TABLE IF NOT EXISTS certificate_sequences (
+    year TEXT PRIMARY KEY,
+    next_number INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS certificate_history (
     history_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id),
@@ -1264,19 +1269,26 @@ def nav_counts():
 
 
 def next_certificate(db, cal_date):
-    """Return the next unused official certificate number for the calibration year."""
-    prefix = f"CAL-{cal_date[:4]}-"
+    """Atomically reserve the next official certificate number for the calibration year."""
+    year = str(cal_date)[:4]
+    prefix = f"CAL-{year}-"
+    db.execute(
+        """INSERT OR IGNORE INTO certificate_sequences(year, next_number)
+           VALUES (?, COALESCE(
+               (SELECT MAX(CAST(substr(certificate_no, ?) AS INTEGER)) + 1
+                  FROM calibrations WHERE certificate_no LIKE ?), 1
+           ))""",
+        (year, len(prefix) + 1, prefix + "%"),
+    )
+    db.execute(
+        "UPDATE certificate_sequences SET next_number=next_number+1 WHERE year=?",
+        (year,),
+    )
     row = db.execute(
-        "SELECT MAX(CAST(substr(certificate_no, ?) AS INTEGER)) AS n "
-        "FROM calibrations WHERE certificate_no LIKE ?",
-        (len(prefix) + 1, prefix + "%")
+        "SELECT next_number-1 AS reserved_number FROM certificate_sequences WHERE year=?",
+        (year,),
     ).fetchone()
-    n = int(row["n"] or 0) + 1
-    candidate = f"{prefix}{n:04d}"
-    while db.execute("SELECT 1 FROM calibrations WHERE certificate_no=?", (candidate,)).fetchone():
-        n += 1
-        candidate = f"{prefix}{n:04d}"
-    return candidate
+    return f"{prefix}{int(row['reserved_number']):04d}"
 
 
 def next_request_number(db, received_date):
