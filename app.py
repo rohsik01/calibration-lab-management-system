@@ -971,6 +971,30 @@ with sqlite3.connect(DB, timeout=30) as _c:
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
+    # Upgrade older databases: certificate integrity and lifecycle fields.
+    # This must run before certificate-related indexes are created because an
+    # existing database may already have completed the older schema rebuild.
+    _cal_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
+    for _col, _ddl in (
+        ("certificate_status", "TEXT NOT NULL DEFAULT 'NONE'"),
+        ("certificate_fingerprint", "TEXT"),
+        ("certificate_reissued_from", "TEXT"),
+        ("certificate_reissued_at", "TEXT"),
+    ):
+        if _col not in _cal_cols:
+            _c.execute(f"ALTER TABLE calibrations ADD COLUMN {_col} {_ddl}")
+            _cal_cols.append(_col)
+
+    # Legacy approved certificates are treated as active certificates after
+    # the integrity/lifecycle fields are introduced.
+    _c.execute(
+        """UPDATE calibrations
+           SET certificate_status='ACTIVE'
+           WHERE lifecycle_status='APPROVED'
+             AND certificate_no IS NOT NULL
+             AND (certificate_status IS NULL OR certificate_status='NONE')"""
+    )
+
     # Query-performance indexes. Foreign keys are not automatically indexed
     # by SQLite, so add indexes for the relationships and common dashboard/report
     # filters. IF NOT EXISTS makes this safe for every startup and old databases.
