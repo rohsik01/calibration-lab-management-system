@@ -79,11 +79,14 @@
         if (!response.ok) throw new Error("Request failed");
         const d = await response.json();
 
+        const formatError = value => value == null ? "—" :
+          (Number(value) >= 0 ? "+" : "") + esc(value);
         const points = d.points.map(p =>
           "<tr><td>" + esc(p.point_no) + "</td><td>" + esc(p.reference_value) +
-          "</td><td>" + esc(p.measured_value) + "</td><td>" +
-          (Number(p.error) >= 0 ? "+" : "") + esc(p.error) + "</td><td>" +
-          esc(p.tolerance) + "</td><td><span class='badge " +
+          "</td><td>" + esc(p.as_found_value) + "</td><td>" + formatError(p.as_found_error) +
+          "</td><td>" + esc(p.as_left_value) + "</td><td>" + formatError(p.as_left_error) +
+          "</td><td>" + esc(p.tolerance) + "</td><td>" + formatError(p.error) +
+          "</td><td><span class='badge " +
           (p.result === "PASS" ? "green" : "red") + "'>" + esc(p.result) +
           "</span></td></tr>"
         ).join("");
@@ -109,7 +112,7 @@
           "<div style='grid-column:1/-1'><strong>Adjustment notes:</strong><br>" + esc(d.adjustment_notes) + "</div>" +
           "</div>" +
           "<h3 style='margin-top:20px'>{{ tr('Measurement results') }}</h3>" +
-          "<div class='scroll'><table><thead><tr><th>No.</th><th>Reference</th><th>Reading</th><th>Error</th><th>Tolerance</th><th>Result</th></tr></thead>" +
+          "<div class='scroll'><table><thead><tr><th>No.</th><th>Reference</th><th>As-Found</th><th>Error AF</th><th>As-Left</th><th>Error AL</th><th>Tolerance</th><th>Final Error</th><th>Result</th></tr></thead>" +
           "<tbody>" + points + "</tbody></table></div>";
 
         const actionUrl = "{{ url_for('decide_calibration_review', review_id=0) }}".replace("/0", "/" + id);
