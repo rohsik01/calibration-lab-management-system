@@ -2,6 +2,16 @@
 from app import *
 from app import _qr_data_uri
 
+def calibration_delete_blocked(row, revision_count, review_count):
+    """Return whether a calibration record must be retained for traceability."""
+    return bool(
+        row["lifecycle_status"] == "APPROVED"
+        or row["certificate_no"]
+        or revision_count
+        or review_count
+    )
+
+
 @app.route("/calibrations/<int:cal_id>/delete", methods=["POST"])
 @admin_required
 def delete_calibration(cal_id):
@@ -26,12 +36,7 @@ def delete_calibration(cal_id):
         (cal_id,),
     ).fetchone()[0]
 
-    if (
-        row["lifecycle_status"] == "APPROVED"
-        or row["certificate_no"]
-        or revision_count
-        or review_count
-    ):
+    if calibration_delete_blocked(row, revision_count, review_count):
         audit_event(
             "CALIBRATION_DELETE_BLOCKED",
             "calibration",
