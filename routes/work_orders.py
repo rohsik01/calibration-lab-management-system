@@ -1,6 +1,26 @@
 """Route module: work_orders."""
 from app import *
 
+WORK_ORDER_STATUS_TRANSITIONS = {
+    "ASSIGNED": {"IN PROGRESS", "CANCELLED"},
+    "IN PROGRESS": {"AWAITING REVIEW", "CANCELLED"},
+    "AWAITING REVIEW": set(),
+    "COMPLETED": set(),
+    "CANCELLED": set(),
+}
+
+
+def audit_work_order_transition_rejection(work_order_id, current, requested, reason):
+    audit_event(
+        "WORK_ORDER_STATUS_REJECTED",
+        "calibration_work_order",
+        work_order_id,
+        old_value={"status": current},
+        new_value={"status": requested},
+        details={"reason": reason},
+    )
+
+
 @app.route("/work-orders")
 def work_orders():
     db = get_db()
