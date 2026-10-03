@@ -3,7 +3,7 @@
 {% block content %}
 <div class="hero">
   <div><h1>{{ tr("Calibration requests") }}</h1><p class="sub">{{ tr("Register, review and track customer calibration work from receipt to completion.") }}</p></div>
-  {% if g.user.role == 'general_user' %}<a class="btn" href="{{ url_for('new_calibration_request') }}">+ {{ tr("New calibration request") }}</a>{% endif %}
+  {% if has_role('general_user') %}<a class="btn" href="{{ url_for('new_calibration_request') }}">+ {{ tr("New calibration request") }}</a>{% endif %}
 </div>
 
 <div class="stats">
@@ -24,7 +24,7 @@
     <button class="btn">{{ tr("Filter") }}</button>
     {% if q or status_filter %}<a class="btn alt" href="{{ url_for('calibration_requests') }}">{{ tr("Clear") }}</a>{% endif %}
   </form>
-  {% if g.user.role == 'admin' %}
+  {% if has_role('admin') or has_role('superadmin') %}
   <form method="post" action="{{ url_for('bulk_assign_calibration_requests') }}" id="bulkAssign">
   {{ csrf_input() }}
   <div class="card" style="margin:14px 0;background:#f8fafd">
@@ -43,10 +43,10 @@
   {% endif %}
   <div class="scroll">
     <table class="js-table">
-      <tr>{% if g.user.role == 'admin' %}<th><input type="checkbox" id="selectAll"></th>{% endif %}<th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
+      <tr>{% if has_role('admin') or has_role('superadmin') %}<th><input type="checkbox" id="selectAll"></th>{% endif %}<th>{{ tr("Request") }}</th><th>{{ tr("Client") }}</th><th>{{ tr("Instrument") }}</th><th>{{ tr("Sensor") }}</th><th>{{ tr("Received") }}</th><th>{{ tr("Due") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Status") }}</th></tr>
       {% for r in rows %}
       <tr>
-        {% if g.user.role == 'admin' %}
+        {% if has_role('admin') or has_role('superadmin') %}
 <td>
   {% set selectable = r.status == 'REVIEWED' %}
   <input type="checkbox" name="request_ids" value="{{ r.request_id }}" class="request-check"
@@ -65,7 +65,7 @@
       {% else %}<tr><td colspan="8" class="empty">{{ tr("No calibration requests found.") }}</td></tr>{% endfor %}
     </table>
   </div>
-  {% if g.user.role == 'admin' %}</form>
+  {% if has_role('admin') or has_role('superadmin') %}</form>
   <script>
   const all=document.getElementById('selectAll');
   if(all) all.addEventListener('change',()=>document.querySelectorAll('.request-check:not(:disabled)').forEach(x=>x.checked=all.checked));
