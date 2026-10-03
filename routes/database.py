@@ -52,6 +52,7 @@ def database_maintenance():
         ("calibration_review_history", "Review history"),
         ("reference_standards", "Reference standards"),
         ("calibration_reference_standards", "Calibration reference standards"),
+        ("work_order_reference_standards", "Work order reference standards"),
         ("audit_log", "Audit log"),
         ("notifications", "Notifications"),
         ("users", "Users"),
