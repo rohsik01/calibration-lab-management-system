@@ -633,7 +633,7 @@ def calibrate_pending_request(request_id):
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
-    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,selected_standard_ids=[],procedure=procedure,procedure_points=procedure_points)
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,selected_standard_ids=work_order_standard_ids,procedure=procedure,procedure_points=procedure_points)
 
 
 @app.route("/calibrations/<int:cal_id>/edit", methods=["GET", "POST"])
@@ -644,6 +644,11 @@ def edit_calibration(cal_id):
     if not cal or not cal["request_id"]:
         abort(404)
     wo = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (cal["request_id"],)).fetchone()
+    work_order_standard_rows = db.execute(
+        "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+        (wo["work_order_id"],)
+    ).fetchall() if wo else []
+    work_order_standard_ids = [r["standard_id"] for r in work_order_standard_rows]
     if not wo or wo["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
     if cal["lifecycle_status"] == "APPROVED":
@@ -713,7 +718,7 @@ def edit_calibration(cal_id):
             if adjustment_status == "PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
 
-            standards_selected = selected_reference_standards(db, f, cal_date)
+            standards_selected = selected_reference_standards(db, f, cal_date, work_order_standard_ids)
             std = standards_selected[0]
             std_id = std["standard_id"]
             ref_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
