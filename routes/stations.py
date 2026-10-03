@@ -74,11 +74,10 @@ def bulk_delete_stations():
 
 
 @app.route("/stations", methods=["GET", "POST"])
+@admin_required
 def stations():
     db = get_db()
     if request.method == "POST":
-        if g.user["role"] != "admin":
-            abort(403)
         try:
             station_id_raw = request.form.get("station_id", "").strip()
             name = request.form["name"].strip()
