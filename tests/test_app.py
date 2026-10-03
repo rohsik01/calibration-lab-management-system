@@ -475,3 +475,17 @@ def test_workflow_routes_audit_rejected_status_and_revision_submission():
     assert "Only a draft or returned calibration can be submitted." in Path(
         __file__
     ).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+
+
+def test_operational_dashboard_exposes_lab_kpis_for_work_orders_reviews_standards_and_stations():
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "home.html"
+    template = template_path.read_text(encoding="utf-8")
+
+    assert "dashboard.active_work_orders" in template
+    assert "dashboard.pending_reviews" in template
+    assert "std_issues|length" in template
+    assert "stations|length" in template
+    assert 'tr("Active work orders")' in template
+    assert 'tr("Pending reviews")' in template
+    assert 'tr("Standards needing attention")' in template
+    assert 'tr("Stations")' in template
