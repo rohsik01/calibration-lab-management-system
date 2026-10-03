@@ -29,7 +29,7 @@
       <h2 style="margin:0">{{ tr("Laboratory dashboard") }}</h2>
       <div class="hint">{{ tr("Workflow, workload, turnaround and calibration performance") }}</div>
     </div>
-    {% if g.user.role == 'admin' %}
+    {% if has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
     <a class="btn alt" href="{{ url_for('calibration_reviews') }}">🔎 {{ tr("Open pending reviews") }}{% if dashboard.pending_reviews %} ({{ dashboard.pending_reviews }}){% endif %}</a>
     {% endif %}
   </div>
@@ -43,7 +43,7 @@
     <a class="stat red" href="{{ url_for('due') }}"><span class="n">{{ dashboard.overdue_sensors }}</span><span class="sub">{{ tr("Overdue sensors") }}</span></a>
     <a class="stat red" href="{{ url_for('register', status='failed') }}"><span class="n">{{ dashboard.failed_calibrations }}</span><span class="sub">{{ tr("Failed calibrations") }}</span></a>
     <a class="stat amber" href="{{ url_for('work_orders') }}"><span class="n">{{ dashboard.active_work_orders }}</span><span class="sub">{{ tr("Active work orders") }}</span></a>
-    {% if g.user.role == 'admin' %}<a class="stat amber" href="{{ url_for('calibration_reviews') }}"><span class="n">{{ dashboard.pending_reviews }}</span><span class="sub">{{ tr("Pending reviews") }}</span></a>{% endif %}
+    {% if has_role('reviewer') or has_role('admin') or has_role('superadmin') %}<a class="stat amber" href="{{ url_for('calibration_reviews') }}"><span class="n">{{ dashboard.pending_reviews }}</span><span class="sub">{{ tr("Pending reviews") }}</span></a>{% endif %}
     <a class="stat grey" href="{{ url_for('standards') }}"><span class="n">{{ std_issues|length }}</span><span class="sub">{{ tr("Standards needing attention") }}</span></a>
     <a class="stat brand" href="{{ url_for('stations') }}"><span class="n">{{ stations|length }}</span><span class="sub">{{ tr("Stations") }}</span></a>
     <div class="stat grey"><span class="n">{{ dashboard.avg_turnaround }}</span><span class="sub">{{ tr("Avg. turnaround days") }}</span></div>
@@ -110,7 +110,7 @@
         {% endfor %}
       </table></div>
       {% else %}<div class="empty">{{ tr("No activity recorded yet.") }}</div>{% endif %}
-      {% if g.user.role == 'admin' %}<p style="margin:12px 0 0"><a href="{{ url_for('audit_log') }}">{{ tr("Open full audit log →") }}</a></p>{% endif %}
+      {% if has_role('superadmin') %}<p style="margin:12px 0 0"><a href="{{ url_for('audit_log') }}">{{ tr("Open full audit log →") }}</a></p>{% endif %}
     </div>
   </div>
 </div>
@@ -121,7 +121,7 @@
       data-url="{{ url_for('calibrate', sensor_id='__ID__') }}" onchange="if(this.value)location=this.dataset.url.replace('__ID__',this.value)">
       <option value="">🧪 {{ tr("Record calibration for…") }}</option>{% for s in sensors %}<option>{{ s }}</option>{% endfor %}</select>{% endif %}
     <a class="btn alt" href="{{ url_for('new_sensor') }}">➕ {{ tr("Add sensor") }}</a>
-    {% if g.user.role == 'admin' %}<a class="btn alt" href="{{ url_for('stations') }}">🏭 {{ tr("Add station") }}</a>{% endif %}
+    {% if has_role('admin') or has_role('superadmin') %}<a class="btn alt" href="{{ url_for('stations') }}">🏭 {{ tr("Add station") }}</a>{% endif %}
     <a class="btn alt" href="{{ url_for('export_csv') }}">⬇️ {{ tr("Export data") }}</a>
     <a class="btn alt" href="{{ url_for('register') }}">📋 {{ tr("Full register") }}</a>
   </div></div>

@@ -23,10 +23,11 @@ def setup():
         if err or not f["username"].strip():
             flash(err or "Username is required.")
         else:
-            db.execute("INSERT INTO users(username, full_name, password_hash, role) "
-                       "VALUES (?,?,?, 'superadmin')",
-                       (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
-                        generate_password_hash(f["password"])))
+            cur = db.execute("INSERT INTO users(username, full_name, password_hash, role) "
+                            "VALUES (?,?,?, 'superadmin')",
+                            (f["username"].strip(), f["full_name"].strip() or f["username"].strip(),
+                             generate_password_hash(f["password"])))
+            db.execute("INSERT INTO user_roles(user_id, role) VALUES (?, 'superadmin')", (cur.lastrowid,))
             db.commit()
             flash("Superadministrator created. Please sign in.")
             return redirect(url_for("login"))

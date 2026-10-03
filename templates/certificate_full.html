@@ -77,7 +77,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:center
 <div class="field"><span class="label">Expanded uncertainty (U)</span><span class="value"><strong>{{ r.expanded_uncertainty if r.expanded_uncertainty is not none else "—" }} {{ r.unit or "" }}</strong></span></div>
 </div></section>
 
-{% if g.user and g.user.role in ('admin','superadmin') %}
+{% if g.user and (has_role('admin') or has_role('superadmin')) %}
 <div class="section noprint" style="margin-top:14px">
   <h2>Certificate Administration</h2>
   <div class="body" style="display:flex;gap:10px;flex-wrap:wrap">

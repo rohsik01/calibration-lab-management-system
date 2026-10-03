@@ -3,7 +3,7 @@ from app import *
 from routes.sensors import _station_sensor_id
 
 @app.route("/reviews")
-@admin_required
+@reviewer_required
 def calibration_reviews():
     db = get_db()
     pending = db.execute(
@@ -33,7 +33,7 @@ def calibration_reviews():
 
 
 @app.route("/reviews/<int:review_id>/calibration")
-@admin_required
+@reviewer_required
 def review_calibration_details(review_id):
     db = get_db()
     row = db.execute(
@@ -93,7 +93,7 @@ def review_calibration_details(review_id):
 
 
 @app.route("/reviews/<int:review_id>/decision", methods=["POST"])
-@admin_required
+@reviewer_required
 def decide_calibration_review(review_id):
     db = get_db()
     review = db.execute(
@@ -312,6 +312,10 @@ def decide_calibration_review(review_id):
                     if existing_station:
                         station_id = existing_station["station_id"]
                     else:
+                        if not (user_has_role("admin") or user_has_role("superadmin")):
+                            db.rollback()
+                            flash("Cannot approve: the pending station must be created by an administrator before approval.", "error")
+                            return redirect(url_for("work_order_detail", work_order_id=review["work_order_id"]))
                         station_id = db.execute(
                             "INSERT INTO stations(name,location,type,updated_at) VALUES (?,?,?,?)",
                             (req["pending_station_name"], req["pending_station_location"] or "",

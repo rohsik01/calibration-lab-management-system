@@ -286,7 +286,7 @@
   {% endif %}
 </div>
 
-{% if g.user and g.user.role in ('admin','superadmin') and not preview %}
+{% if g.user and (has_role('admin') or has_role('superadmin')) and not preview %}
 <div class="noprint" style="max-width:148mm;margin:10px auto;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
   {% if r.certificate_status == 'ACTIVE' %}
   <form method="post" action="{{ url_for('withdraw_certificate', cert=r.certificate_no) }}" onsubmit="var x=prompt('Reason for withdrawal:'); if(!x || !x.trim()) return false; this.reason.value=x; return true;">
