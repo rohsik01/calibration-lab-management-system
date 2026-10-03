@@ -105,7 +105,7 @@
   <aside class="side" id="side">
     <div class="brand">🧪 {{ tr("Calibration Lab") }}<small>{{ tr("Management System") }}</small></div>
     <nav>
-      {% if g.user.role != 'general_user' %}
+      {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
       {% endif %}
 
@@ -114,10 +114,10 @@
         <summary class="{{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status','work_orders','work_order_detail','update_work_order_status','calibration_reviews','decide_calibration_review') }}">{{ tr("Calibration workflow") }}</summary>
         <div class="submenu">
           <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Requests") }}{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
-          {% if g.user.role != 'general_user' %}
+          {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
           <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
           {% endif %}
-          {% if g.user.role == 'admin' %}
+          {% if has_role('admin') or has_role('superadmin') %}
           <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
           {% endif %}
         </div>
@@ -137,7 +137,7 @@
         <div class="submenu">
           <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
           <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}{% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
-          {% if g.user.role == 'admin' %}<a class="item {{ 'active' if ep in ('procedures','procedure_detail','new_procedure','edit_procedure','toggle_procedure') }}" href="{{ url_for('procedures') }}"><span class="ic">📐</span>{{ tr("Calibration procedures") }}</a>{% endif %}
+          {% if has_role('admin') or has_role('superadmin') %}<a class="item {{ 'active' if ep in ('procedures','procedure_detail','new_procedure','edit_procedure','toggle_procedure') }}" href="{{ url_for('procedures') }}"><span class="ic">📐</span>{{ tr("Calibration procedures") }}</a>{% endif %}
           <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
         </div>
       </details>
@@ -151,7 +151,7 @@
       </details>
       {% endif %}
 
-      {% if g.user.role == 'superadmin' %}
+      {% if has_role('superadmin') %}
       <div class="grp">{{ tr("System administration") }}</div>
       <details class="menu-group" {% if ep in ('users','audit_log','database_maintenance') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('users','audit_log','database_maintenance') }}">{{ tr("System administration") }}</summary>
@@ -163,7 +163,7 @@
       </details>
       {% endif %}
     </nav>
-    <div class="me"><b>{{ g.user.full_name }}</b><span>{{ tr(g.user.role|capitalize) }}</span>
+    <div class="me"><b>{{ g.user.full_name }}</b><span>{% for role in ['superadmin','admin','reviewer','technician','general_user'] if has_role(role) %}{{ tr({'superadmin':'Superadministrator','admin':'Administrator','reviewer':'Reviewer','technician':'Technician','general_user':'General user'}[role]) }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
       <div class="lang">🌐 <a class="{{ 'on' if g.lang != 'ne' }}" href="{{ url_for('set_lang', code='en', next=here) }}">English</a> ·
         <a class="{{ 'on' if g.lang == 'ne' }}" href="{{ url_for('set_lang', code='ne', next=here) }}">नेपाली</a></div>
       <div class="row"><a href="{{ url_for('account') }}">{{ tr("Change password") }}</a>
