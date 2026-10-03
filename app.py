@@ -111,6 +111,9 @@ CREATE TABLE IF NOT EXISTS calibration_reference_standards (
     usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
     PRIMARY KEY (cal_id, standard_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_calibration_reference_standards_one_primary
+    ON calibration_reference_standards(cal_id)
+    WHERE is_primary = 1;
 CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
     ON calibration_reference_standards(standard_id, cal_id);
 CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
@@ -919,6 +922,9 @@ with sqlite3.connect(DB, timeout=30) as _c:
         usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
         PRIMARY KEY (cal_id, standard_id)
     )""")
+    _c.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_calibration_reference_standards_one_primary
+        ON calibration_reference_standards(cal_id)
+        WHERE is_primary = 1""")
     _c.execute("""CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
         ON calibration_reference_standards(standard_id, cal_id)""")
     _c.execute("""CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
