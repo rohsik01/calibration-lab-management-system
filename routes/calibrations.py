@@ -263,15 +263,6 @@ def calibrate(sensor_id):
              "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
             for x in standards_selected
         ], ensure_ascii=False)
-            ref_text, std_id = f"{std['code']} – {std['name']}", std["standard_id"]
-            std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
-                                      "certificate": std["certificate_no"], "valid_until": std["valid_until"],
-                                      "uncertainty": std["uncertainty"]}, ensure_ascii=False)
-        else:
-            ref_text = f.get("reference_standard", "").strip()
-            if not ref_text:
-                flash("Could not save: choose a reference standard or type its name.")
-                return redirect(url_for("calibrate", sensor_id=sensor_id))
         request_id = None
         if f.get("request_id", "").isdigit():
             request_id = int(f["request_id"])
