@@ -74,19 +74,24 @@ def bulk_delete_stations():
 
 
 @app.route("/stations", methods=["GET", "POST"])
+@admin_required
 def stations():
     db = get_db()
     if request.method == "POST":
-        if g.user["role"] != "admin":
-            abort(403)
         try:
+            station_id_raw = request.form.get("station_id", "").strip()
             name = request.form["name"].strip()
             location = request.form.get("location", "").strip()
             station_type = request.form.get("type", "").strip() or "Meteorological"
+            if not station_id_raw or not station_id_raw.isdigit() or int(station_id_raw) <= 0:
+                raise ValueError("A valid positive Station ID is required.")
+            station_id = int(station_id_raw)
             if not name:
                 raise ValueError("Station name is required.")
-            db.execute("INSERT INTO stations(name, location, type, updated_at) VALUES (?,?,?,?)",
-                       (name, location, station_type, datetime.now().isoformat(timespec="seconds")))
+            if db.execute("SELECT 1 FROM stations WHERE station_id=?", (station_id,)).fetchone():
+                raise ValueError(f"Station ID {station_id} is already in use.")
+            db.execute("INSERT INTO stations(station_id, name, location, type, updated_at) VALUES (?,?,?,?,?)",
+                       (station_id, name, location, station_type, datetime.now().isoformat(timespec="seconds")))
             db.commit()
             flash("Station added.")
         except sqlite3.IntegrityError:
@@ -133,14 +138,14 @@ def station_bulk_sample():
     data = _excel_workbook(
         [
             "Fill one station per row in the 'Stations' sheet.",
-            "Station ID: leave blank when creating a new station. Enter an existing numeric Station ID only when updating that station.",
+            "Station ID: enter the unique positive numeric Station ID assigned to the station. It is required for every station record.",
             "Station Name is required and must be unique.",
             "Location and Type are required for complete station details. Example Type: Meteorological, Hydrological, Agrometeorological, Radar.",
             "Do not change the column headings."
         ],
         "Stations",
         ["Station ID", "Station Name", "Location", "Type"],
-        [["", "Example Station", "Dharan, Sunsari", "Meteorological"]]
+        [[1001, "Example Station", "Dharan, Sunsari", "Meteorological"]]
     )
     return Response(data, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": 'attachment; filename="station_bulk_upload_sample.xlsx"'})
@@ -184,18 +189,20 @@ def station_bulk_upload():
                 errors.append(f"Row {row_no}: Type is required.")
                 continue
             sid_int = None
-            if sid not in (None, ""):
-                try:
-                    sid_int = int(float(sid))
-                    if sid_int <= 0:
-                        raise ValueError
-                except (TypeError, ValueError):
-                    errors.append(f"Row {row_no}: Station ID must be a positive number or blank.")
-                    continue
-                if sid_int in seen_ids:
-                    errors.append(f"Row {row_no}: duplicate Station ID {sid_int} in the file.")
-                    continue
-                seen_ids.add(sid_int)
+            if sid in (None, ""):
+                errors.append(f"Row {row_no}: Station ID is required.")
+                continue
+            try:
+                sid_int = int(float(sid))
+                if sid_int <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"Row {row_no}: Station ID must be a positive number.")
+                continue
+            if sid_int in seen_ids:
+                errors.append(f"Row {row_no}: duplicate Station ID {sid_int} in the file.")
+                continue
+            seen_ids.add(sid_int)
             name_key = name.casefold()
             if name_key in seen_names:
                 errors.append(f"Row {row_no}: duplicate Station Name '{name}'.")
@@ -208,10 +215,7 @@ def station_bulk_upload():
         with db:
             for sid, name, location, station_type, row_no in parsed:
                 if sid is None:
-                    if db.execute("SELECT 1 FROM stations WHERE name=? COLLATE NOCASE", (name,)).fetchone():
-                        raise ValueError(f"Row {row_no}: station name '{name}' already exists.")
-                    db.execute("INSERT INTO stations(name, location, type, updated_at) VALUES (?,?,?,?)",
-                               (name, location, station_type, datetime.now().isoformat(timespec="seconds")))
+                    raise ValueError(f"Row {row_no}: Station ID is required.")
                 else:
                     existing = db.execute("SELECT station_id FROM stations WHERE station_id=?", (sid,)).fetchone()
                     if existing:

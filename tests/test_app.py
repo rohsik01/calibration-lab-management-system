@@ -166,6 +166,36 @@ def test_sensor_history_ui_does_not_offer_sensor_deletion_when_calibrations_exis
 
 
 
+
+def test_station_management_requires_administrator_and_explicit_station_id():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "stations.py"
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "stations.html"
+    route_source = route_path.read_text(encoding="utf-8")
+    template_source = template_path.read_text(encoding="utf-8")
+
+    assert '@admin_required\ndef stations():' in route_source
+    assert 'station_id_raw = request.form.get("station_id", "").strip()' in route_source
+    assert 'INSERT INTO stations(station_id, name, location, type, updated_at)' in route_source
+    assert "Station ID" in template_source
+    assert 'name="station_id"' in template_source
+    assert 'name="station_id" type="number"' in template_source
+    assert "Station ID is required." in route_source
+    assert "Station ID: enter the unique positive numeric Station ID" in route_source
+
+
+def test_technician_calibration_form_cannot_create_new_stations():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "calibrate_pending.html"
+    route_source = route_path.read_text(encoding="utf-8")
+    template_source = template_path.read_text(encoding="utf-8")
+
+    assert 'SELECT station_id, name, location, type FROM stations WHERE station_id=?' in route_source
+    assert 'new_station_name' not in route_source
+    assert 'id="add_station"' not in template_source
+    assert 'id="new_station_fields"' not in template_source
+    assert 'name="station_id"' in template_source
+    assert "administrator-maintained station" in template_source
+
 def test_certificate_verification_token_is_stable_and_nontrivial():
     first = certificate_verification_token("CAL-2026-0001")
     second = certificate_verification_token("CAL-2026-0001")
