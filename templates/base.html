@@ -88,6 +88,14 @@
   .chip:hover { border-color:var(--brand); }
   .steps { padding-left:20px; margin:8px 0 0; } .steps li { margin-bottom:6px; }
   .preview { margin:14px 0; padding:10px 14px; border-radius:8px; background:#f4f6fa; border:1px dashed #cfd5df; }
+  .multi-select-enhanced { border:1px solid var(--line); border-radius:10px; background:#f8fafd; padding:8px; max-height:260px; overflow:auto; }
+  .multi-option { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border-radius:7px; cursor:pointer; color:var(--ink); }
+  .multi-option:hover { background:#eef4fd; }
+  .multi-option input { width:auto; margin-top:4px; flex:0 0 auto; }
+  .multi-option.disabled { color:var(--mute); cursor:not-allowed; opacity:.75; }
+  .multi-option .multi-option-text { min-width:0; }
+  .multi-option .multi-option-meta { display:block; color:var(--mute); font-size:12px; }
+  .multi-select-summary { margin:6px 2px 0; color:var(--mute); font-size:12px; }
   .empty { text-align:center; color:var(--mute); padding:20px; }
   @media (max-width:900px) { .two { grid-template-columns:1fr; } }
   @media (max-width:800px) {
@@ -187,6 +195,45 @@
 <script>
 document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
 // click any column heading of a table to sort it
+
+// Accessible checkbox enhancement for native multi-select fields.
+// The original select remains the form's source of truth and is used when JavaScript is unavailable.
+document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
+  const wrap = document.createElement('div');
+  wrap.className = 'multi-select-enhanced';
+  const summary = document.createElement('div');
+  summary.className = 'multi-select-summary';
+  const updateSummary = () => {
+    const selected = [...select.options].filter(o => o.selected);
+    summary.textContent = selected.length
+      ? selected.length + ' selected: ' + selected.map(o => o.textContent.trim().split('(')[0].trim()).join(', ')
+      : 'No reference standards selected';
+  };
+  [...select.options].forEach(option => {
+    const label = document.createElement('label');
+    label.className = 'multi-option' + (option.disabled ? ' disabled' : '');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = option.value;
+    checkbox.checked = option.selected;
+    checkbox.disabled = option.disabled;
+    checkbox.addEventListener('change', () => {
+      option.selected = checkbox.checked;
+      select.dispatchEvent(new Event('change', {bubbles:true}));
+      updateSummary();
+    });
+    const text = document.createElement('span');
+    text.className = 'multi-option-text';
+    text.textContent = option.textContent.trim();
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    wrap.appendChild(label);
+  });
+  select.insertAdjacentElement('afterend', wrap);
+  select.style.display = 'none';
+  wrap.insertAdjacentElement('afterend', summary);
+  updateSummary();
+});
 document.querySelectorAll('table.js-table').forEach(t => {
   const ths = [...t.rows[0].cells];
   ths.forEach((th, i) => { th.style.cursor = 'pointer'; th.title = {{ tr("Click to sort")|tojson }};
