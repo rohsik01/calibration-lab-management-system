@@ -3,6 +3,7 @@
 <p class="sub">{{ tr("Station ID, Station Name, Location and Type are maintained here.") }}</p>
 {% if g.user.role == 'admin' %}
 <form method="post" class="grid" style="margin-bottom:20px">{{ csrf_input() }}
+<div><label>{{ tr("Station ID") }}</label><input name="station_id" type="number" min="1" step="1" required placeholder="{{ tr('Enter the unique station ID') }}"></div>
 <div><label>{{ tr("Station Name") }}</label><input name="name" required></div>
 <div><label>{{ tr("Location") }}</label><input name="location"></div>
 <div><label>{{ tr("Type") }}</label><input name="type" value="Meteorological" required></div>
