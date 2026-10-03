@@ -581,8 +581,7 @@ def test_multi_role_authorization_decorators_use_assigned_roles():
 
         g.user_roles = {"technician", "admin"}
         assert admin_action() == "admin-ok"
-        with pytest.raises(Exception):
-            review_action()
+        assert review_action() == "review-ok"
         with pytest.raises(Exception):
             superadmin_action()
 
