@@ -961,32 +961,6 @@ with sqlite3.connect(DB, timeout=30) as _c:
             _c.execute("UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
                        (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row[0]))
 
-    # Backfill certificate status/history metadata for legacy approved certificates.
-    _approved_for_integrity = _c.execute(
-        "SELECT cal_id, certificate_no, approved_revision FROM calibrations "
-        "WHERE lifecycle_status='APPROVED' AND certificate_no IS NOT NULL"
-    ).fetchall()
-    for _row in _approved_for_integrity:
-        _c.execute(
-            "UPDATE calibrations SET certificate_status=CASE WHEN certificate_status='NONE' THEN 'ACTIVE' ELSE certificate_status END "
-            "WHERE cal_id=?",
-            (_row["cal_id"],),
-        )
-        if not _c.execute(
-            "SELECT 1 FROM certificate_history WHERE cal_id=? AND event_type='ISSUED' LIMIT 1",
-            (_row["cal_id"],),
-        ).fetchone():
-            try:
-                _fp = build_certificate_fingerprint(_c, _row["cal_id"])
-            except Exception:
-                _fp = None
-            _c.execute(
-                "INSERT INTO certificate_history(cal_id,certificate_no,event_type,fingerprint,changed_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)",
-                (_row["cal_id"], _row["certificate_no"], "ISSUED", _fp),
-            )
-            if _fp:
-                _c.execute("UPDATE calibrations SET certificate_fingerprint=? WHERE cal_id=?", (_fp, _row["cal_id"]))
-
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
