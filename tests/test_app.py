@@ -356,7 +356,7 @@ def _workflow_validation_db():
         "INSERT INTO calibration_work_orders VALUES (1,10,7,3,'IN PROGRESS')"
     )
     db.execute(
-        "INSERT INTO calibrations VALUES (1,10,'DRAFT',1,3,2,'PASS',0.0,0.2,5,'2026-10-03')"
+        "INSERT INTO calibrations VALUES (1,10,'DRAFT',1,3,2,'PASS',0.15,0.2,5,'2026-10-03')"
     )
     db.execute("INSERT INTO calibration_procedures VALUES (3,1)")
     db.executemany(
