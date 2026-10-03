@@ -4,3 +4,4 @@ waitress
 pyotp
 qrcode[pil]
 nepali-datetime
+reportlab
