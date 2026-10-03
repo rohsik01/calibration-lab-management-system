@@ -522,5 +522,5 @@ def test_multi_role_user_model_and_review_permissions_are_defined():
     assert "def user_has_role(role" in app_source
     assert "def reviewer_required" in app_source
     assert "@reviewer_required" in review_source
-    assert "name="roles"" in users_template
+    assert 'name="roles"' in users_template
     assert "update_user_roles" in users_source
