@@ -38,7 +38,7 @@ S/N: {{ req.pending_serial_number }} ·
 <div class="grid">
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ calibration.cal_date if edit_mode else today }}" required></div>
 <div><label>{{ tr("Reference standards") }}</label>
-<select name="standard_id" id="std" multiple size="6" required>
+<select name="standard_id" id="std" class="multi-select" multiple size="6" required>
 {% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }} {{ 'selected' if x.standard_id in selected_standard_ids }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
 <p class="sub">{{ tr("Select every reference standard used for this calibration. Hold Ctrl to select multiple standards. All selected standards are recorded in the calibration traceability history.") }}</p></div>
 </div>
