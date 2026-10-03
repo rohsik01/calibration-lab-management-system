@@ -14,14 +14,12 @@
   <small class="hint">{{ tr("Link this calibration to a laboratory request when applicable.") }}</small>
 </div>
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ calibration.cal_date if edit_mode else today }}" required><small class="hint">{{ tr("Nepali date (BS):") }} <span id="cal-bs">{{ date_pair(today) }}</span></small></div>
-<div><label>{{ tr("Reference standard") }}</label>
-  <select name="standard_id" id="std">
-    <option value="">{{ tr("Other — not in the register") }}</option>
+<div><label>{{ tr("Reference standards") }}</label>
+  <select name="standard_id" id="std" multiple size="6" required>
     {% for x in standards %}{% set st = std_status(x) %}
-    <option value="{{ x.standard_id }}" {{ 'disabled' if st[0] == 'Expired' }} {{ 'selected' if edit_mode and calibration.standard_id == x.standard_id }}>{{ x.code }} — {{ x.name }} ({{ tr("EXPIRED {d}" if st[0] == 'Expired' else "valid until {d}").format(d=x.valid_until) }})</option>{% endfor %}
+    <option value="{{ x.standard_id }}" {{ 'disabled' if st[0] == 'Expired' }} {{ 'selected' if x.standard_id in selected_standard_ids }}>{{ x.code }} — {{ x.name }} ({{ tr("EXPIRED {d}" if st[0] == 'Expired' else "valid until {d}").format(d=x.valid_until) }})</option>{% endfor %}
   </select>
-  <input name="reference_standard" id="stdtext" value="{{ calibration.reference_standard if edit_mode and not calibration.standard_id else '' }}" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px">
-  <small class="hint">{{ tr("Standards come from the") }} <a href="{{ url_for('standards') }}">{{ tr("Reference standards") }}</a> {{ tr("register.") }}</small></div>
+  <small class="hint">{{ tr("Select every reference standard used for this calibration. Hold Ctrl to select multiple standards.") }} {{ tr("Standards come from the") }} <a href="{{ url_for('standards') }}">{{ tr("Reference standards") }}</a> {{ tr("register.") }}</small></div>
 </div>
 {% if procedure %}<div class="card" style="margin-top:18px;background:#f8fafd">
 <h2>{{ tr("Controlled calibration procedure") }}</h2>
