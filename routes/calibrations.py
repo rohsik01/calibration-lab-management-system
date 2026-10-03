@@ -552,6 +552,7 @@ def calibrate_pending_request(request_id):
                  uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"],
                  json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"],
                  uncertainty["environment_humidity"],procedure_id))
+            persist_calibration_reference_standards(db, cur.lastrowid, standards_selected)
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
@@ -736,6 +737,7 @@ def edit_calibration(cal_id):
                      uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"],
                      json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"], uncertainty["environment_humidity"],
                      next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
+                persist_calibration_reference_standards(db, cal_id, standards_selected)
                 db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
                 db.executemany("""INSERT INTO calibration_points
                     (cal_id,point_no,reference_value,error,result,tolerance,
