@@ -7,6 +7,8 @@ from app import app as flask_app, calculate_measurement_uncertainty, certificate
 from routes.calibrations import calibration_delete_blocked
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
+from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS
+from app import validate_calibration_record_for_submission
 
 
 @pytest.fixture
@@ -288,3 +290,158 @@ def test_inactive_or_non_superadmin_does_not_trigger_last_superadmin_guard():
     db.execute("INSERT INTO users VALUES (2, 'technician', 1)")
     technician = db.execute("SELECT user_id, role, active FROM users WHERE user_id=2").fetchone()
     assert is_last_active_superadmin(db, technician) is False
+
+
+def _workflow_validation_db():
+    import sqlite3
+
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.executescript(
+        """
+        CREATE TABLE calibration_work_orders (
+            work_order_id INTEGER PRIMARY KEY,
+            request_id INTEGER,
+            assigned_technician_id INTEGER,
+            procedure_id INTEGER,
+            status TEXT
+        );
+        CREATE TABLE calibrations (
+            cal_id INTEGER PRIMARY KEY,
+            request_id INTEGER,
+            lifecycle_status TEXT,
+            revision_no INTEGER,
+            procedure_id INTEGER,
+            n_points INTEGER,
+            result TEXT,
+            mean_error REAL,
+            max_error REAL,
+            standard_id INTEGER,
+            cal_date TEXT
+        );
+        CREATE TABLE calibration_procedures (
+            procedure_id INTEGER PRIMARY KEY,
+            active INTEGER
+        );
+        CREATE TABLE calibration_procedure_points (
+            procedure_id INTEGER,
+            point_no INTEGER,
+            reference_value REAL,
+            tolerance REAL
+        );
+        CREATE TABLE calibration_points (
+            cal_id INTEGER,
+            point_no INTEGER,
+            reference_value REAL,
+            tolerance REAL,
+            as_found_value REAL,
+            as_found_error REAL,
+            as_found_result TEXT,
+            as_left_value REAL,
+            as_left_error REAL,
+            as_left_result TEXT,
+            result TEXT
+        );
+        CREATE TABLE reference_standards (
+            standard_id INTEGER PRIMARY KEY,
+            active INTEGER,
+            calibrated_on TEXT,
+            valid_until TEXT,
+            certificate_no TEXT,
+            traceability TEXT
+        );
+        """
+    )
+    db.execute(
+        "INSERT INTO calibration_work_orders VALUES (1,10,7,3,'IN PROGRESS')"
+    )
+    db.execute(
+        "INSERT INTO calibrations VALUES (1,10,'DRAFT',1,3,2,'PASS',0.15,0.2,5,'2026-10-03')"
+    )
+    db.execute("INSERT INTO calibration_procedures VALUES (3,1)")
+    db.executemany(
+        "INSERT INTO calibration_procedure_points VALUES (3,?,?,?)",
+        [(1,10.0,0.5), (2,20.0,0.5)],
+    )
+    db.executemany(
+        "INSERT INTO calibration_points VALUES (1,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (1,10.0,0.5,10.1,0.1,"PASS",10.1,0.1,"PASS","PASS"),
+            (2,20.0,0.5,20.2,0.2,"PASS",20.2,0.2,"PASS","PASS"),
+        ],
+    )
+    db.execute(
+        "INSERT INTO reference_standards VALUES (5,1,'2026-01-01','2027-01-01','STD-CERT-1','NABL traceable')"
+    )
+    return db
+
+
+def test_calibration_submission_validator_accepts_current_controlled_record():
+    db = _workflow_validation_db()
+    assert validate_calibration_record_for_submission(db, 1, 1) is True
+
+
+@pytest.mark.parametrize(
+    "lifecycle,work_order_status",
+    [
+        ("SUBMITTED", "IN PROGRESS"),
+        ("APPROVED", "COMPLETED"),
+    ],
+)
+def test_calibration_submission_validator_rejects_non_editable_lifecycle(lifecycle, work_order_status):
+    db = _workflow_validation_db()
+    db.execute("UPDATE calibrations SET lifecycle_status=?", (lifecycle,))
+    db.execute("UPDATE calibration_work_orders SET status=?", (work_order_status,))
+    with pytest.raises(ValueError, match="work order|submitted|draft or returned"):
+        validate_calibration_record_for_submission(db, 1, 1)
+
+
+def test_calibration_submission_validator_rejects_missing_required_point():
+    db = _workflow_validation_db()
+    db.execute("DELETE FROM calibration_points WHERE point_no=2")
+    with pytest.raises(ValueError, match="every required procedure point"):
+        validate_calibration_record_for_submission(db, 1, 1)
+
+
+def test_calibration_submission_validator_rejects_tampered_summary():
+    db = _workflow_validation_db()
+    db.execute("UPDATE calibrations SET max_error=9.9")
+    with pytest.raises(ValueError, match="summary"):
+        validate_calibration_record_for_submission(db, 1, 1)
+
+
+def test_calibration_submission_validator_rejects_invalid_reference_standard():
+    db = _workflow_validation_db()
+    db.execute("UPDATE reference_standards SET valid_until='2026-01-01'")
+    with pytest.raises(ValueError, match="valid"):
+        validate_calibration_record_for_submission(db, 1, 1)
+
+
+def test_work_order_status_transitions_are_one_way_until_review():
+    assert WORK_ORDER_STATUS_TRANSITIONS["ASSIGNED"] == {"IN PROGRESS", "CANCELLED"}
+    assert WORK_ORDER_STATUS_TRANSITIONS["IN PROGRESS"] == {"AWAITING REVIEW", "CANCELLED"}
+    assert WORK_ORDER_STATUS_TRANSITIONS["AWAITING REVIEW"] == set()
+    assert WORK_ORDER_STATUS_TRANSITIONS["COMPLETED"] == set()
+    assert WORK_ORDER_STATUS_TRANSITIONS["CANCELLED"] == set()
+
+
+def test_workflow_routes_audit_rejected_status_and_revision_submission():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "work_orders.py"
+    source = route_path.read_text(encoding="utf-8")
+    calibration_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    calibration_source = calibration_path.read_text(encoding="utf-8")
+    review_path = Path(__file__).resolve().parents[1] / "routes" / "reviews.py"
+    review_source = review_path.read_text(encoding="utf-8")
+
+    assert "WORK_ORDER_STATUS_REJECTED" in source
+    assert "CALIBRATION_SUBMISSION_REJECTED" in source
+    assert 'record_calibration_revision(' in source
+    assert '"SUBMITTED"' in source
+    assert "CALIBRATION_REVIEW_REJECTED" in review_source
+    assert "submitted_revision" in review_source
+    assert "lifecycle_status='RETURNED'" in review_source
+    assert "record_calibration_revision(" in review_source
+    assert "already has a calibration awaiting administrator review" in calibration_source
+    assert "Only a draft or returned calibration can be submitted." in Path(
+        __file__
+    ).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
