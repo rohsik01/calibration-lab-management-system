@@ -305,6 +305,7 @@
   {% if not preview %}
   <div class="certificate-actions noprint">
     <button class="btn" type="button" onclick="window.print()">🖨 {{ tr("Print / Save as PDF") }}</button>
+    {% if r.certificate_status == 'ACTIVE' %}<a class="btn" href="{{ url_for('certificate_pdf', cert=r.certificate_no) }}" target="_blank">PDF</a>{% endif %}
   </div>
   {% else %}
   <div class="noprint" style="position:absolute;left:5mm;right:5mm;bottom:-13mm;text-align:center">
