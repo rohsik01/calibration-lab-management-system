@@ -42,6 +42,10 @@
     <a class="stat green" href="{{ url_for('calibration_requests') }}"><span class="n">{{ dashboard.completed_requests }}</span><span class="sub">{{ tr("Completed requests") }}</span></a>
     <a class="stat red" href="{{ url_for('due') }}"><span class="n">{{ dashboard.overdue_sensors }}</span><span class="sub">{{ tr("Overdue sensors") }}</span></a>
     <a class="stat red" href="{{ url_for('register', status='failed') }}"><span class="n">{{ dashboard.failed_calibrations }}</span><span class="sub">{{ tr("Failed calibrations") }}</span></a>
+    <a class="stat amber" href="{{ url_for('work_orders') }}"><span class="n">{{ dashboard.active_work_orders }}</span><span class="sub">{{ tr("Active work orders") }}</span></a>
+    {% if g.user.role == 'admin' %}<a class="stat amber" href="{{ url_for('calibration_reviews') }}"><span class="n">{{ dashboard.pending_reviews }}</span><span class="sub">{{ tr("Pending reviews") }}</span></a>{% endif %}
+    <a class="stat grey" href="{{ url_for('standards') }}"><span class="n">{{ std_issues|length }}</span><span class="sub">{{ tr("Standards needing attention") }}</span></a>
+    <a class="stat brand" href="{{ url_for('stations') }}"><span class="n">{{ stations|length }}</span><span class="sub">{{ tr("Stations") }}</span></a>
     <div class="stat grey"><span class="n">{{ dashboard.avg_turnaround }}</span><span class="sub">{{ tr("Avg. turnaround days") }}</span></div>
   </div>
 
