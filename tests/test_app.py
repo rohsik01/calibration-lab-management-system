@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from app import app as flask_app, calculate_measurement_uncertainty, certificate_verification_token
+from flask import g
+
+from app import app as flask_app, calculate_measurement_uncertainty, certificate_verification_token, user_has_role
 from routes.calibrations import calibration_delete_blocked
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
@@ -283,7 +285,9 @@ def test_last_active_superadmin_cannot_be_deactivated():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.execute("CREATE TABLE user_roles (user_id INTEGER, role TEXT)")
     db.execute("INSERT INTO users VALUES (1, 'superadmin', 1)")
+    db.execute("INSERT INTO user_roles VALUES (1, 'superadmin')")
     user = db.execute("SELECT user_id, role, active FROM users WHERE user_id=1").fetchone()
 
     assert is_last_active_superadmin(db, user) is True
@@ -295,8 +299,13 @@ def test_superadmin_can_be_deactivated_when_another_active_superadmin_exists():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.execute("CREATE TABLE user_roles (user_id INTEGER, role TEXT)")
     db.executemany(
         "INSERT INTO users VALUES (?, 'superadmin', 1)",
+        [(1,), (2,)],
+    )
+    db.executemany(
+        "INSERT INTO user_roles VALUES (?, 'superadmin')",
         [(1,), (2,)],
     )
     user = db.execute("SELECT user_id, role, active FROM users WHERE user_id=1").fetchone()
@@ -310,7 +319,9 @@ def test_inactive_or_non_superadmin_does_not_trigger_last_superadmin_guard():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.execute("CREATE TABLE users (user_id INTEGER, role TEXT, active INTEGER)")
+    db.execute("CREATE TABLE user_roles (user_id INTEGER, role TEXT)")
     db.execute("INSERT INTO users VALUES (1, 'superadmin', 0)")
+    db.execute("INSERT INTO user_roles VALUES (1, 'superadmin')")
     inactive_superadmin = db.execute(
         "SELECT user_id, role, active FROM users WHERE user_id=1"
     ).fetchone()
@@ -318,6 +329,7 @@ def test_inactive_or_non_superadmin_does_not_trigger_last_superadmin_guard():
     assert is_last_active_superadmin(db, inactive_superadmin) is False
 
     db.execute("INSERT INTO users VALUES (2, 'technician', 1)")
+    db.execute("INSERT INTO user_roles VALUES (2, 'technician')")
     technician = db.execute("SELECT user_id, role, active FROM users WHERE user_id=2").fetchone()
     assert is_last_active_superadmin(db, technician) is False
 
@@ -489,3 +501,26 @@ def test_operational_dashboard_exposes_lab_kpis_for_work_orders_reviews_standard
     assert 'tr("Pending reviews")' in template
     assert 'tr("Standards needing attention")' in template
     assert 'tr("Stations")' in template
+
+
+def test_multi_role_helpers_support_combined_permissions():
+    with flask_app.test_request_context("/"):
+        g.user_roles = {"technician", "reviewer"}
+        assert user_has_role("technician") is True
+        assert user_has_role("reviewer") is True
+        assert user_has_role("admin") is False
+
+
+def test_multi_role_user_model_and_review_permissions_are_defined():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    users_source = Path(__file__).resolve().parents[1].joinpath("routes/users.py").read_text(encoding="utf-8")
+    review_source = Path(__file__).resolve().parents[1].joinpath("routes/reviews.py").read_text(encoding="utf-8")
+    users_template = Path(__file__).resolve().parents[1].joinpath("templates/users.html").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS user_roles" in app_source
+    assert "role IN ('superadmin','admin','technician','reviewer','general_user')" in app_source
+    assert "def user_has_role(role" in app_source
+    assert "def reviewer_required" in app_source
+    assert "@reviewer_required" in review_source
+    assert "name="roles"" in users_template
+    assert "update_user_roles" in users_source
