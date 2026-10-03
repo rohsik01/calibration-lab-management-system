@@ -150,7 +150,6 @@
           <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
         </div>
       </details>
-      {% endif %}
 
       {% if has_role('superadmin') %}
       <div class="grp">{{ tr("System administration") }}</div>
