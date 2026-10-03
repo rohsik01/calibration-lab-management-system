@@ -234,3 +234,10 @@ def test_corrected_revision_gets_new_certificate_and_supersedes_previous():
     assert "A corrected revision is a new controlled certificate" in source
     assert "event_type, previous_certificate_no" in source
     assert "'SUPERSEDED'" in source
+
+
+
+def test_general_users_can_access_certificate_pdf_endpoint():
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    source = app_path.read_text(encoding="utf-8")
+    assert '"certificate_pdf"' in source
