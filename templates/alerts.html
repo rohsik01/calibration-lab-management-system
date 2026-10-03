@@ -16,6 +16,14 @@
   </div>
 </div>
 
+<div class="card">
+  <div class="actions" style="margin-bottom:0">
+    <a class="btn {{ '' if view == 'all' else 'alt' }}" href="{{ url_for('alerts', view='all') }}">{{ tr("All notifications") }}</a>
+    <a class="btn {{ '' if view == 'unread' else 'alt' }}" href="{{ url_for('alerts', view='unread') }}">{{ tr("Unread") }}{% if unread %} ({{ unread|length }}){% endif %}</a>
+    <a class="btn {{ '' if view == 'tasks' else 'alt' }}" href="{{ url_for('alerts', view='tasks') }}">📥 {{ tr("Task inbox") }}{% if task_count %} ({{ task_count }}){% endif %}</a>
+  </div>
+</div>
+
 <div class="stats">
   <div class="stat red"><span class="n">{{ unread|length }}</span><span class="sub">{{ tr("Unread") }}</span></div>
   <div class="stat brand"><span class="n">{{ notifications|length }}</span><span class="sub">{{ tr("History") }}</span></div>
@@ -57,7 +65,7 @@
 </div>
 
 <div class="card">
-  <h2>{{ tr("Notification history") }}</h2>
+  <h2>{{ tr("Notification history") }}{% if view == "unread" %} · {{ tr("Unread only") }}{% elif view == "tasks" %} · {{ tr("Task inbox") }}{% endif %}</h2>
   {% if notifications %}
   <div class="scroll"><table class="js-table">
     <tr><th>{{ tr("Status") }}</th><th>{{ tr("Priority") }}</th><th>{{ tr("Notification") }}</th><th>{{ tr("Details") }}</th><th>{{ tr("Created") }}</th><th>{{ tr("Read") }}</th></tr>
