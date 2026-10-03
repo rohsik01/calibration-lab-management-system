@@ -79,7 +79,7 @@ def calendar_view():
 @app.route("/")
 def index():
     """Home page: summary, items needing attention, recent activity."""
-    if g.user["role"] == "general_user":
+    if user_has_role("general_user") and not any(user_has_role(role) for role in ("technician", "reviewer", "admin", "superadmin")):
         return redirect(url_for("calibration_requests"))
     db = get_db()
     rows = db.execute(LATEST + " ORDER BY s.sensor_id").fetchall()
@@ -131,7 +131,7 @@ def index():
                              COUNT(CASE WHEN w.status='COMPLETED' THEN 1 END) AS completed
                       FROM users u
                       LEFT JOIN calibration_work_orders w ON w.assigned_technician_id=u.user_id
-                      WHERE u.role='technician' AND u.active=1
+                      WHERE u.active=1 AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=u.user_id AND ur.role='technician')
                       GROUP BY u.user_id, u.full_name
                       ORDER BY active DESC, completed DESC, u.full_name"""
     technician_workload = db.execute(workload_sql).fetchall()
