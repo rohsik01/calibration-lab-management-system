@@ -103,6 +103,19 @@ CREATE TABLE IF NOT EXISTS reference_standards (
     traceability TEXT, certificate_no TEXT,
     calibrated_on TEXT NOT NULL, valid_until TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS calibration_reference_standards (
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
+    standard_id INTEGER NOT NULL REFERENCES reference_standards(standard_id),
+    selection_order INTEGER NOT NULL DEFAULT 1,
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+    usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+    PRIMARY KEY (cal_id, standard_id)
+);
+CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
+    ON calibration_reference_standards(standard_id, cal_id);
+CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
+    ON calibration_reference_standards(cal_id, selection_order);
+
 CREATE TABLE IF NOT EXISTS calibration_points (
     point_id INTEGER PRIMARY KEY AUTOINCREMENT,
     cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
@@ -882,6 +895,25 @@ with sqlite3.connect(DB, timeout=30) as _c:
             _c.execute("UPDATE calibration_revisions SET snapshot_json=? WHERE revision_id=?",
                        (json.dumps(_snap, ensure_ascii=False, default=str), _rev_row[0]))
 
+    # Upgrade older databases: allow each calibration to use multiple controlled reference standards.
+    _c.execute("""CREATE TABLE IF NOT EXISTS calibration_reference_standards (
+        cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id) ON DELETE CASCADE,
+        standard_id INTEGER NOT NULL REFERENCES reference_standards(standard_id),
+        selection_order INTEGER NOT NULL DEFAULT 1,
+        is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+        usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+        PRIMARY KEY (cal_id, standard_id)
+    )""")
+    _c.execute("""CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
+        ON calibration_reference_standards(standard_id, cal_id)""")
+    _c.execute("""CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
+        ON calibration_reference_standards(cal_id, selection_order)""")
+    _c.execute("""INSERT OR IGNORE INTO calibration_reference_standards
+        (cal_id, standard_id, selection_order, is_primary, usage_role)
+        SELECT cal_id, standard_id, 1, 1, 'REFERENCE'
+        FROM calibrations
+        WHERE standard_id IS NOT NULL""")
+
     # Restore SQLite foreign-key enforcement after all legacy table rebuilds.
     _c.execute("PRAGMA foreign_keys = ON")
 
@@ -919,6 +951,10 @@ with sqlite3.connect(DB, timeout=30) as _c:
     CREATE INDEX IF NOT EXISTS idx_calibrations_date ON calibrations(cal_date);
     CREATE INDEX IF NOT EXISTS idx_calibrations_result ON calibrations(result);
     CREATE INDEX IF NOT EXISTS idx_calibrations_standard_id ON calibrations(standard_id);
+    CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_standard
+        ON calibration_reference_standards(standard_id, cal_id);
+    CREATE INDEX IF NOT EXISTS idx_calibration_reference_standards_cal
+        ON calibration_reference_standards(cal_id, selection_order);
     CREATE INDEX IF NOT EXISTS idx_calibrations_procedure_id ON calibrations(procedure_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_request_id ON calibrations(request_id);
     CREATE INDEX IF NOT EXISTS idx_calibrations_lifecycle ON calibrations(lifecycle_status);
@@ -973,13 +1009,47 @@ with sqlite3.connect(DB, timeout=30) as _c:
 
 
 
+def calibration_reference_standards(db, cal_id):
+    """Return all controlled reference standards used by a calibration, in selection order."""
+    rows = db.execute(
+        """SELECT crs.selection_order, crs.is_primary, crs.usage_role,
+                  rs.standard_id, rs.code, rs.name, rs.standard_type, rs.manufacturer,
+                  rs.serial_number, rs.uncertainty, rs.traceability, rs.certificate_no,
+                  rs.calibrated_on, rs.valid_until, rs.active
+           FROM calibration_reference_standards crs
+           JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+           WHERE crs.cal_id=?
+           ORDER BY crs.selection_order, rs.standard_id""",
+        (cal_id,),
+    ).fetchall()
+    if rows:
+        return rows
+    # Compatibility for a legacy calibration created before the junction table.
+    cal = db.execute("SELECT standard_id FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
+    if cal and cal["standard_id"]:
+        row = db.execute(
+            """SELECT 1 AS selection_order, 1 AS is_primary, 'REFERENCE' AS usage_role,
+                      standard_id, code, name, standard_type, manufacturer, serial_number,
+                      uncertainty, traceability, certificate_no, calibrated_on, valid_until, active
+               FROM reference_standards WHERE standard_id=?""",
+            (cal["standard_id"],),
+        ).fetchone()
+        return [row] if row else []
+    return []
+
+
 def calibration_snapshot(db, cal_id):
     """Capture the complete editable calibration state for immutable revision history."""
     cal = db.execute("SELECT * FROM calibrations WHERE cal_id=?", (cal_id,)).fetchone()
     if not cal:
         raise ValueError("Calibration record not found.")
     points = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (cal_id,)).fetchall()
-    return {"calibration": dict(cal), "points": [dict(p) for p in points]}
+    standards = calibration_reference_standards(db, cal_id)
+    return {
+        "calibration": dict(cal),
+        "points": [dict(p) for p in points],
+        "reference_standards": [dict(s) for s in standards],
+    }
 
 
 def record_calibration_revision(db, cal_id, event_type, created_by=None, review_id=None, comments=None):
@@ -1319,18 +1389,16 @@ def validate_calibration_record_for_submission(db, cal_id, work_order_id, actor_
         summary_matches = False
     if not summary_matches:
         raise ValueError("Stored calibration summary does not match the measurement points.")
-    if not cal["standard_id"]:
-        raise ValueError("A registered reference standard is required for a controlled calibration.")
-    standard = db.execute(
-        "SELECT * FROM reference_standards WHERE standard_id=? AND active=1",
-        (cal["standard_id"],),
-    ).fetchone()
-    if not standard:
-        raise ValueError("The registered reference standard is no longer active.")
-    if standard["calibrated_on"] > cal["cal_date"] or standard["valid_until"] < cal["cal_date"]:
-        raise ValueError("The registered reference standard was not valid on the calibration date.")
-    if not standard["certificate_no"] or not standard["traceability"]:
-        raise ValueError("The registered reference standard is missing certificate or traceability information.")
+    standards = calibration_reference_standards(db, cal_id)
+    if not standards:
+        raise ValueError("At least one registered reference standard is required for a controlled calibration.")
+    for standard in standards:
+        if not standard["active"]:
+            raise ValueError("A selected reference standard is no longer active.")
+        if standard["calibrated_on"] > cal["cal_date"] or standard["valid_until"] < cal["cal_date"]:
+            raise ValueError("A selected reference standard was not valid on the calibration date.")
+        if not standard["certificate_no"] or not standard["traceability"]:
+            raise ValueError("A selected reference standard is missing certificate or traceability information.")
     return True
 
 
@@ -1499,6 +1567,7 @@ def build_certificate_fingerprint(db, cal_id):
         "reference_standard": cal["reference_standard"],
         "standard_id": cal["standard_id"],
         "standard_details": cal["standard_details"],
+        "reference_standards": [dict(s) for s in calibration_reference_standards(db, cal_id)],
         "procedure_id": cal["procedure_id"],
         "result": cal["result"],
         "next_due": cal["next_due"],
