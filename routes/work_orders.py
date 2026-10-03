@@ -269,16 +269,17 @@ def update_work_order_status(work_order_id):
 
     current = row["status"]
     new_status = request.form.get("status", "").strip()
-    if current in ("COMPLETED", "CANCELLED"):
-        flash("This work order is already closed and cannot be changed.", "error")
-        return redirect(url_for("work_order_detail", work_order_id=work_order_id))
-
+    allowed = WORK_ORDER_STATUS_TRANSITIONS.get(current, set()).copy()
     if g.user["role"] == "admin":
-        allowed = {"ASSIGNED": {"CANCELLED"}, "IN PROGRESS": {"CANCELLED"}}
+        allowed.discard("IN PROGRESS")
+        allowed.discard("AWAITING REVIEW")
     else:
-        allowed = {"ASSIGNED": {"IN PROGRESS"}, "IN PROGRESS": {"AWAITING REVIEW"}}
-    if new_status not in allowed.get(current, set()):
-        flash("Invalid work-order status transition.", "error")
+        allowed.discard("CANCELLED")
+    if new_status not in allowed:
+        reason = "Invalid work-order status transition."
+        audit_work_order_transition_rejection(work_order_id, current, new_status, reason)
+        db.commit()
+        flash(reason, "error")
         return redirect(url_for("work_order_detail", work_order_id=work_order_id))
 
     now = datetime.now().isoformat(timespec="seconds")
@@ -291,7 +292,9 @@ def update_work_order_status(work_order_id):
             flash("Record the calibration measurements before submitting this work order for review.", "error")
             return redirect(url_for("work_order_detail", work_order_id=work_order_id))
         try:
-            validate_calibration_record_for_submission(db, calibration["cal_id"], work_order_id)
+            validate_calibration_record_for_submission(
+                db, calibration["cal_id"], work_order_id, g.user["user_id"]
+            )
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("work_order_detail", work_order_id=work_order_id))
@@ -300,17 +303,29 @@ def update_work_order_status(work_order_id):
             (work_order_id,)
         ).fetchone()
         with db:
-            if not pending:
-                db.execute(
-                    """INSERT INTO calibration_review_history
-                       (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
-                       VALUES (?,?,?,?,?, 'PENDING')""",
-                    (work_order_id, calibration["cal_id"], g.user["user_id"], now, calibration["revision_no"])
+            if pending:
+                audit_event(
+                    "CALIBRATION_SUBMISSION_REJECTED",
+                    "calibration",
+                    calibration["cal_id"],
+                    details={"work_order_id": work_order_id, "reason": "A review is already pending."},
                 )
-                db.execute(
-                    "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
-                    (now, calibration["cal_id"])
-                )
+                flash("This calibration is already awaiting administrator review.", "error")
+                return redirect(url_for("work_order_detail", work_order_id=work_order_id))
+            db.execute(
+                """INSERT INTO calibration_review_history
+                   (work_order_id, cal_id, submitted_by, submitted_at, submitted_revision, decision)
+                   VALUES (?,?,?,?,?, 'PENDING')""",
+                (work_order_id, calibration["cal_id"], g.user["user_id"], now, calibration["revision_no"])
+            )
+            db.execute(
+                "UPDATE calibrations SET lifecycle_status='SUBMITTED', updated_at=? WHERE cal_id=?",
+                (now, calibration["cal_id"])
+            )
+            record_calibration_revision(
+                db, calibration["cal_id"], "SUBMITTED", g.user["user_id"],
+                comments="Calibration submitted for administrator review"
+            )
             db.execute(
                 "UPDATE calibration_work_orders SET status='AWAITING REVIEW', updated_at=? WHERE work_order_id=?",
                 (now, work_order_id)
