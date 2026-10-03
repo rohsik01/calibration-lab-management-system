@@ -185,7 +185,7 @@
       <div class="scroll"><table>
         <tr><th>{{ tr("Request") }}</th><th>{{ tr("Revision") }}</th><th>{{ tr("Returned") }}</th><th>{{ tr("Comments") }}</th></tr>
         {% for r in role_dashboard.technician.returned %}
-        <tr><td><a href="{{ url_for('calibration_request', request_id=r.cal_id) }}">{{ r.request_no }}</a></td><td>v{{ r.revision_no }}</td><td>{{ r.reviewed_at or '—' }}</td><td>{{ r.comments or '—' }}</td></tr>
+        <tr><td><a href="{{ url_for('calibration_request', request_id=r.request_id) }}">{{ r.request_no }}</a></td><td>v{{ r.revision_no }}</td><td>{{ r.reviewed_at or '—' }}</td><td>{{ r.comments or '—' }}</td></tr>
         {% endfor %}
       </table></div>
       {% else %}<div class="empty">{{ tr("No returned calibrations.") }}</div>{% endif %}
