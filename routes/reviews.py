@@ -107,6 +107,36 @@ def decide_calibration_review(review_id):
     if review["decision"] != "PENDING":
         flash("This review has already been decided.", "error")
         return redirect(url_for("calibration_reviews"))
+
+    cal_state = db.execute(
+        """SELECT lifecycle_status, revision_no, request_id
+           FROM calibrations WHERE cal_id=?""",
+        (review["cal_id"],)
+    ).fetchone()
+    if (
+        not cal_state
+        or cal_state["request_id"] != review["request_id"]
+        or cal_state["revision_no"] != review["submitted_revision"]
+        or cal_state["lifecycle_status"] != "SUBMITTED"
+        or review["work_order_status"] != "AWAITING REVIEW"
+    ):
+        audit_event(
+            "CALIBRATION_REVIEW_REJECTED",
+            "calibration_review",
+            review_id,
+            details={
+                "reason": "Review does not match the current submitted calibration revision.",
+                "cal_id": review["cal_id"],
+                "submitted_revision": review["submitted_revision"],
+                "current_revision": cal_state["revision_no"] if cal_state else None,
+                "current_lifecycle_status": cal_state["lifecycle_status"] if cal_state else None,
+                "work_order_status": review["work_order_status"],
+            },
+        )
+        db.commit()
+        flash("This review is stale and no longer matches the current calibration revision.", "error")
+        return redirect(url_for("calibration_reviews"))
+
     decision = request.form.get("decision", "").strip()
     comments = request.form.get("comments", "").strip()
     if decision not in ("APPROVED", "RETURNED"):
@@ -248,6 +278,10 @@ def decide_calibration_review(review_id):
             db.execute(
                 "UPDATE calibrations SET lifecycle_status='RETURNED', approved_by=NULL, approved_at=NULL, updated_at=? WHERE cal_id=?",
                 (now, review["cal_id"])
+            )
+            record_calibration_revision(
+                db, review["cal_id"], "RETURNED", g.user["user_id"],
+                review_id=review_id, comments=comments
             )
         if decision == "APPROVED":
             req = db.execute(
