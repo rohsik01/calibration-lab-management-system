@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}{{ tr("Reference standard") }} · {{ tr("Calibration Lab") }}{% endblock %}{% block content %}
 <div class="card"><h1>{{ tr("Edit reference standard") if editing else tr("Add reference standard") }}</h1>
-{% if editing %}<p class="sub">{{ tr("When the standard is recalibrated, update its calibration date, certificate and expiry date here.") }}</p>{% endif %}
+{% if editing %}<p class="sub">{{ tr("Once a standard has been used in a calibration, its identity, certificate, traceability and validity fields are locked. Record a recalibration or replacement as a new reference-standard record so the previous record remains historically traceable.") }}</p>{% endif %}
 <form method="post">{{ csrf_input() }}<div class="grid">
 <div><label>{{ tr("Code") }}</label><input name="code" value="{{ x.code }}" placeholder="RS-001" required><small class="hint">{{ tr("A unique label, e.g. RS-001.") }}</small></div>
 <div><label>{{ tr("Name") }}</label><input name="name" value="{{ x.name }}" required></div>
