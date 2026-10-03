@@ -37,10 +37,10 @@ S/N: {{ req.pending_serial_number }} ·
 <h2 style="margin-top:22px">{{ tr("Calibration details") }}</h2>
 <div class="grid">
 <div><label>{{ tr("Calibration date (AD)") }}</label><input type="date" name="cal_date" value="{{ calibration.cal_date if edit_mode else today }}" required></div>
-<div><label>{{ tr("Reference standard") }}</label>
-<select name="standard_id" id="std"><option value="">{{ tr("Other — not in the register") }}</option>
-{% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }} {{ 'selected' if edit_mode and calibration.standard_id == x.standard_id }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
-<input name="reference_standard" id="stdtext" value="{{ calibration.reference_standard if edit_mode and not calibration.standard_id else '' }}" placeholder="{{ tr('Name / ID of the standard used') }}" style="margin-top:6px"></div>
+<div><label>{{ tr("Reference standards") }}</label>
+<select name="standard_id" id="std" multiple size="6" required>
+{% for x in standards %}{% set st=std_status(x) %}<option value="{{ x.standard_id }}" {{ 'disabled' if st[0]=='Expired' }} {{ 'selected' if x.standard_id in selected_standard_ids }}>{{ x.code }} — {{ x.name }}</option>{% endfor %}</select>
+<p class="sub">{{ tr("Select every reference standard used for this calibration. Hold Ctrl to select multiple standards. All selected standards are recorded in the calibration traceability history.") }}</p></div>
 </div>
 {% if procedure %}<div class="card" style="margin-top:18px;background:#f8fafd"><h2>{{ tr("Controlled calibration procedure") }}</h2><p><b>{{ procedure.code }}</b> — {{ procedure.title }} · {{ tr("Rev.") }} {{ procedure.revision }} · {{ procedure.method }}</p>{% if procedure.environmental_requirements %}<p class="hint"><b>{{ tr("Environmental requirements") }}:</b> {{ procedure.environmental_requirements }}</p>{% endif %}
 {% if procedure.environment_temperature_min is not none or procedure.environment_temperature_max is not none %}<p class="hint"><b>{{ tr("Temperature range") }}:</b> {{ procedure.environment_temperature_min if procedure.environment_temperature_min is not none else '—' }} to {{ procedure.environment_temperature_max if procedure.environment_temperature_max is not none else '—' }} °C</p>{% endif %}
