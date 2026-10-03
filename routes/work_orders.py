@@ -37,7 +37,7 @@ def work_orders():
         LEFT JOIN calibration_procedures cp ON cp.procedure_id=w.procedure_id
     """
     where, params = [], []
-    if g.user["role"] != "admin":
+    if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer")):
         where.append("w.assigned_technician_id=?")
         params.append(g.user["user_id"])
     if q:
@@ -57,7 +57,7 @@ def work_orders():
     for st in WORK_ORDER_STATUSES:
         count_sql = "SELECT COUNT(*) FROM calibration_work_orders WHERE status=?"
         count_params = [st]
-        if g.user["role"] != "admin":
+        if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer")):
             count_sql += " AND assigned_technician_id=?"
             count_params.append(g.user["user_id"])
         counts[st] = db.execute(count_sql, count_params).fetchone()[0]
@@ -89,7 +89,9 @@ def work_order_detail(work_order_id):
     ).fetchone()
     if not row:
         abort(404)
-    if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
+    if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer") or user_has_role("technician")):
+        abort(403)
+    if user_has_role("technician") and not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("reviewer")) and row["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
     calibration = db.execute(
         """SELECT * FROM calibrations WHERE request_id=? ORDER BY cal_id DESC LIMIT 1""",
@@ -117,7 +119,7 @@ def bulk_assign_calibration_requests():
     db=get_db()
     ids=list(dict.fromkeys(int(x) for x in request.form.getlist("request_ids") if str(x).isdigit()))
     tech_id=request.form.get("technician_id","").strip()
-    tech=db.execute("SELECT user_id,full_name FROM users WHERE user_id=? AND role='technician' AND active=1",
+    tech=db.execute("SELECT user_id,full_name FROM users WHERE user_id=? AND active=1 AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=users.user_id AND ur.role='technician')",
                     (tech_id,)).fetchone() if tech_id.isdigit() else None
     if not ids or not tech:
         flash("Select at least one request and an active technician.","error"); return redirect(url_for("calibration_requests"))
@@ -284,16 +286,17 @@ def update_work_order_status(work_order_id):
     row = db.execute("SELECT * FROM calibration_work_orders WHERE work_order_id=?", (work_order_id,)).fetchone()
     if not row:
         abort(404)
-    if g.user["role"] != "admin" and row["assigned_technician_id"] != g.user["user_id"]:
+    if not (user_has_role("admin") or user_has_role("superadmin") or user_has_role("technician")) or (user_has_role("technician") and not (user_has_role("admin") or user_has_role("superadmin")) and row["assigned_technician_id"] != g.user["user_id"]):
         abort(403)
 
     current = row["status"]
     new_status = request.form.get("status", "").strip()
     allowed = WORK_ORDER_STATUS_TRANSITIONS.get(current, set()).copy()
-    if g.user["role"] == "admin":
-        allowed.discard("IN PROGRESS")
-        allowed.discard("AWAITING REVIEW")
-    else:
+    if user_has_role("admin") or user_has_role("superadmin"):
+        if not user_has_role("technician"):
+            allowed.discard("IN PROGRESS")
+            allowed.discard("AWAITING REVIEW")
+    if user_has_role("technician") and not (user_has_role("admin") or user_has_role("superadmin")):
         allowed.discard("CANCELLED")
     if new_status not in allowed:
         reason = "Invalid work-order status transition."
