@@ -230,8 +230,21 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
     wrap.appendChild(label);
   });
   select.insertAdjacentElement('afterend', wrap);
+  select.removeAttribute('required');
   select.style.display = 'none';
+  summary.setAttribute('aria-live', 'polite');
   wrap.insertAdjacentElement('afterend', summary);
+  if (select.form) {
+    select.form.addEventListener('submit', event => {
+      const selected = [...select.options].some(o => o.selected && !o.disabled);
+      if (!selected) {
+        event.preventDefault();
+        summary.textContent = 'Select at least one reference standard before continuing.';
+        const first = wrap.querySelector('input:not(:disabled)');
+        if (first) first.focus();
+      }
+    });
+  }
   updateSummary();
 });
 document.querySelectorAll('table.js-table').forEach(t => {
