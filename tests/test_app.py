@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app import app as flask_app, calculate_measurement_uncertainty
+from app import app as flask_app, calculate_measurement_uncertainty, certificate_verification_token
 from routes.calibrations import calibration_delete_blocked
 from routes.sensors import sensor_delete_blocked
 
@@ -160,3 +160,84 @@ def test_sensor_history_ui_does_not_offer_sensor_deletion_when_calibrations_exis
 
     assert 'g.user.role == "admin" and not hist' in template
     assert "Sensor protected by calibration history" in template
+
+
+
+def test_certificate_verification_token_is_stable_and_nontrivial():
+    first = certificate_verification_token("CAL-2026-0001")
+    second = certificate_verification_token("CAL-2026-0001")
+    other = certificate_verification_token("CAL-2026-0002")
+    assert first == second
+    assert first != other
+    assert len(first) == 40
+
+
+def test_certificate_verification_uses_compact_signed_url_not_embedded_measurement_payload():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    source = route_path.read_text(encoding="utf-8")
+    assert "certificate_verification_url" in source
+    assert "qr_code = _qr_data_uri(verification_url)" in source
+    assert "NO WEB / LOCALHOST LINK" not in source
+    assert '@app.route("/verify/<cert>/<token>")' in source
+
+
+def test_certificate_integrity_and_lifecycle_controls_are_present():
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    app_source = app_path.read_text(encoding="utf-8")
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    route_source = route_path.read_text(encoding="utf-8")
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "certificate.html"
+    template_source = template_path.read_text(encoding="utf-8")
+
+    assert "certificate_fingerprint" in app_source
+    assert "certificate_history" in app_source
+    assert "certificate_sequences" in app_source
+    assert "CERTIFICATE_VERIFIED" in route_source
+    assert "CERTIFICATE_INTEGRITY_FAILURE" in route_source
+    assert "CERTIFICATE_WITHDRAWN" in route_source
+    assert "CERTIFICATE_REISSUED" in route_source
+    assert "certificate_pdf" in route_source
+    assert "SCAN TO VERIFY" in template_source
+
+
+def test_certificate_status_page_and_full_report_show_integrity_information():
+    status_path = Path(__file__).resolve().parents[1] / "templates" / "certificate_status.html"
+    full_path = Path(__file__).resolve().parents[1] / "templates" / "certificate_full.html"
+    status_source = status_path.read_text(encoding="utf-8")
+    full_source = full_path.read_text(encoding="utf-8")
+    assert "Certificate Withdrawn" in status_source
+    assert "Certificate Superseded" in status_source
+    assert "INTEGRITY_FAILURE" in status_source
+    assert "r.certificate_fingerprint" in full_source
+
+
+def test_certificate_pdf_endpoint_and_dependency_are_present():
+    req_path = Path(__file__).resolve().parents[1] / "requirements.txt"
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
+    assert "reportlab" in req_path.read_text(encoding="utf-8")
+    assert '@app.route("/certificate/<cert>/pdf")' in route_path.read_text(encoding="utf-8")
+
+
+def test_certificate_numbering_is_transaction_safe():
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    source = app_path.read_text(encoding="utf-8")
+    assert "certificate_sequences" in source
+    assert "INSERT OR IGNORE INTO certificate_sequences" in source
+    assert "UPDATE certificate_sequences SET next_number=next_number+1" in source
+
+
+
+def test_corrected_revision_gets_new_certificate_and_supersedes_previous():
+    route_path = Path(__file__).resolve().parents[1] / "routes" / "reviews.py"
+    source = route_path.read_text(encoding="utf-8")
+    assert "previous_cert" in source
+    assert "A corrected revision is a new controlled certificate" in source
+    assert "event_type, previous_certificate_no" in source
+    assert "'SUPERSEDED'" in source
+
+
+
+def test_general_users_can_access_certificate_pdf_endpoint():
+    app_path = Path(__file__).resolve().parents[1] / "app.py"
+    source = app_path.read_text(encoding="utf-8")
+    assert '"certificate_pdf"' in source
