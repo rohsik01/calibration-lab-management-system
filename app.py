@@ -84,11 +84,18 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL COLLATE NOCASE,
     full_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','general_user')),
+    role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','reviewer','general_user')),
     active INTEGER NOT NULL DEFAULT 1,
     two_factor_enabled INTEGER NOT NULL DEFAULT 0,
     totp_secret TEXT,
     recovery_codes TEXT);
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','reviewer','general_user')),
+    PRIMARY KEY (user_id, role)
+);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role, user_id);
+
 CREATE TABLE IF NOT EXISTS reference_standards (
     standard_id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT UNIQUE NOT NULL COLLATE NOCASE, name TEXT NOT NULL,
@@ -557,7 +564,7 @@ with sqlite3.connect(DB, timeout=30) as _c:
             username TEXT UNIQUE NOT NULL COLLATE NOCASE,
             full_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','general_user')),
+            role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','reviewer','general_user')),
             active INTEGER NOT NULL DEFAULT 1,
             two_factor_enabled INTEGER NOT NULL DEFAULT 0,
             totp_secret TEXT,
@@ -569,6 +576,20 @@ with sqlite3.connect(DB, timeout=30) as _c:
                    two_factor_enabled, totp_secret, recovery_codes FROM users""")
         _c.execute("DROP TABLE users")
         _c.execute("ALTER TABLE users_new RENAME TO users")
+    # Upgrade older installations: normalize user roles into a many-to-many role map.
+    # The legacy users.role column is retained as the primary role for compatibility;
+    # user_roles is the authoritative set used by authorization checks.
+    _c.execute("""CREATE TABLE IF NOT EXISTS user_roles (
+        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK (role IN ('superadmin','admin','technician','reviewer','general_user')),
+        PRIMARY KEY (user_id, role)
+    )""")
+    _c.execute("CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role, user_id)")
+    _c.execute("""INSERT OR IGNORE INTO user_roles(user_id, role)
+                 SELECT user_id, role FROM users""")
+    _c.execute("""DELETE FROM user_roles
+                 WHERE user_id NOT IN (SELECT user_id FROM users)""")
+
     # Upgrade legacy calibration table to allow unregistered instruments during review.
     _cal_sql = _c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='calibrations'").fetchone()[0]
     if "sensor_id TEXT NOT NULL" in _cal_sql or "sensor_id INTEGER NOT NULL" in _cal_sql:
@@ -1085,7 +1106,8 @@ def bs_date_pair(iso_value):
         return str(iso_value)
 
 app.jinja_env.globals.update(tr=tr, stl=status_label, status_key=status_key,
-                             std_status=standard_status, date_pair=bs_date_pair)
+                             std_status=standard_status, date_pair=bs_date_pair,
+                             has_role=user_has_role)
 
 
 @app.context_processor
@@ -1104,7 +1126,7 @@ def nav_counts():
     sensor_alerts = sum(1 for r in rows if status(r)[0] != "OK")
     standard_alerts = sum(1 for x in stds if standard_status(x)[0] != "Valid")
     pending_reviews = db.execute("SELECT COUNT(*) FROM calibration_review_history WHERE decision='PENDING'").fetchone()[0]
-    if g.user["role"] in ("admin", "superadmin"):
+    if user_has_role("admin") or user_has_role("superadmin"):
         unassigned = db.execute("""SELECT COUNT(*) FROM calibration_requests r
                                    WHERE r.status='REVIEWED'
                                      AND NOT EXISTS (
@@ -1122,7 +1144,7 @@ def nav_counts():
     # Admins see all actionable new requests, active work orders and pending reviews.
     # Technicians see only their own actionable work orders; general users see
     # new requests relevant to their own submitted requests.
-    if g.user["role"] in ("admin", "superadmin"):
+    if user_has_role("admin") or user_has_role("superadmin"):
         new_calibration_requests = db.execute(
             "SELECT COUNT(*) FROM calibration_requests WHERE status='RECEIVED'"
         ).fetchone()[0]
@@ -1131,7 +1153,7 @@ def nav_counts():
             "WHERE status IN ('ASSIGNED','IN PROGRESS','AWAITING REVIEW')"
         ).fetchone()[0]
         calibration_review_count = pending_reviews
-    elif g.user["role"] == "technician":
+    elif user_has_role("technician"):
         new_calibration_requests = db.execute(
             """SELECT COUNT(*) FROM calibration_requests r
                JOIN calibration_work_orders w ON w.request_id=r.request_id
@@ -1521,6 +1543,7 @@ def certificate_verification_token(certificate_no):
 @app.before_request
 def gate():
     g.user = None
+    g.user_roles = set()
     g.lang = request.cookies.get("lang") if request.cookies.get("lang") in LANGS else "en"
     if request.endpoint is None:
         return
@@ -1530,6 +1553,11 @@ def gate():
     if session.get("user_id"):
         g.user = db.execute("SELECT * FROM users WHERE user_id=? AND active=1",
                             (session["user_id"],)).fetchone()
+        if g.user:
+            g.user_roles = {r["role"] for r in db.execute(
+                "SELECT role FROM user_roles WHERE user_id=? ORDER BY role",
+                (g.user["user_id"],)
+            ).fetchall()}
         if not g.user:
             session.clear()
     if request.method == "POST":
@@ -1538,7 +1566,9 @@ def gate():
             abort(400, "Invalid or missing security token. Reload the page and try again.")
     if not g.user and request.endpoint not in OPEN_ENDPOINTS:
         return redirect(url_for("login", next=request.full_path.rstrip("?")))
-    if g.user and g.user["role"] == "general_user":
+    if g.user and user_has_role("general_user") and not any(
+        user_has_role(role) for role in ("technician", "reviewer", "admin", "superadmin")
+    ):
         allowed = {"index", "calibration_requests", "new_calibration_request",
                    "calibration_request", "certificate", "certificate_pdf", "verify_certificate", "account", "logout",
                    "set_lang", "static"}
@@ -1546,11 +1576,30 @@ def gate():
             abort(403)
 
 
+def user_has_role(role, user=None):
+    """Return whether the current user (or supplied user id/row) has a role."""
+    if user is None:
+        return role in getattr(g, "user_roles", set())
+    user_id = user["user_id"] if hasattr(user, "keys") else int(user)
+    return bool(get_db().execute(
+        "SELECT 1 FROM user_roles WHERE user_id=? AND role=?", (user_id, role)
+    ).fetchone())
+
+
+def user_roles_for(user_id):
+    """Return a user's assigned roles in stable display order."""
+    return [r["role"] for r in get_db().execute(
+        "SELECT role FROM user_roles WHERE user_id=? ORDER BY CASE role "
+        "WHEN 'superadmin' THEN 1 WHEN 'admin' THEN 2 WHEN 'reviewer' THEN 3 "
+        "WHEN 'technician' THEN 4 ELSE 5 END", (user_id,)
+    ).fetchall()]
+
+
 def admin_required(f):
-    """Require a laboratory administrator or superadministrator."""
+    """Require a laboratory administrator or superadministrator role."""
     @wraps(f)
     def wrapper(*a, **kw):
-        if g.user["role"] not in ("admin", "superadmin"):
+        if not (user_has_role("admin") or user_has_role("superadmin")):
             abort(403)
         return f(*a, **kw)
     return wrapper
@@ -1560,7 +1609,17 @@ def superadmin_required(f):
     """Require the dedicated superadministrator role for critical system tasks."""
     @wraps(f)
     def wrapper(*a, **kw):
-        if g.user["role"] != "superadmin":
+        if not user_has_role("superadmin"):
+            abort(403)
+        return f(*a, **kw)
+    return wrapper
+
+
+def reviewer_required(f):
+    """Require review capability; administrators retain review authority."""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not (user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")):
             abort(403)
         return f(*a, **kw)
     return wrapper
