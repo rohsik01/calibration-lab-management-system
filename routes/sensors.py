@@ -2,6 +2,17 @@
 from app import *
 from routes.stations import _excel_workbook
 
+def sensor_delete_blocked(calibration_rows):
+    """Return whether a sensor must be retained because it has controlled calibration history."""
+    return any(
+        row["lifecycle_status"] == "APPROVED"
+        or row["certificate_no"]
+        or row["revision_count"]
+        or row["review_count"]
+        for row in calibration_rows
+    )
+
+
 def _sensor_id_prefix(sensor_type):
     """Return the standard two-letter Sensor ID prefix for a sensor type."""
     value = re.sub(r"[^A-Za-z]", "", (sensor_type or "").strip()).lower()
@@ -181,15 +192,58 @@ def delete_sensor(sensor_id):
     if not sensor:
         abort(404)
     try:
+        cal_rows = db.execute(
+            """SELECT c.cal_id, c.certificate_no, c.lifecycle_status, c.revision_no,
+                      (SELECT COUNT(*) FROM calibration_revisions cr WHERE cr.cal_id=c.cal_id) AS revision_count,
+                      (SELECT COUNT(*) FROM calibration_review_history rh WHERE rh.cal_id=c.cal_id) AS review_count
+               FROM calibrations c
+               WHERE c.sensor_id=?
+               ORDER BY c.cal_id DESC""",
+            (sensor_id,),
+        ).fetchall()
+
+        if sensor_delete_blocked(cal_rows):
+            protected = [
+                {
+                    "cal_id": row["cal_id"],
+                    "lifecycle_status": row["lifecycle_status"],
+                    "certificate_no": row["certificate_no"],
+                    "revision_count": row["revision_count"],
+                    "review_count": row["review_count"],
+                }
+                for row in cal_rows
+                if (
+                    row["lifecycle_status"] == "APPROVED"
+                    or row["certificate_no"]
+                    or row["revision_count"]
+                    or row["review_count"]
+                )
+            ]
+            audit_event(
+                "SENSOR_DELETE_BLOCKED",
+                "sensor",
+                sensor_id,
+                details={
+                    "calibration_count": len(cal_rows),
+                    "protected_calibrations": protected,
+                },
+            )
+            db.commit()
+            flash(
+                f"Sensor '{sensor_id}' is protected because it has controlled calibration history. "
+                "Retain the sensor and calibration records for traceability.",
+                "error",
+            )
+            return redirect(url_for("sensor", sensor_id=sensor_id))
+
         with db:
-            cal_rows = db.execute("SELECT cal_id FROM calibrations WHERE sensor_id=?", (sensor_id,)).fetchall()
             cal_ids = [r["cal_id"] for r in cal_rows]
             if cal_ids:
-                cp = ",".join("?" * len(cal_ids))
-                db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({cp})", cal_ids)
-                db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({cp})", cal_ids)
+                placeholders = ",".join("?" * len(cal_ids))
+                db.execute(f"DELETE FROM calibration_points WHERE cal_id IN ({placeholders})", cal_ids)
+                db.execute(f"DELETE FROM calibrations WHERE cal_id IN ({placeholders})", cal_ids)
             db.execute("DELETE FROM sensors WHERE sensor_id=?", (sensor_id,))
-        flash(f"Sensor '{sensor_id}' and its calibration history were deleted.")
+        flash(f"Sensor '{sensor_id}' and its unprotected calibration history were deleted.")
     except sqlite3.Error:
         flash("Could not delete the sensor and its calibration history.", "error")
     return redirect(url_for("register"))
