@@ -573,7 +573,7 @@ def test_multi_role_authorization_decorators_use_assigned_roles():
 
     with flask_app.test_request_context("/"):
         g.user_roles = {"technician", "reviewer"}
-        assert admin_action.__wrapped__ if False else review_action() == "review-ok"
+        assert review_action() == "review-ok"
         with pytest.raises(Exception):
             admin_action()
         with pytest.raises(Exception):
