@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Certificate {{ certificate_no }} · Verification{% endblock %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h1>Certificate Verification</h1>
+    <p class="sub">Controlled certificate status for {{ certificate_no }}</p>
+  </div>
+</div>
+<div class="card" style="max-width:760px;margin:20px auto;text-align:center;padding:36px">
+  {% if status == "WITHDRAWN" %}
+    <div style="font-size:42px">⚠</div>
+    <h2 style="color:#b42318">Certificate Withdrawn</h2>
+    <p>Certificate <strong>{{ certificate_no }}</strong> is no longer valid for use.</p>
+  {% elif status == "SUPERSEDED" %}
+    <div style="font-size:42px">↗</div>
+    <h2>Certificate Superseded</h2>
+    <p>Certificate <strong>{{ certificate_no }}</strong> has been replaced by
+      <strong>{{ replacement or "a newer certificate" }}</strong>.</p>
+  {% elif status == "INTEGRITY_FAILURE" %}
+    <div style="font-size:42px">!</div>
+    <h2 style="color:#b42318">Certificate Integrity Check Failed</h2>
+    <p>The certificate could not be matched to the laboratory record fingerprint stored at issuance.</p>
+  {% else %}
+    <div style="font-size:42px">?</div>
+    <h2>Certificate Not Active</h2>
+    <p>Certificate <strong>{{ certificate_no }}</strong> is not currently active.</p>
+  {% endif %}
+  {% if reason %}<p style="margin-top:20px;color:var(--muted)"><strong>Reason:</strong> {{ reason }}</p>{% endif %}
+  <p style="margin-top:24px;color:var(--muted)">
+    Verification is based on the controlled record maintained by the DHM Calibration Laboratory.
+  </p>
+</div>
+{% endblock %}
