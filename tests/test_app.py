@@ -1,4 +1,5 @@
 import math
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -14,10 +15,10 @@ from app import (
     superadmin_required,
     user_has_role,
 )
-from routes.calibrations import calibration_delete_blocked
+from routes.calibrations import calibration_delete_blocked, selected_reference_standards
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
-from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS
+from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS, selected_work_order_standards, persist_work_order_reference_standards
 from app import validate_calibration_record_for_submission
 
 
@@ -685,3 +686,67 @@ def test_reference_standard_ui_uses_multi_role_admin_permissions():
         assert "has_role('admin') or has_role('superadmin')" in source
         assert "g.user.role == 'admin'" not in source
         assert 'g.user.role == "admin"' not in source
+
+def _reference_standard_test_db():
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.executescript("""
+        CREATE TABLE reference_standards (
+            standard_id INTEGER PRIMARY KEY, code TEXT, name TEXT, standard_type TEXT,
+            manufacturer TEXT, serial_number TEXT, uncertainty TEXT, traceability TEXT,
+            certificate_no TEXT, calibrated_on TEXT, valid_until TEXT, active INTEGER
+        );
+        CREATE TABLE calibration_work_orders (work_order_id INTEGER PRIMARY KEY, standard_id INTEGER);
+        CREATE TABLE work_order_reference_standards (
+            work_order_id INTEGER NOT NULL, standard_id INTEGER NOT NULL,
+            selection_order INTEGER NOT NULL DEFAULT 1,
+            is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+            usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+            PRIMARY KEY (work_order_id, standard_id)
+        );
+        CREATE UNIQUE INDEX idx_test_one_primary
+            ON work_order_reference_standards(work_order_id) WHERE is_primary=1;
+    """)
+    db.executemany("INSERT INTO reference_standards VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", [
+        (1,"RS-001","Primary","Temperature","DHM","S1","0.1","ISO","CERT-1","2026-01-01","2026-12-31",1),
+        (2,"RS-002","Secondary","Temperature","DHM","S2","0.1","ISO","CERT-2","2026-01-01","2026-12-31",1),
+        (3,"RS-003","Expired","Temperature","DHM","S3","0.1","ISO","CERT-3","2025-01-01","2025-12-31",1),
+    ])
+    return db
+
+
+def test_multiple_reference_standards_are_persisted_in_order_with_one_primary():
+    db = _reference_standard_test_db()
+    standards = selected_work_order_standards(db, {"standard_id":["1","2","1"]}, "2026-10-03")
+    assert [row["standard_id"] for row in standards] == [1,2]
+    db.execute("INSERT INTO calibration_work_orders(work_order_id, standard_id) VALUES (10,1)")
+    persist_work_order_reference_standards(db, 10, standards)
+    rows = db.execute(
+        "SELECT standard_id, selection_order, is_primary FROM work_order_reference_standards "
+        "WHERE work_order_id=? ORDER BY selection_order",(10,)
+    ).fetchall()
+    assert [(r["standard_id"],r["selection_order"],r["is_primary"]) for r in rows] == [(1,1,1),(2,2,0)]
+    assert db.execute("SELECT COUNT(*) FROM work_order_reference_standards WHERE work_order_id=? AND is_primary=1",(10,)).fetchone()[0] == 1
+
+
+def test_calibration_must_include_all_work_order_reference_standards():
+    db = _reference_standard_test_db()
+    with pytest.raises(ValueError, match="must include every reference standard"):
+        selected_reference_standards(db, {"standard_id":["1"]}, "2026-10-03", required_standard_ids=[1,2])
+    standards = selected_reference_standards(db, {"standard_id":["1","2"]}, "2026-10-03", required_standard_ids=[1,2])
+    assert [row["standard_id"] for row in standards] == [1,2]
+
+
+def test_reference_standard_selection_rejects_expired_work_order_standard():
+    db = _reference_standard_test_db()
+    with pytest.raises(ValueError, match="not valid on the work-order target date"):
+        selected_work_order_standards(db, {"standard_id":["3"]}, "2026-10-03")
+
+
+def test_multiple_reference_standard_ui_is_checkbox_enhanced():
+    base = Path(__file__).resolve().parents[1].joinpath("templates","base.html").read_text(encoding="utf-8")
+    for name in ("calibrate.html","calibrate_pending.html","request_detail.html"):
+        source = Path(__file__).resolve().parents[1].joinpath("templates",name).read_text(encoding="utf-8")
+        assert 'class="multi-select"' in source
+    assert "multi-select-enhanced" in base
+    assert "checkbox" in base
