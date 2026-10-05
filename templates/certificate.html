@@ -3,300 +3,138 @@
 {% block banner %}{% endblock %}
 {% block content %}
 <style>
-  .certificate-page {
-    width:148mm; height:210mm; max-width:148mm;
-    margin:8mm auto; padding:9mm 9mm 11mm 10mm;
-    position:relative; overflow:hidden;
-    background:#fff; color:#172b43;
-    border:.45mm solid #174b7b; border-radius:3mm;
-    box-shadow:0 4px 20px rgba(20,45,80,.14);
-    font:8.2pt/1.28 Arial,"Segoe UI",sans-serif;
+  .cert-wrap{max-width:148mm;margin:6mm auto}
+  .cert-actions{display:flex;justify-content:flex-end;gap:6px;margin-bottom:6mm}
+  .certificate-page{width:148mm;height:210mm;margin:0 auto;padding:9mm 9mm 8mm;
+    position:relative;overflow:hidden;background:#fff;color:#172b43;
+    border:0.45mm solid #174b7b;border-radius:2.5mm;
+    font:8pt/1.25 Arial,"Segoe UI",sans-serif}
+  .certificate-page *{box-sizing:border-box}
+  .watermark{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+    color:rgba(23,75,123,.045);font-size:62pt;font-weight:900;letter-spacing:.08em;
+    transform:rotate(-32deg)}
+  .content{position:relative;z-index:1}
+  .head{display:grid;grid-template-columns:16mm 1fr auto;gap:3.5mm;align-items:center;
+    padding-bottom:3.5mm;border-bottom:.6mm solid #174b7b}
+  .mark{width:14mm;height:14mm;border:.4mm solid #174b7b;border-radius:50%;
+    display:grid;place-items:center;color:#174b7b;font-size:6.5pt;font-weight:900}
+  .agency{font-size:9.5pt;font-weight:900;color:#174b7b;line-height:1.08}
+  .sub{font-size:6.4pt;color:#607187;margin-top:1mm}
+  .title{text-align:right;color:#174b7b;font-size:12pt;font-weight:900;white-space:nowrap}
+  .certno{text-align:right;color:#172b43;font-size:6.8pt;font-weight:700;margin-top:1.2mm}
+  .body{display:grid;grid-template-columns:minmax(0,1fr) 43mm;gap:5mm;padding-top:5mm}
+  .section-title{font-size:6.4pt;color:#174b7b;font-weight:900;letter-spacing:.12em;
+    text-transform:uppercase;margin:0 0 2.5mm}
+  .fields{display:grid;grid-template-columns:25mm minmax(0,1fr);gap:2.1mm 2.5mm}
+  .label{color:#607187;font-size:6.6pt;white-space:nowrap}
+  .value{font-weight:700;overflow-wrap:anywhere;border-bottom:.2mm solid #e3e9ef;padding-bottom:.7mm}
+  .status{margin:4mm 0;border:.35mm solid #174b7b;border-radius:1.5mm;padding:3mm;
+    display:grid;grid-template-columns:1fr 1fr;gap:2mm;background:#f5f9fc}
+  .status .big{grid-column:1/3;text-align:center;font-size:11pt;font-weight:900}
+  .pass{color:#087443}.fail{color:#b42318}
+  .mini{text-align:center}.mini span{display:block;color:#607187;font-size:5.8pt}.mini strong{display:block;margin-top:.7mm;font-size:7.5pt}
+  .qrbox{border:.45mm solid #174b7b;border-radius:1.5mm;padding:3mm;text-align:center;background:#fff}
+  .qrbox img{width:34mm;height:34mm;display:block;margin:0 auto;image-rendering:pixelated}
+  .qrlabel{margin-top:2.5mm;color:#174b7b;font-weight:900;font-size:7pt;letter-spacing:.06em}
+  .qrhint{margin-top:1.2mm;color:#607187;font-size:5.7pt;line-height:1.3}
+  .offline{margin-top:3mm;padding:2mm;border-top:.25mm solid #d7e1ec;color:#607187;font-size:5.7pt;text-align:left}
+  .footer{position:absolute;left:9mm;right:9mm;bottom:4mm;border-top:.25mm solid #d7e1ec;
+    padding-top:1.8mm;display:flex;justify-content:space-between;gap:3mm;color:#607187;font-size:5.6pt}
+  .preview-note{margin:0 0 4mm;padding:2mm;border:.3mm solid #b42318;color:#b42318;text-align:center;font-weight:700;font-size:8pt}
+  @media print{
+    html,body{margin:0!important;padding:0!important;background:#fff!important}
+    main{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
+    .side,.topbar,.langbar,.flash,.noprint{display:none!important}
+    .cert-wrap{max-width:none;margin:0}
+    .certificate-page{width:148mm;height:210mm;margin:0;border:0;border-radius:0}
   }
-  .certificate-page * { box-sizing:border-box; }
-
-  .certificate-content{position:relative;z-index:1;height:100%}
-  .emblem-mark{width:15mm;height:15mm;border:.35mm solid #174b7b;border-radius:50%;display:grid;place-items:center;color:#174b7b;font-size:7pt;font-weight:900}
-  .qr-side{border:.4mm solid #174b7b;background:#fff}
-
-  .card-header {
-    display:grid; grid-template-columns:15mm 1fr 1fr;
-    gap:4mm; align-items:center;
-    padding-bottom:4mm; border-bottom:.65mm solid #174b7b;
-  }
-  .agency { color:#174b7b; font-weight:900; font-size:10.5pt;
-    line-height:1.05; letter-spacing:.01em;
-  }
-  .agency-sub { font-size:6.8pt; color:#52657b; margin-top:1mm; }
-  .certificate-heading { text-align:right; color:#174b7b; }
-  .certificate-heading .title {
-    font-size:13.5pt; font-weight:900; letter-spacing:.035em;
-    line-height:1.05;
-  }
-  .certificate-heading .number {
-    margin-top:1.5mm; font-size:7.2pt; color:#52657b;
-  }
-  .certificate-heading .number strong { color:#172b43; }
-
-  .card-body { display:grid; grid-template-columns:minmax(0,1fr) 40mm;
-    gap:4mm; min-height:145mm; padding-top:5mm;
-  }
-  .info-side { min-width:0; }
-
-  .section-title {
-    color:#174b7b; font-size:6.8pt; font-weight:900;
-    letter-spacing:.12em; text-transform:uppercase;
-    margin-bottom:2.5mm;
-  }
-  .info-grid {
-    display:grid;
-    grid-template-columns:21mm minmax(0,1fr);
-    column-gap:2.5mm; row-gap:2.3mm;
-  }
-  .label {
-    color:#607187; font-size:6.7pt; font-weight:600;
-    white-space:nowrap;
-  }
-  .value {
-    min-width:0; font-weight:700; overflow-wrap:anywhere;
-    border-bottom:.2mm solid rgba(96,113,135,.25);
-    padding-bottom:.8mm;
-  }
-
-  .result-row {
-    margin-top:4mm; display:grid; grid-template-columns:1fr 1fr;
-    border:.3mm solid #cbd8e5; border-radius:2mm; overflow:hidden;
-    background:rgba(255,255,255,.93);
-  }
-  .result-cell { padding:2.5mm 2mm; text-align:center; min-width:0; }
-  .result-cell + .result-cell { border-left:.3mm solid #d7e1ec; }
-  .result-cell:last-child { grid-column:1 / 3; border-left:0; border-top:.3mm solid #d7e1ec; }
-  .result-cell span {
-    display:block; color:#607187; font-size:6.1pt;
-    text-transform:uppercase; letter-spacing:.04em;
-  }
-  .result-cell strong {
-    display:block; margin-top:1mm; font-size:9pt; overflow-wrap:anywhere;
-  }
-  .pass { color:#087443; } .fail { color:#b42318; }
-
-  .lower-grid {
-    margin-top:4mm; display:grid; grid-template-columns:1fr;
-    gap:3mm;
-  }
-  .approval-box,.trace-box {
-    background:rgba(255,255,255,.91);
-    border:.25mm solid #d7e1ec; border-radius:1.5mm;
-    padding:2.5mm 3mm; min-height:17mm;
-  }
-  .box-caption {
-    color:#607187; font-size:6.1pt; text-transform:uppercase;
-    letter-spacing:.05em;
-  }
-  .box-value { font-size:8.5pt; font-weight:900; margin-top:1mm; overflow-wrap:anywhere; }
-  .box-note { color:#607187; font-size:6pt; margin-top:1mm; line-height:1.25; }
-
-  .qr-side { border:.4mm solid #174b7b; padding:3mm;
-    display:flex; flex-direction:column; align-items:center;
-    justify-content:flex-start; padding-top:2mm;
-    background:#fff; border-radius:1mm;
-  }
-  .qr-frame {
-    padding:2.5mm; border:.45mm solid #174b7b;
-    border-radius:2mm; background:#fff;
-  }
-  .qr-side img {
-    width:31mm; height:31mm; display:block;
-    image-rendering:pixelated; background:#fff;
-  }
-  .qr-placeholder { width:31mm; height:31mm; display:grid; place-items:center;
-    border:.25mm dashed #aab8c8; background:#fff; text-align:center;
-    color:#718096; font-size:6.5pt;
-  }
-  .qr-label {
-    margin-top:3mm; text-align:center; color:#174b7b;
-    font-size:7pt; font-weight:900; letter-spacing:.05em;
-  }
-  .qr-hint {
-    margin-top:1.2mm; text-align:center; color:#607187;
-    font-size:5.8pt; line-height:1.3; max-width:36mm;
-  }
-  .qr-meta {
-    width:100%; margin-top:4mm; padding-top:3mm;
-    border-top:.25mm solid #d7e1ec;
-  }
-  .qr-meta-row {
-    display:flex; justify-content:space-between; gap:2mm;
-    padding:1.2mm 0; border-bottom:.2mm solid rgba(96,113,135,.18);
-    font-size:6pt;
-  }
-  .qr-meta-row span { color:#607187; }
-  .qr-meta-row strong { text-align:right; overflow-wrap:anywhere; }
-
-  .card-footer {
-    position:absolute; left:10mm; right:9mm; bottom:4.5mm;
-    padding-top:2mm; border-top:.3mm solid #d7e1ec;
-    display:flex; justify-content:space-between; gap:3mm;
-    color:#607187; font-size:5.7pt;
-  }
-
-  .preview-watermark {
-    position:absolute; z-index:4; left:12mm; right:48mm; top:43%;
-    text-align:center; transform:rotate(-18deg);
-    font-size:21pt; font-weight:900; color:rgba(180,35,24,.12);
-    pointer-events:none;
-  }
-  .preview-note {
-    margin:0 0 4mm; padding:2mm;
-    border:.3mm solid #b42318; color:#b42318;
-    text-align:center; font-weight:700; font-size:8pt;
-  }
-
-  .certificate-actions {
-    width:100%; max-width:calc(100% - 16mm);
-    margin:0 auto 3mm; text-align:right;
-  }
-  .certificate-actions .btn {
-    padding:2.5mm 5mm; font-weight:700; cursor:pointer;
-  }
-
-  @media screen and (max-width:700px) {
-    .certificate-page { width:100%; max-width:148mm; margin:4mm auto; }
-  }
-
-  @media print {
-    html,body {
-      margin:0!important; padding:0!important; background:#fff!important;
-    }
-    main {
-      width:100%!important; max-width:none!important;
-      margin:0!important; padding:0!important;
-    }
-    .certificate-page {
-      width:100%!important; max-width:none!important;
-      margin:0!important; border:0!important; border-radius:0!important;
-      box-shadow:none!important;
-    }
-    .certificate-page .noprint { display:none!important; }
-    .side,.topbar,.langbar,.flash { display:none!important; }
-  }
+  @media screen and (max-width:700px){.cert-wrap{max-width:100%;overflow:auto}.certificate-page{margin:0 auto}}
 </style>
 
-{% if preview %}
-<div class="preview-note noprint">UNVERIFIED PREVIEW — NOT AN OFFICIAL CERTIFICATE</div>
-{% endif %}
-
-<div class="certificate-page">
-  {% if preview %}<div class="preview-watermark" aria-hidden="true">UNVERIFIED PREVIEW</div>{% endif %}
-
-  <div class="certificate-content">
-    <header class="card-header">
-      <div class="emblem-mark">DHM</div>
-      <div>
-        <div class="agency">{{ banner[2] or "DHM" }}</div>
-        <div class="agency-sub">{{ banner[3] or "Calibration Laboratory" }}</div>
-        <div class="agency-sub">{{ banner[0] }} · {{ banner[1] }}</div>
-      </div>
-      <div class="certificate-heading">
-        <div class="title">{{ tr("CALIBRATION CERTIFICATE") }}</div>
-        <div class="number">{{ tr("Certificate No.") }} <strong>{{ r.certificate_no or "NOT ISSUED" }}</strong></div>
-      </div>
-    </header>
-
-    <div class="card-body">
-      <section class="info-side">
-        <div class="section-title">{{ tr("Instrument identification") }}</div>
-        <div class="info-grid">
-          <span class="label">{{ tr("Instrument") }}</span><span class="value">{{ r.sensor_type or "—" }}</span>
-          <span class="label">{{ tr("Serial number") }}</span><span class="value">{{ r.serial_number or "—" }}</span>
-
-          <span class="label">{{ tr("Station") }}</span><span class="value">{{ r.station or "—" }}</span>
-          <span class="label">{{ tr("Unit") }}</span><span class="value">{{ r.unit or "—" }}</span>
-
-          <span class="label">{{ tr("Calibration date") }}</span><span class="value">{{ r.cal_date or "—" }}</span>
-          <span class="label">{{ tr("Next due") }}</span><span class="value">{{ r.next_due or "—" }}</span>
-
-          <span class="label">{{ tr("Reference standard") }}</span>
-          <span class="value wide-value">{% if standards %}{% for std in standards %}{{ std.code }} — {{ std.name }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}{{ r.reference_standard or "—" }}{% endif %}</span>
-
-          <span class="label">{{ tr("Procedure") }}</span>
-          <span class="value wide-value">{{ r.procedure_code or "—" }}{% if r.procedure_title %} — {{ r.procedure_title }}{% endif %}</span>
-        </div>
-
-        <div class="result-row">
-          <div class="result-cell">
-            <span>{{ tr("Overall result") }}</span>
-            <strong class="{{ 'fail' if r.result == 'FAIL' else 'pass' }}">{{ tr(r.result) }}</strong>
-          </div>
-          <div class="result-cell">
-            <span>{{ tr("Measurement points") }}</span>
-            <strong>{{ pts|length }}</strong>
-          </div>
-          <div class="result-cell">
-            <span>{{ tr("Maximum absolute error") }}</span>
-            <strong>{{ '%+.5g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</strong>
-          </div>
-        </div>
-
-        <div class="lower-grid">
-          <div class="approval-box">
-            <div class="box-caption">{{ tr("Approved by") }}</div>
-            <div class="box-value">{{ r.approved_by or "—" }}</div>
-            <div class="box-note">
-              {% if r.approved_at %}{{ tr("Approved") }}: {{ r.approved_at[:10] }}
-              {% elif r.certificate_issued_at %}{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}{% endif %}
-            </div>
-          </div>
-          <div class="trace-box">
-            <div class="box-caption">{{ tr("Traceability") }}</div>
-            <div class="box-value">{% if standards %}{% for std in standards %}{{ std.code }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}{{ r.reference_standard or "—" }}{% endif %}</div>
-            <div class="box-note">Complete measurement data, uncertainty, procedure and reference details are embedded in the QR.</div>
-          </div>
-        </div>
-      </section>
-
-      <aside class="qr-side">
-        {% if qr_code and not preview %}
-          <div class="qr-frame">
-            <img src="{{ qr_code }}" alt="QR code for official certificate verification">
-          </div>
-        {% else %}
-          <div class="qr-placeholder">QR available<br>after approval</div>
-        {% endif %}
-        <div class="qr-label">SCAN TO VERIFY</div>
-        <div class="qr-hint">Scan to verify this certificate against the controlled DHM laboratory record and open the complete report.</div>
-      </aside>
-    </div>
-  </div>
-
-  <div class="card-footer">
-    <span>DHM CALIBRATION LABORATORY</span>
-    <span>{{ tr("Accuracy · Traceability · Trust") }}</span>
-    {% if r.certificate_issued_at %}<span>{{ tr("Issued") }}: {{ r.certificate_issued_at[:10] }}</span>{% endif %}
-  </div>
-
+{% if preview %}<div class="preview-note noprint">UNVERIFIED PREVIEW — NOT AN OFFICIAL CERTIFICATE</div>{% endif %}
+<div class="cert-wrap">
   {% if not preview %}
-  <div class="certificate-actions noprint">
+  <div class="cert-actions noprint">
     <button class="btn" type="button" onclick="window.print()">🖨 {{ tr("Print / Save as PDF") }}</button>
     {% if r.certificate_status == 'ACTIVE' %}<a class="btn" href="{{ url_for('certificate_pdf', cert=r.certificate_no) }}" target="_blank">PDF</a>{% endif %}
   </div>
-  {% else %}
-  <div class="noprint" style="position:absolute;left:5mm;right:5mm;bottom:-13mm;text-align:center">
-    <span style="color:#b42318;font-weight:700">PREVIEW ONLY — NOT VALID AS A CERTIFICATE</span>
-  </div>
   {% endif %}
+
+  <div class="certificate-page">
+    <div class="watermark" aria-hidden="true">DHM</div>
+    <div class="content">
+      <header class="head">
+        <div class="mark">DHM</div>
+        <div>
+          <div class="agency">{{ banner[2] or "DEPARTMENT OF HYDROLOGY AND METEOROLOGY" }}</div>
+          <div class="sub">{{ banner[3] or "Calibration Laboratory" }}</div>
+          <div class="sub">{{ banner[0] }} · {{ banner[1] }}</div>
+        </div>
+        <div>
+          <div class="title">{{ tr("CALIBRATION CERTIFICATE") }}</div>
+          <div class="certno">{{ tr("No.") }} {{ r.certificate_no or "NOT ISSUED" }}</div>
+        </div>
+      </header>
+
+      <div class="body">
+        <section>
+          <div class="section-title">Field installation identity</div>
+          <div class="fields">
+            <span class="label">{{ tr("Sensor ID") }}</span><span class="value">{{ r.sensor_id or "—" }}</span>
+            <span class="label">{{ tr("Instrument") }}</span><span class="value">{{ r.sensor_type or "—" }}</span>
+            <span class="label">{{ tr("Serial number") }}</span><span class="value">{{ r.serial_number or "—" }}</span>
+            <span class="label">{{ tr("Manufacturer") }}</span><span class="value">{{ r.manufacturer or "—" }}</span>
+            <span class="label">{{ tr("Station") }}</span><span class="value">{{ r.station or "—" }}</span>
+            <span class="label">{{ tr("Unit") }}</span><span class="value">{{ r.unit or "—" }}</span>
+          </div>
+
+          <div class="section-title" style="margin-top:5mm">Calibration status</div>
+          <div class="fields">
+            <span class="label">{{ tr("Cal. date") }}</span><span class="value">{{ r.cal_date or "—" }}</span>
+            <span class="label">{{ tr("Next due") }}</span><span class="value">{{ r.next_due or "—" }}</span>
+            <span class="label">{{ tr("Tolerance") }}</span><span class="value">{{ r.tolerance if r.tolerance is not none else "—" }} {{ r.unit or "" }}</span>
+            <span class="label">{{ tr("Reference") }}</span><span class="value">{% if standards %}{% for std in standards %}{{ std.code }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}{{ r.reference_standard or "—" }}{% endif %}</span>
+            <span class="label">{{ tr("Approved by") }}</span><span class="value">{{ r.approved_by or "—" }}</span>
+          </div>
+
+          <div class="status">
+            <div class="big {{ 'fail' if r.result == 'FAIL' else 'pass' }}">{{ r.result or "—" }}</div>
+            <div class="mini"><span>{{ tr("Maximum error") }}</span><strong>{{ '%+.6g'|format(r.max_error if r.max_error is not none else (r.error|abs)) }} {{ r.unit or "" }}</strong></div>
+            <div class="mini"><span>{{ tr("Points") }}</span><strong>{{ pts|length }}</strong></div>
+          </div>
+        </section>
+
+        <aside>
+          <div class="qrbox">
+            {% if qr_code and not preview %}
+              <img src="{{ qr_code }}" alt="Offline calibration record QR code">
+            {% else %}
+              <div style="height:34mm;display:grid;place-items:center;color:#607187;font-size:6.5pt">QR available<br>after approval</div>
+            {% endif %}
+            <div class="qrlabel">OFFLINE CALIBRATION RECORD</div>
+            <div class="qrhint">Scan with any QR reader. The complete calibration record is embedded in this code and does not require internet.</div>
+            <div class="offline"><strong>Includes:</strong> measurement points, errors, as-found/as-left values, uncertainty, reference-standard traceability, procedure and approval details.</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>DHM Calibration Laboratory</span>
+      <span>{{ tr("Retain with the installed sensor record") }}</span>
+    </div>
+  </div>
 </div>
 
 {% if g.user and (has_role('admin') or has_role('superadmin')) and not preview %}
 <div class="noprint" style="max-width:148mm;margin:10px auto;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
   {% if r.certificate_status == 'ACTIVE' %}
   <form method="post" action="{{ url_for('withdraw_certificate', cert=r.certificate_no) }}" onsubmit="var x=prompt('Reason for withdrawal:'); if(!x || !x.trim()) return false; this.reason.value=x; return true;">
-    {{ csrf_input() }}<input type="hidden" name="reason">
-    <button class="btn" type="submit">Withdraw certificate</button>
+    {{ csrf_input() }}<input type="hidden" name="reason"><button class="btn" type="submit">Withdraw certificate</button>
   </form>
   {% endif %}
   <form method="post" action="{{ url_for('reissue_certificate', cert=r.certificate_no) }}" onsubmit="var x=prompt('Reason for reissue:'); if(!x || !x.trim()) return false; this.reason.value=x; return true;">
-    {{ csrf_input() }}<input type="hidden" name="reason">
-    <button class="btn" type="submit">Reissue certificate</button>
+    {{ csrf_input() }}<input type="hidden" name="reason"><button class="btn" type="submit">Reissue certificate</button>
   </form>
 </div>
 {% endif %}
