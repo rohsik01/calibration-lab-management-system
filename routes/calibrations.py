@@ -1,6 +1,7 @@
 """Route module: calibrations."""
 from app import *
 from app import _qr_data_uri
+import os
 
 
 
@@ -1096,29 +1097,37 @@ def certificate_pdf(cert):
 
     pdf.setStrokeColor(navy); pdf.setLineWidth(1); pdf.roundRect(margin,margin,width-2*margin,height-2*margin,6,stroke=1,fill=0)
 
-    pdf.saveState(); pdf.setFillColor(colors.Color(23/255,75/255,123/255,alpha=0.045))
-    pdf.setFont("Helvetica-Bold",64); pdf.translate(width*.33,height*.48); pdf.rotate(32)
-    pdf.drawCentredString(0,0,"DHM"); pdf.restoreState()
+    # Official Nepal emblem: keep the watermark very light and never underneath the QR panel.
+    emblem_path = os.path.join(app.root_path, "static", "images", "nepal-emblem.png")
+    if os.path.exists(emblem_path):
+        pdf.saveState()
+        pdf.setFillAlpha(0.045)
+        pdf.drawImage(ImageReader(emblem_path), width*.22, height*.35, width=width*.56, height=height*.30,
+                      preserveAspectRatio=True, anchor="c", mask="auto")
+        pdf.restoreState()
 
-    pdf.setStrokeColor(navy); pdf.circle(margin+22,top-22,15,stroke=1,fill=0)
-    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawCentredString(margin+22,top-24,"DHM")
-    pdf.setFont("Helvetica-Bold",9); pdf.drawString(margin+44,top-15,"DEPARTMENT OF HYDROLOGY")
-    pdf.drawString(margin+44,top-26,"AND METEOROLOGY")
-    pdf.setFillColor(muted); pdf.setFont("Helvetica",6.5); pdf.drawString(margin+44,top-36,"Calibration Laboratory")
-    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",11); pdf.drawRightString(right-8,top-16,"CALIBRATION CERTIFICATE")
+    if os.path.exists(emblem_path):
+        pdf.drawImage(ImageReader(emblem_path), margin+6, top-43, width=42, height=36,
+                      preserveAspectRatio=True, anchor="c", mask="auto")
+
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",9.5); pdf.drawString(margin+54,top-14,"Government of Nepal")
+    pdf.setFont("Helvetica-Bold",8.5); pdf.drawString(margin+54,top-25,"Ministry of Energy, Water Resources and Irrigation")
+    pdf.setFont("Helvetica-Bold",9); pdf.drawString(margin+54,top-36,"Department of Hydrology and Meteorology")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica-Bold",7); pdf.drawString(margin+54,top-46,"Calibration Laboratory")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",11.5); pdf.drawRightString(right-8,top-16,"CALIBRATION CERTIFICATE")
     pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.7); pdf.drawRightString(right-8,top-28,"No. "+cert)
     pdf.setStrokeColor(navy); pdf.line(margin+8,top-46,right-8,top-46)
 
     left_x=margin+8; qr_panel_w=118; gap=13; panel_x=right-8-qr_panel_w; left_right=panel_x-gap
     value_x=left_x+64; y=top-64
-    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x,y,"FIELD INSTALLATION IDENTITY"); y-=13
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x,y,"FIELD INSTALLATION IDENTITY"); y-=13
     for label,value in (("Sensor ID",r["sensor_id"] or "—"),("Instrument",r["sensor_type"] or "—"),
                         ("Serial number",r["serial_number"] or "—"),("Manufacturer",r["manufacturer"] or "—"),
                         ("Station",r["station"] or "—"),("Unit",r["unit"] or "—")):
         pdf.setFillColor(muted); pdf.setFont("Helvetica",6.2); pdf.drawString(left_x,y,label)
         pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
-    y-=2; pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x,y,"CALIBRATION STATUS"); y-=13
+    y-=2; pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x,y,"CALIBRATION STATUS"); y-=13
     ref_summary="; ".join(std["code"] for std in standards) if standards else (r["reference_standard"] or "—")
     tol=((str(r["tolerance"])+" "+(r["unit"] or "")).strip() if r["tolerance"] is not None else "—")
     for label,value in (("Cal. date",r["cal_date"] or "—"),("Next due",r["next_due"] or "—"),
@@ -1127,7 +1136,7 @@ def certificate_pdf(cert):
         pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
     y-=3; card_h=55; pdf.setFillColor(pale); pdf.roundRect(left_x,y-card_h+5,left_right-left_x,card_h,5,stroke=0,fill=1)
-    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x+7,y-12,"CALIBRATION RESULT")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x+7,y-12,"CALIBRATION RESULT")
     pdf.setFillColor(colors.HexColor("#b42318") if r["result"]=="FAIL" else colors.HexColor("#087443"))
     pdf.setFont("Helvetica-Bold",12); pdf.drawCentredString((left_x+left_right)/2,y-30,str(r["result"] or "—"))
     max_error=r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
