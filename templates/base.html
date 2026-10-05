@@ -208,6 +208,7 @@ const MULTI_TEXT = {
   required: {{ tr("Select at least one item before continuing.")|tojson }}
 };
 document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
+  const mustSelect = select.required;
   const wrap = document.createElement('div');
   wrap.className = 'multi-select-enhanced';
   const toolbar = document.createElement('div');
@@ -278,7 +279,7 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
   if (select.form) {
     select.form.addEventListener('submit', event => {
       const selected = [...select.options].some(o => o.selected && !o.disabled);
-      if (!selected && select.hasAttribute('data-required-multi')) {
+      if (!selected && mustSelect) {
         event.preventDefault();
         summary.textContent = MULTI_TEXT.required;
         const first = wrap.querySelector('input:not(:disabled)');
