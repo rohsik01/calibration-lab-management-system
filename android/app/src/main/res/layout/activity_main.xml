@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+        <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/app_name" android:textSize="26sp" android:textStyle="bold" />
+        <TextView android:id="@+id/subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/app_subtitle" android:textSize="15sp" android:paddingBottom="16dp" />
+        <Button android:id="@+id/scanButton" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/scan_qr" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/paste_payload" android:textStyle="bold" android:textSize="17sp"
+            android:paddingTop="18dp" android:paddingBottom="6dp" />
+        <EditText android:id="@+id/payloadInput" android:layout_width="match_parent" android:layout_height="150dp"
+            android:gravity="top|start" android:hint="@string/payload_hint" android:inputType="textMultiLine"
+            android:padding="12dp" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/readButton" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="@string/verify_payload" />
+            <Button android:id="@+id/clearButton" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:text="@string/clear" />
+        </LinearLayout>
+        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/ready" android:textStyle="bold" android:paddingTop="18dp" android:paddingBottom="10dp" />
+        <TextView android:id="@+id/result" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="14sp" android:fontFamily="monospace" android:textIsSelectable="true"
+            android:paddingBottom="30dp" />
+    </LinearLayout>
+</ScrollView>
