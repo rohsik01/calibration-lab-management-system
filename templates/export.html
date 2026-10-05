@@ -40,6 +40,7 @@ const st=document.getElementById('st'), se=document.getElementById('se'), stat=d
 function narrow(){const ch=[...st.selectedOptions].map(o=>o.value);
   [...se.options].forEach(o=>{const show=!ch.length||ch.includes(o.dataset.station);o.hidden=!show;if(!show)o.selected=false;});}
 st.addEventListener('change',narrow);
+narrow();
 document.querySelectorAll('input[name=scope]').forEach(r=>r.addEventListener('change',()=>{
   stat.disabled=document.querySelector('input[name=scope]:checked').value!=='latest';}));
 </script>{% endblock %}
