@@ -786,3 +786,48 @@ def test_bulk_assignment_uses_a_valid_reference_standard_date_without_undefined_
     call_pos = source.index(marker)
     surrounding = source[max(0, call_pos - 300):call_pos + len(marker) + 100]
     assert 'req["requested_due_date"]' not in surrounding
+
+
+def test_offline_qr_reader_page_and_pwa_assets_are_present():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    base = root.joinpath("templates", "base.html").read_text(encoding="utf-8")
+    assert 'DHM Offline QR Reader' in template
+    assert 'DHM-CAL-OFFLINE|' in template
+    assert 'BarcodeDetector' in template
+    assert 'getUserMedia' in template
+    assert 'serviceWorker.register("/qr-reader/sw.js"' in template
+    assert '@app.route("/qr-reader/")' in route
+    assert '@app.route("/qr-reader/manifest.webmanifest")' in route
+    assert '@app.route("/qr-reader/sw.js")' in route
+    assert 'qr_reader_manifest' in base
+
+
+def test_offline_qr_reader_does_not_depend_on_external_scripts():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    assert 'https://' not in template
+    assert 'http://' not in template
+    assert 'cdn.' not in template
+    assert 'fetch(' not in template
+
+
+def test_offline_qr_reader_payload_contract_matches_certificate_format():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    for field in (
+        '"certificate"', '"sensor_id"', '"reference_standards"',
+        '"measurements"', '"uncertainty"', '"fingerprint"',
+    ):
+        assert field in route or field in template
+    assert 'record.type !== "DHM-CAL-OFFLINE"' in template
+    assert 'record.v !== 1' in template
+
+
+def test_offline_qr_reader_service_worker_is_scoped_to_reader():
+    root = Path(__file__).resolve().parents[1]
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    assert 'Service-Worker-Allowed' in route
+    assert '"/qr-reader/"' in route
