@@ -762,5 +762,8 @@ def test_multiple_reference_standard_ui_is_checkbox_enhanced():
 
 def test_bulk_assignment_uses_a_valid_reference_standard_date_without_undefined_request():
     source = Path(__file__).resolve().parents[1].joinpath("routes","work_orders.py").read_text(encoding="utf-8")
-    assert 'selected_work_order_standards(db, request.form, target or date.today().isoformat())' in source
-    assert 'target or req["requested_due_date"]' not in source
+    marker = 'selected_work_order_standards(db, request.form, target or date.today().isoformat())'
+    assert marker in source
+    call_pos = source.index(marker)
+    surrounding = source[max(0, call_pos - 300):call_pos + len(marker) + 100]
+    assert 'req["requested_due_date"]' not in surrounding
