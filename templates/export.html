@@ -9,9 +9,9 @@
     <label style="color:inherit"><input type="radio" name="scope" value="history" style="width:auto"> {{ tr("Full calibration history (one row per calibration)") }}</label>
     <label style="color:inherit"><input type="radio" name="scope" value="points" style="width:auto"> {{ tr("Every measurement point (one row per point)") }}</label></div>
   <div><label>{{ tr("Stations (Ctrl/Cmd-click for several)") }}</label>
-    <select name="station" id="st" multiple size="6">{% for s in stations %}<option value="{{ s.station_id }}">{{ s.name }}</option>{% endfor %}</select></div>
+    <select name="station" id="st" class="multi-select" multiple size="6">{% for s in stations %}<option value="{{ s.station_id }}" {{ "selected" if s.station_id|string in request.args.getlist("station") }}>{{ s.name }}</option>{% endfor %}</select></div>
   <div><label>{{ tr("Sensors (Ctrl/Cmd-click for several)") }}</label>
-    <select name="sensor" id="se" multiple size="6">{% for s in sensors %}<option value="{{ s.sensor_id }}" data-station="{{ s.station_id }}">{{ s.sensor_id }} — {{ s.sensor_type }} ({{ s.station }})</option>{% endfor %}</select></div>
+    <select name="sensor" id="se" class="multi-select" multiple size="6">{% for s in sensors %}<option value="{{ s.sensor_id }}" data-station="{{ s.station_id }}" {{ "selected" if s.sensor_id in request.args.getlist("sensor") }}>{{ s.sensor_id }} — {{ s.sensor_type }} ({{ s.station }})</option>{% endfor %}</select></div>
 </div>
 <div class="grid" style="margin-top:16px">
   <div><label>{{ tr("Calibrated from") }}</label><input type="date" name="date_from"></div>
