@@ -107,6 +107,7 @@
   @media print { .side, .topbar, .noprint, .actions, .toolbar, .langbar { display:none !important; } .only-print { display:block; }
                  body { background:#fff; } .card { border:0; } }
 </style>
+{% if request.endpoint in ('qr_reader',) %}<link rel="manifest" href="{{ url_for('qr_reader_manifest') }}"><meta name="theme-color" content="#17365d">{% endif %}
 </head>
 <body>
 {% set ep = request.endpoint %}{% set here = request.full_path.rstrip('?') %}
