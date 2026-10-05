@@ -774,6 +774,9 @@ def test_multiple_reference_standard_ui_is_checkbox_enhanced():
         assert 'multiple size="6"' in source
     assert "multi-select-enhanced" in base
     assert "multi-select-toolbar" in base
+    assert "multi-select-search" in base
+    assert "Search options" in base
+    assert "No matching options" in base
     assert "Select all" in base
     assert "Clear all" in base
     assert "No reference standards selected" not in base
