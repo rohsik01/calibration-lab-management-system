@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DHM Calibration QR Reader</string>
+    <string name="app_subtitle">Offline certificate verification reader</string>
+    <string name="scan_qr">Scan QR code</string>
+    <string name="paste_payload">Paste QR payload</string>
+    <string name="verify_payload">Read certificate</string>
+    <string name="clear">Clear</string>
+    <string name="payload_hint">Paste DHM-CAL-OFFLINE|... payload here</string>
+    <string name="ready">Ready. Scan a DHM calibration certificate QR code.</string>
+</resources>
