@@ -4,6 +4,98 @@ from app import _qr_data_uri
 
 
 
+def build_offline_certificate_payload(r, pts, standards):
+    """Build a self-contained, scanner-readable certificate record.
+
+    The QR deliberately contains the calibration record itself rather than a
+    web URL. A field technician can therefore scan it with no network access.
+    Keys are compact to keep the A5 QR practical while retaining the complete
+    technical record needed for field reference.
+    """
+    def v(value):
+        return value if value is not None else None
+
+    payload = {
+        "v": 1,
+        "type": "DHM-CAL-OFFLINE",
+        "certificate": v(r["certificate_no"]),
+        "sensor_id": v(r["sensor_id"]),
+        "sensor_type": v(r["sensor_type"]),
+        "manufacturer": v(r["manufacturer"]),
+        "serial": v(r["serial_number"]),
+        "station": v(r["station"]),
+        "unit": v(r["unit"]),
+        "calibration_date": v(r["cal_date"]),
+        "next_due": v(r["next_due"]),
+        "tolerance": v(r["tolerance"]),
+        "result": v(r["result"]),
+        "approved_by": v(r["approved_by"]),
+        "issued_by": v(r["certificate_issued_by_name"]),
+        "issued_at": v(r["certificate_issued_at"]),
+        "procedure": {
+            "code": v(r["procedure_code"]),
+            "title": v(r["procedure_title"]),
+            "revision": v(r["procedure_revision"]),
+        },
+        "adjustment": {
+            "status": v(r["adjustment_status"]),
+            "notes": v(r["adjustment_notes"]),
+        },
+        "remarks": v(r["technician_remarks"]),
+        "environment": {
+            "temperature_c": v(r["environment_temperature"]),
+            "humidity_pct": v(r["environment_humidity"]),
+        },
+        "uncertainty": {
+            "method": v(r["uncertainty_method"]),
+            "standard": v(r["standard_uncertainty"]),
+            "resolution": v(r["resolution"]),
+            "repeatability": v(r["repeatability"]),
+            "environmental": v(r["environmental_uncertainty"]),
+            "other": v(r["other_uncertainty"]),
+            "combined": v(r["combined_standard_uncertainty"]),
+            "k": v(r["coverage_factor"]),
+            "expanded": v(r["expanded_uncertainty"]),
+        },
+        "summary": {
+            "points": len(pts),
+            "mean_error": v(r["mean_error"]),
+            "max_error": v(r["max_error"]),
+        },
+        "reference_standards": [
+            {
+                "code": v(std["code"]),
+                "name": v(std["name"]),
+                "serial": v(std["serial_number"]),
+                "certificate": v(std["certificate_no"]),
+                "traceability": v(std["traceability"]),
+                "calibrated_on": v(std["calibrated_on"]),
+                "valid_until": v(std["valid_until"]),
+                "uncertainty": v(std["uncertainty"]),
+            }
+            for std in standards
+        ],
+        "measurements": [
+            [
+                v(p["point_no"]),
+                v(p["reference_value"]),
+                v(p["tolerance"]),
+                v(p["as_found_value"] if p["as_found_value"] is not None else p["measured_value"]),
+                v(p["as_found_error"] if p["as_found_error"] is not None else p["error"]),
+                v(p["as_left_value"]),
+                v(p["as_left_error"]),
+                v(p["result"]),
+            ]
+            for p in pts
+        ],
+        "fingerprint": v(r["certificate_fingerprint"]),
+    }
+    return "DHM-CAL-OFFLINE|" + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+
 def selected_reference_standards(db, form, cal_date, required_standard_ids=None):
     """Validate and snapshot one or more registered reference standards for a calibration."""
     required_standard_ids = [int(x) for x in (required_standard_ids or [])]
@@ -937,34 +1029,40 @@ def certificate(cert):
     standards = calibration_reference_standards(db, r["cal_id"])
     standard = standards[0] if standards else None
 
-    # Official QR contains only a signed verification URL. The complete report
-    # remains server-side so withdrawal/supersession is reflected immediately.
-    token = certificate_verification_token(cert)
-    verification_url = certificate_verification_url(cert, token)
-    qr_code = _qr_data_uri(verification_url)
+    # The printed certificate is designed to work in the field without internet.
+    # The QR carries the complete compact calibration record itself. The normal
+    # online verification endpoint remains available separately for live status
+    # and fingerprint validation.
+    offline_payload = build_offline_certificate_payload(r, pts, standards)
+    qr_code = _qr_data_uri(offline_payload)
     return render_template(
         "certificate.html", r=r, pts=pts, det=details, standard=standard, standards=standards,
-        preview=False, qr_code=qr_code, verification_url=verification_url,
+        preview=False, qr_code=qr_code, offline_payload=offline_payload,
     )
 
 
 @app.route("/certificate/<cert>/pdf")
 def certificate_pdf(cert):
-    """Generate the compact A6 official certificate with the same visual hierarchy as the browser certificate."""
+    """Generate the A5 official certificate with the same visual hierarchy as the browser certificate."""
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
                   COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
                   COALESCE(s.unit, rq.pending_unit) AS unit,
                   COALESCE(st.name, rq.pending_station_name) AS station,
+                  cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
                   (SELECT u.full_name FROM calibration_review_history rh
                    JOIN users u ON u.user_id=rh.reviewed_by
                    WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
-                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by,
+                  (SELECT u.full_name FROM users u WHERE u.user_id=c.certificate_issued_by) AS certificate_issued_by_name
            FROM calibrations c
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
            WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'
                  AND c.certificate_status='ACTIVE'""",
         (cert,),
@@ -980,10 +1078,12 @@ def certificate_pdf(cert):
     except ImportError:
         abort(503, "PDF generation requires reportlab.")
 
-    verification_url = certificate_verification_url(cert)
     standards = calibration_reference_standards(db, r["cal_id"])
     standard = standards[0] if standards else None
-    qr = qrcode.make(verification_url)
+    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
+                     (r["cal_id"],)).fetchall()
+    offline_payload = build_offline_certificate_payload(r, pts, standards)
+    qr = qrcode.make(offline_payload)
     qr_bytes = io.BytesIO()
     qr.save(qr_bytes, format="PNG")
     qr_bytes.seek(0)
