@@ -1043,7 +1043,7 @@ def certificate(cert):
 
 @app.route("/certificate/<cert>/pdf")
 def certificate_pdf(cert):
-    """Generate the A5 official certificate with the same visual hierarchy as the browser certificate."""
+    """Generate the A5 portrait certificate matching the browser print design."""
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
@@ -1069,19 +1069,16 @@ def certificate_pdf(cert):
     ).fetchone()
     if not r:
         abort(404)
-
     try:
-        from reportlab.lib.pagesizes import A6
+        from reportlab.lib.pagesizes import A5
         from reportlab.pdfgen import canvas
         from reportlab.lib.utils import ImageReader
         from reportlab.lib import colors
     except ImportError:
         abort(503, "PDF generation requires reportlab.")
 
+    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (r["cal_id"],)).fetchall()
     standards = calibration_reference_standards(db, r["cal_id"])
-    standard = standards[0] if standards else None
-    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
-                     (r["cal_id"],)).fetchall()
     offline_payload = build_offline_certificate_payload(r, pts, standards)
     qr = qrcode.make(offline_payload)
     qr_bytes = io.BytesIO()
@@ -1089,165 +1086,75 @@ def certificate_pdf(cert):
     qr_bytes.seek(0)
 
     out = io.BytesIO()
-    pdf = canvas.Canvas(out, pagesize=A6)
-    width, height = A6
+    pdf = canvas.Canvas(out, pagesize=A5)
+    width, height = A5
     pdf.setTitle("DHM Calibration Certificate " + cert)
     pdf.setAuthor("DHM Calibration Laboratory")
+    navy, ink, muted = colors.HexColor("#174b7b"), colors.HexColor("#172b43"), colors.HexColor("#607187")
+    pale, line = colors.HexColor("#f5f9fc"), colors.HexColor("#d7e1ec")
+    margin, right, top = 25, width - 25, height - 25
 
-    navy = colors.HexColor("#174b7b")
-    ink = colors.HexColor("#172b43")
-    muted = colors.HexColor("#607187")
-    light = colors.HexColor("#eef4f8")
-    white = colors.white
-    margin = 18
-    right = width - margin
-    top = height - margin
-    qr_panel_w = 112
-    gap = 12
-    left_w = right - margin - qr_panel_w - gap
+    pdf.setStrokeColor(navy); pdf.setLineWidth(1); pdf.roundRect(margin,margin,width-2*margin,height-2*margin,6,stroke=1,fill=0)
 
-    # A6 card frame and header.
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(1.0)
-    pdf.roundRect(margin, margin, width - 2 * margin, height - 2 * margin, 6, stroke=1, fill=0)
+    pdf.saveState(); pdf.setFillColor(colors.Color(23/255,75/255,123/255,alpha=0.045))
+    pdf.setFont("Helvetica-Bold",64); pdf.translate(width*.33,height*.48); pdf.rotate(32)
+    pdf.drawCentredString(0,0,"DHM"); pdf.restoreState()
 
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(0.7)
-    pdf.circle(margin + 22, top - 22, 15, stroke=1, fill=0)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawCentredString(margin + 22, top - 24, "DHM")
+    pdf.setStrokeColor(navy); pdf.circle(margin+22,top-22,15,stroke=1,fill=0)
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawCentredString(margin+22,top-24,"DHM")
+    pdf.setFont("Helvetica-Bold",9); pdf.drawString(margin+44,top-15,"DEPARTMENT OF HYDROLOGY")
+    pdf.drawString(margin+44,top-26,"AND METEOROLOGY")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",6.5); pdf.drawString(margin+44,top-36,"Calibration Laboratory")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",11); pdf.drawRightString(right-8,top-16,"CALIBRATION CERTIFICATE")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.7); pdf.drawRightString(right-8,top-28,"No. "+cert)
+    pdf.setStrokeColor(navy); pdf.line(margin+8,top-46,right-8,top-46)
 
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 8.5)
-    pdf.drawString(margin + 44, top - 15, "DEPARTMENT OF HYDROLOGY")
-    pdf.drawString(margin + 44, top - 26, "AND METEOROLOGY")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6.5)
-    pdf.drawString(margin + 44, top - 36, "Calibration Laboratory")
+    left_x=margin+8; qr_panel_w=118; gap=13; panel_x=right-8-qr_panel_w; left_right=panel_x-gap
+    value_x=left_x+64; y=top-64
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x,y,"FIELD INSTALLATION IDENTITY"); y-=13
+    for label,value in (("Sensor ID",r["sensor_id"] or "—"),("Instrument",r["sensor_type"] or "—"),
+                        ("Serial number",r["serial_number"] or "—"),("Manufacturer",r["manufacturer"] or "—"),
+                        ("Station",r["station"] or "—"),("Unit",r["unit"] or "—")):
+        pdf.setFillColor(muted); pdf.setFont("Helvetica",6.2); pdf.drawString(left_x,y,label)
+        pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawRightString(right - 8, top - 16, "CALIBRATION CERTIFICATE")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawRightString(right - 8, top - 28, "Certificate No. " + cert)
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(1.0)
-    pdf.line(margin + 8, top - 46, right - 8, top - 46)
+    y-=2; pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x,y,"CALIBRATION STATUS"); y-=13
+    ref_summary="; ".join(std["code"] for std in standards) if standards else (r["reference_standard"] or "—")
+    tol=((str(r["tolerance"])+" "+(r["unit"] or "")).strip() if r["tolerance"] is not None else "—")
+    for label,value in (("Cal. date",r["cal_date"] or "—"),("Next due",r["next_due"] or "—"),
+                        ("Tolerance",tol),("Reference",ref_summary),("Approved by",r["approved_by"] or "—")):
+        pdf.setFillColor(muted); pdf.setFont("Helvetica",6.2); pdf.drawString(left_x,y,label)
+        pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
-    # Left-side essential certificate information.
-    left_x = margin + 8
-    y = top - 62
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.setFillColor(navy)
-    pdf.drawString(left_x, y, "INSTRUMENT DETAILS")
-    y -= 12
+    y-=3; card_h=55; pdf.setFillColor(pale); pdf.roundRect(left_x,y-card_h+5,left_right-left_x,card_h,5,stroke=0,fill=1)
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x+7,y-12,"CALIBRATION RESULT")
+    pdf.setFillColor(colors.HexColor("#b42318") if r["result"]=="FAIL" else colors.HexColor("#087443"))
+    pdf.setFont("Helvetica-Bold",12); pdf.drawCentredString((left_x+left_right)/2,y-30,str(r["result"] or "—"))
+    max_error=r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.8); pdf.drawString(left_x+7,y-44,"Maximum error")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x+55,y-44,(str(max_error)+" "+(r["unit"] or "")).strip())
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.8); pdf.drawRightString(left_right-7,y-44,"Points: "+str(len(pts)))
 
-    standard_summary = "; ".join(std["code"] for std in standards) if standards else "—"
-    fields = (
-        ("Instrument", r["sensor_type"] or "—"),
-        ("Serial number", r["serial_number"] or "—"),
-        ("Station", r["station"] or "—"),
-        ("Unit", r["unit"] or "—"),
-        ("Calibration date", r["cal_date"] or "—"),
-        ("Next due", r["next_due"] or "—"),
-        ("Ref. standards", standard_summary),
-    )
-    label_x = left_x
-    value_x = left_x + 62
-    for label, value in fields:
-        pdf.setFillColor(muted)
-        pdf.setFont("Helvetica", 6.2)
-        pdf.drawString(label_x, y, label)
-        pdf.setFillColor(ink)
-        pdf.setFont("Helvetica-Bold", 6.2)
-        pdf.drawString(value_x, y, str(value)[:32])
-        y -= 13
+    panel_y=margin+30; panel_h=height-2*margin-92
+    pdf.setStrokeColor(navy); pdf.setLineWidth(.8); pdf.roundRect(panel_x,panel_y,qr_panel_w,panel_h,5,stroke=1,fill=0)
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawCentredString(panel_x+qr_panel_w/2,top-64,"OFFLINE RECORD")
+    qr_size=91; qr_x=panel_x+(qr_panel_w-qr_size)/2; qr_y=top-78-qr_size
+    pdf.drawImage(ImageReader(qr_bytes),qr_x,qr_y,qr_size,qr_size,preserveAspectRatio=True,mask="auto")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-12,"SCAN WITH ANY QR READER")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.5); pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-23,"Complete calibration record")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-31,"is embedded — no internet.")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",5.8)
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+36,"Measurements, uncertainty,")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+27,"traceability, procedure")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+18,"and approval data included.")
 
-    y -= 4
-    pdf.setFillColor(light)
-    pdf.roundRect(left_x, y - 42, left_w - 8, 42, 4, stroke=0, fill=1)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawString(left_x + 7, y - 11, "CALIBRATION RESULT")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(left_x + 7, y - 25, str(r["result"] or "—"))
-    pdf.setFont("Helvetica", 6)
-    pdf.setFillColor(muted)
-    pdf.drawString(left_x + 72, y - 24, "Maximum absolute error")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 7)
-    max_error = r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
-    pdf.drawString(left_x + 72, y - 34, str(max_error))
-
-    y -= 57
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawString(left_x, y, "REFERENCE & AUTHORIZATION")
-    y -= 13
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6)
-    pdf.drawString(left_x, y, "Reference standard")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawString(left_x + 62, y, "Controlled laboratory reference")
-    y -= 14
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6)
-    pdf.drawString(left_x, y, "Approved by")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawString(left_x + 62, y, str(r["approved_by"] or "—")[:28])
-
-    # Right QR verification panel.
-    panel_x = margin + 8 + left_w + gap
-    panel_y = margin + 28
-    panel_h = height - 2 * margin - 86
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(0.7)
-    pdf.roundRect(panel_x, panel_y, qr_panel_w, panel_h, 4, stroke=1, fill=0)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 7)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, top - 62, "VERIFY ONLINE")
-
-    qr_size = 86
-    qr_x = panel_x + (qr_panel_w - qr_size) / 2
-    qr_y = top - 62 - qr_size - 10
-    pdf.drawImage(
-        ImageReader(qr_bytes), qr_x, qr_y, qr_size, qr_size,
-        preserveAspectRatio=True, mask="auto",
-    )
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 12, "SCAN TO VERIFY")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.5)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 23, "Opens the complete")
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 31, "digital calibration report.")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 38, "STATUS: ACTIVE")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.3)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 28, "Official verification record")
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 20, "retained by DHM.")
-
-    pdf.setStrokeColor(navy)
-    pdf.line(margin + 8, margin + 19, right - 8, margin + 19)
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.3)
-    pdf.drawString(margin + 8, margin + 10, "Retain this certificate with the complete digital report.")
-    pdf.drawRightString(right - 8, margin + 10, "DHM Calibration Laboratory")
-
-    pdf.showPage()
-    pdf.save()
-    out.seek(0)
-    return Response(
-        out.getvalue(), mimetype="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'},
-    )
+    pdf.setStrokeColor(line); pdf.line(margin+8,margin+20,right-8,margin+20)
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.4)
+    pdf.drawString(margin+8,margin+11,"Retain this certificate with the installed sensor record.")
+    pdf.drawRightString(right-8,margin+11,"DHM Calibration Laboratory")
+    pdf.showPage(); pdf.save(); out.seek(0)
+    return Response(out.getvalue(),mimetype="application/pdf",
+                    headers={"Content-Disposition":'inline; filename="'+cert+'.pdf"'})
 
 @app.route("/certificates/<cert>/withdraw", methods=["POST"])
 @admin_required
