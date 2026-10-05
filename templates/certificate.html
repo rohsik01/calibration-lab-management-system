@@ -5,29 +5,28 @@
 <style>
   .cert-wrap{max-width:148mm;margin:6mm auto}
   .cert-actions{display:flex;justify-content:flex-end;gap:6px;margin-bottom:6mm}
-  .certificate-page{width:148mm;height:210mm;margin:0 auto;padding:9mm 9mm 8mm;
+  .certificate-page{width:148mm;height:210mm;margin:0 auto;padding:8mm 9mm 8mm;
     position:relative;overflow:hidden;background:#fff;color:#172b43;
     border:0.45mm solid #174b7b;border-radius:2.5mm;
-    font:8pt/1.25 Arial,"Segoe UI",sans-serif}
+    font:8.6pt/1.28 Arial,"Segoe UI",sans-serif}
   .certificate-page *{box-sizing:border-box}
-  .watermark{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
-    color:rgba(23,75,123,.045);font-size:62pt;font-weight:900;letter-spacing:.08em;
-    transform:rotate(-32deg)}
+  .watermark{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:0}
+  .watermark img{width:92mm;max-height:78mm;object-fit:contain;opacity:.045}
   .content{position:relative;z-index:1}
-  .head{display:grid;grid-template-columns:16mm 1fr auto;gap:3.5mm;align-items:center;
+  .head{display:grid;grid-template-columns:18mm 1fr auto;gap:3.5mm;align-items:center;
     padding-bottom:3.5mm;border-bottom:.6mm solid #174b7b}
-  .mark{width:14mm;height:14mm;border:.4mm solid #174b7b;border-radius:50%;
-    display:grid;place-items:center;color:#174b7b;font-size:6.5pt;font-weight:900}
-  .agency{font-size:9.5pt;font-weight:900;color:#174b7b;line-height:1.08}
-  .sub{font-size:6.4pt;color:#607187;margin-top:1mm}
-  .title{text-align:right;color:#174b7b;font-size:12pt;font-weight:900;white-space:nowrap}
+  .mark{width:17mm;height:17mm;display:flex;align-items:center;justify-content:center}
+  .mark img{width:17mm;height:17mm;object-fit:contain}
+  .agency{font-size:10.2pt;font-weight:900;color:#174b7b;line-height:1.08}
+  .sub{font-size:7pt;color:#607187;margin-top:1mm;font-weight:600}
+  .title{text-align:right;color:#174b7b;font-size:12.6pt;font-weight:900;white-space:nowrap}
   .certno{text-align:right;color:#172b43;font-size:6.8pt;font-weight:700;margin-top:1.2mm}
   .body{display:grid;grid-template-columns:minmax(0,1fr) 43mm;gap:5mm;padding-top:5mm}
-  .section-title{font-size:6.4pt;color:#174b7b;font-weight:900;letter-spacing:.12em;
+  .section-title{font-size:7pt;color:#174b7b;font-weight:900;letter-spacing:.12em;
     text-transform:uppercase;margin:0 0 2.5mm}
   .fields{display:grid;grid-template-columns:25mm minmax(0,1fr);gap:2.1mm 2.5mm}
-  .label{color:#607187;font-size:6.6pt;white-space:nowrap}
-  .value{font-weight:700;overflow-wrap:anywhere;border-bottom:.2mm solid #e3e9ef;padding-bottom:.7mm}
+  .label{color:#607187;font-size:7pt;white-space:nowrap}
+  .value{font-weight:700;font-size:7.4pt;overflow-wrap:anywhere;border-bottom:.2mm solid #e3e9ef;padding-bottom:.7mm}
   .status{margin:4mm 0;border:.35mm solid #174b7b;border-radius:1.5mm;padding:3mm;
     display:grid;grid-template-columns:1fr 1fr;gap:2mm;background:#f5f9fc}
   .status .big{grid-column:1/3;text-align:center;font-size:11pt;font-weight:900}
@@ -35,7 +34,7 @@
   .mini{text-align:center}.mini span{display:block;color:#607187;font-size:5.8pt}.mini strong{display:block;margin-top:.7mm;font-size:7.5pt}
   .qrbox{border:.45mm solid #174b7b;border-radius:1.5mm;padding:3mm;text-align:center;background:#fff}
   .qrbox img{width:34mm;height:34mm;display:block;margin:0 auto;image-rendering:pixelated}
-  .qrlabel{margin-top:2.5mm;color:#174b7b;font-weight:900;font-size:7pt;letter-spacing:.06em}
+  .qrlabel{margin-top:2.5mm;color:#174b7b;font-weight:900;font-size:7.4pt;letter-spacing:.06em}
   .qrhint{margin-top:1.2mm;color:#607187;font-size:5.7pt;line-height:1.3}
   .offline{margin-top:3mm;padding:2mm;border-top:.25mm solid #d7e1ec;color:#607187;font-size:5.7pt;text-align:left}
   .footer{position:absolute;left:9mm;right:9mm;bottom:4mm;border-top:.25mm solid #d7e1ec;
@@ -61,14 +60,15 @@
   {% endif %}
 
   <div class="certificate-page">
-    <div class="watermark" aria-hidden="true">DHM</div>
+    <div class="watermark" aria-hidden="true"><img src="{{ url_for('static', filename='images/nepal-emblem.png') }}" alt=""></div>
     <div class="content">
       <header class="head">
-        <div class="mark">DHM</div>
+        <div class="mark"><img src="{{ url_for('static', filename='images/nepal-emblem.png') }}" alt="Government of Nepal emblem"></div>
         <div>
-          <div class="agency">{{ banner[2] or "DEPARTMENT OF HYDROLOGY AND METEOROLOGY" }}</div>
+          <div class="agency">{{ banner[0] or "Government of Nepal" }}</div>
+          <div class="sub">{{ banner[1] or "Ministry of Energy, Water Resources and Irrigation" }}</div>
+          <div class="sub">{{ banner[2] or "Department of Hydrology and Meteorology" }}</div>
           <div class="sub">{{ banner[3] or "Calibration Laboratory" }}</div>
-          <div class="sub">{{ banner[0] }} · {{ banner[1] }}</div>
         </div>
         <div>
           <div class="title">{{ tr("CALIBRATION CERTIFICATE") }}</div>
