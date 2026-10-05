@@ -95,6 +95,8 @@
   .multi-option.disabled { color:var(--mute); cursor:not-allowed; opacity:.75; }
   .multi-option .multi-option-text { min-width:0; }
   .multi-option .multi-option-meta { display:block; color:var(--mute); font-size:12px; }
+  .multi-select-toolbar { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .multi-select-toolbar .btn { padding:5px 10px; font-size:12px; }
   .multi-select-summary { margin:6px 2px 0; color:var(--mute); font-size:12px; }
   .empty { text-align:center; color:var(--mute); padding:20px; }
   @media (max-width:900px) { .two { grid-template-columns:1fr; } }
@@ -198,16 +200,43 @@ document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', ()
 
 // Accessible checkbox enhancement for native multi-select fields.
 // The original select remains the form's source of truth and is used when JavaScript is unavailable.
+const MULTI_TEXT = {
+  selectAll: {{ tr("Select all")|tojson }},
+  clearAll: {{ tr("Clear all")|tojson }},
+  selected: {{ tr("selected")|tojson }},
+  none: {{ tr("No items selected")|tojson }},
+  required: {{ tr("Select at least one item before continuing.")|tojson }}
+};
 document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
   const wrap = document.createElement('div');
   wrap.className = 'multi-select-enhanced';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'multi-select-toolbar';
+  const selectAll = document.createElement('button');
+  selectAll.type = 'button';
+  selectAll.className = 'btn alt';
+  selectAll.textContent = MULTI_TEXT.selectAll;
+  const clearAll = document.createElement('button');
+  clearAll.type = 'button';
+  clearAll.className = 'btn alt';
+  clearAll.textContent = MULTI_TEXT.clearAll;
+  toolbar.appendChild(selectAll);
+  toolbar.appendChild(clearAll);
   const summary = document.createElement('div');
   summary.className = 'multi-select-summary';
   const updateSummary = () => {
-    const selected = [...select.options].filter(o => o.selected);
+    const selected = [...select.options].filter(o => o.selected && !o.disabled);
     summary.textContent = selected.length
-      ? selected.length + ' selected: ' + selected.map(o => o.textContent.trim().split('(')[0].trim()).join(', ')
-      : 'No reference standards selected';
+      ? selected.length + ' ' + MULTI_TEXT.selected + ': ' +
+        selected.map(o => o.textContent.trim().split('(')[0].trim()).join(', ')
+      : MULTI_TEXT.none;
+  };
+  const syncOptions = () => {
+    [...select.options].forEach(option => {
+      const checkbox = wrap.querySelector('input[data-value="' + CSS.escape(option.value) + '"]');
+      if (checkbox) checkbox.checked = option.selected;
+    });
+    updateSummary();
   };
   [...select.options].forEach(option => {
     const label = document.createElement('label');
@@ -215,6 +244,7 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = option.value;
+    checkbox.dataset.value = option.value;
     checkbox.checked = option.selected;
     checkbox.disabled = option.disabled;
     checkbox.addEventListener('change', () => {
@@ -229,17 +259,28 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
     label.appendChild(text);
     wrap.appendChild(label);
   });
-  select.insertAdjacentElement('afterend', wrap);
+  selectAll.addEventListener('click', () => {
+    [...select.options].forEach(option => { if (!option.disabled) option.selected = true; });
+    syncOptions();
+    select.dispatchEvent(new Event('change', {bubbles:true}));
+  });
+  clearAll.addEventListener('click', () => {
+    [...select.options].forEach(option => { if (!option.disabled) option.selected = false; });
+    syncOptions();
+    select.dispatchEvent(new Event('change', {bubbles:true}));
+  });
+  select.insertAdjacentElement('afterend', toolbar);
+  toolbar.insertAdjacentElement('afterend', wrap);
+  wrap.insertAdjacentElement('afterend', summary);
   select.removeAttribute('required');
   select.style.display = 'none';
   summary.setAttribute('aria-live', 'polite');
-  wrap.insertAdjacentElement('afterend', summary);
   if (select.form) {
     select.form.addEventListener('submit', event => {
       const selected = [...select.options].some(o => o.selected && !o.disabled);
-      if (!selected) {
+      if (!selected && select.hasAttribute('data-required-multi')) {
         event.preventDefault();
-        summary.textContent = 'Select at least one reference standard before continuing.';
+        summary.textContent = MULTI_TEXT.required;
         const first = wrap.querySelector('input:not(:disabled)');
         if (first) first.focus();
       }
