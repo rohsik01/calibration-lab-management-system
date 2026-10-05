@@ -702,6 +702,38 @@ def test_reference_standard_usage_includes_secondary_standards():
     assert "SELECT COUNT(*) FROM calibration_reference_standards" in route_source
 
 
+def test_multi_standard_reporting_and_latest_register_use_selection_ordered_codes():
+    root = Path(__file__).resolve().parents[1]
+    app_source = root.joinpath("app.py").read_text(encoding="utf-8")
+    report_source = root.joinpath("routes", "reports.py").read_text(encoding="utf-8")
+
+    assert "GROUP_CONCAT(code, '; ')" in app_source
+    assert "ORDER BY crs.selection_order" in app_source
+    assert "GROUP_CONCAT(code, '; ')" in report_source
+    assert "ORDER BY crs.selection_order" in report_source
+    assert "COALESCE(" in report_source
+
+
+def test_work_order_detail_exposes_all_calibration_reference_standards():
+    root = Path(__file__).resolve().parents[1]
+    route_source = root.joinpath("routes", "work_orders.py").read_text(encoding="utf-8")
+    template_source = root.joinpath("templates", "work_order_detail.html").read_text(encoding="utf-8")
+
+    assert 'calibration_standards = calibration_reference_standards(db, calibration["cal_id"])' in route_source
+    assert "calibration_standards=calibration_standards" in route_source
+    assert "for st in calibration_standards" in template_source
+    assert "Reference standards used" in template_source
+
+
+def test_reference_standard_edit_protects_secondary_usage():
+    root = Path(__file__).resolve().parents[1]
+    source = root.joinpath("routes", "standards.py").read_text(encoding="utf-8")
+
+    assert "SELECT COUNT(*) FROM calibrations c" in source
+    assert "FROM calibration_reference_standards crs" in source
+    assert "OR EXISTS" in source
+
+
 def test_reference_standard_ui_uses_multi_role_admin_permissions():
     for name in ("standard.html", "standards.html"):
         source = Path(__file__).resolve().parents[1].joinpath("templates", name).read_text(encoding="utf-8")
