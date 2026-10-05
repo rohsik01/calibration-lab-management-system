@@ -96,13 +96,16 @@ def standard(sid):
            FROM calibrations c
            LEFT JOIN calibration_work_orders w ON w.request_id=c.request_id
            LEFT JOIN users u ON u.user_id=w.assigned_technician_id
-           WHERE c.standard_id=?
+           WHERE EXISTS (
+               SELECT 1 FROM calibration_reference_standards crs
+               WHERE crs.cal_id=c.cal_id AND crs.standard_id=?
+           )
            ORDER BY c.cal_id DESC
            LIMIT 250""",
         (sid,)
     ).fetchall()
     usage_count = db.execute(
-        "SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)
+        "SELECT COUNT(*) FROM calibration_reference_standards WHERE standard_id=?", (sid,)
     ).fetchone()[0]
     history = db.execute(
         """SELECT h.*, u.full_name AS changed_by_name

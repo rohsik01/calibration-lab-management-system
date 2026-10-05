@@ -16,7 +16,7 @@
 <div><label>{{ tr("Priority") }}</label><div><span class="badge {{ 'red' if w.priority == 'Urgent' else 'amber' if w.priority == 'High' else 'grey' }}">{{ w.priority }}</span></div></div>
 <div><label>{{ tr("Controlled calibration procedure") }}</label><div>{% if w.procedure_code %}<a href="{{ url_for('procedure_detail', procedure_id=w.procedure_id) }}">{{ w.procedure_code }}</a> — {{ w.procedure_title }} ({{ tr("Rev.") }} {{ w.procedure_revision }}){% else %}<span class="badge red">{{ tr("No controlled procedure assigned") }}</span>{% endif %}</div></div>
 <div><label>{{ tr("Method / additional reference") }}</label><div>{{ w.calibration_method or '—' }}</div></div>
-<div><label>{{ tr("Reference standard") }}</label><div>{{ w.standard_code or '—' }}{% if w.standard_name %} — {{ w.standard_name }}{% endif %}</div></div>
+<div><label>{{ tr("Reference standards") }}</label><div>{% if work_order_standards %}{% for st in work_order_standards %}<span class="chip">{{ st.code }} — {{ st.name }}{% if loop.first %} · {{ tr("Primary") }}{% endif %}</span>{% endfor %}{% else %}—{% endif %}</div></div>
 </div>
 {% if w.instructions %}<div style="margin-top:14px"><label>{{ tr("Technician instructions") }}</label><div class="preview">{{ w.instructions }}</div></div>{% endif %}
 {% if g.user.role == 'admin' and w.status in ('ASSIGNED','IN PROGRESS') %}
@@ -35,7 +35,7 @@
 <div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
 <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
 <div><label>{{ tr("Performed by") }}</label><div>{{ calibration.performed_by or '—' }}</div></div>
-<div><label>{{ tr("Reference standard used") }}</label><div>{{ calibration.reference_standard }}</div></div>
+<div><label>{{ tr("Reference standards used") }}</label><div>{% if calibration.reference_standard %}{{ calibration.reference_standard }}{% else %}—{% endif %}</div></div>
 <div><label>{{ tr("Next due date") }}</label><div>{{ date_pair(calibration.next_due) }}</div></div>
 </div>
 <div class="scroll" style="margin-top:12px"><table><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("As-Found") }}</th><th>{{ tr("As-Left") }}</th><th>{{ tr("Error AF") }}</th><th>{{ tr("Error AL") }}</th><th>{{ tr("Tolerance") }}</th><th>{{ tr("Result") }}</th></tr></thead><tbody>

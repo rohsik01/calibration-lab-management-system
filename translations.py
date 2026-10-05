@@ -26,6 +26,12 @@ NE = {
     "Sign out": "लग आउट",
     "Sign in": "लग इन",
     "Click to sort": "क्रमबद्ध गर्न क्लिक गर्नुहोस्",
+    "Select all": "सबै चयन गर्नुहोस्",
+    "Clear all": "सबै हटाउनुहोस्",
+    "selected": "चयन गरिएको",
+    "No items selected": "कुनै वस्तु चयन गरिएको छैन",
+    "Select at least one item before continuing.": "अघि बढ्न कम्तीमा एउटा वस्तु चयन गर्नुहोस्।",
+
     "Admin": "प्रशासक",
     "Administrator": "प्रशासक",
     "Technician": "प्राविधिक",

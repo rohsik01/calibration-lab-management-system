@@ -1,4 +1,5 @@
 import math
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -14,10 +15,10 @@ from app import (
     superadmin_required,
     user_has_role,
 )
-from routes.calibrations import calibration_delete_blocked
+from routes.calibrations import calibration_delete_blocked, selected_reference_standards
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
-from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS
+from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS, selected_work_order_standards, persist_work_order_reference_standards
 from app import validate_calibration_record_for_submission
 
 
@@ -216,13 +217,32 @@ def test_certificate_verification_token_is_stable_and_nontrivial():
     assert len(first) == 40
 
 
-def test_certificate_verification_uses_compact_signed_url_not_embedded_measurement_payload():
-    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
-    source = route_path.read_text(encoding="utf-8")
-    assert "certificate_verification_url" in source
-    assert "qr_code = _qr_data_uri(verification_url)" in source
-    assert "NO WEB / LOCALHOST LINK" not in source
-    assert '@app.route("/verify/<cert>/<token>")' in source
+def test_certificate_qr_contains_a_complete_offline_record():
+    root = Path(__file__).resolve().parents[1]
+    route_source = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    template_source = root.joinpath("templates", "certificate.html").read_text(encoding="utf-8")
+    assert "def build_offline_certificate_payload" in route_source
+    assert '"type": "DHM-CAL-OFFLINE"' in route_source
+    assert '"measurements"' in route_source
+    assert '"reference_standards"' in route_source
+    assert '"uncertainty"' in route_source
+    assert "qr_code = _qr_data_uri(offline_payload)" in route_source
+    assert "does not require internet" in template_source
+    assert '@app.route("/verify/<cert>/<token>")' in route_source
+
+
+def test_certificate_is_a5_portrait_and_shows_only_field_essential_information():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "certificate.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    assert "width:148mm;height:210mm" in template
+    assert "Field installation identity" in template
+    assert 'r.sensor_id' in template
+    assert 'r.serial_number' in template
+    assert 'r.station' in template
+    assert 'r.next_due' in template
+    assert "pagesize=A5" in route
+    assert "offline_payload" in route
 
 
 def test_certificate_integrity_and_lifecycle_controls_are_present():
@@ -241,7 +261,7 @@ def test_certificate_integrity_and_lifecycle_controls_are_present():
     assert "CERTIFICATE_WITHDRAWN" in route_source
     assert "CERTIFICATE_REISSUED" in route_source
     assert "certificate_pdf" in route_source
-    assert "SCAN TO VERIFY" in template_source
+    assert "OFFLINE CALIBRATION RECORD" in template_source
 
 
 def test_certificate_status_page_and_full_report_show_integrity_information():
@@ -634,3 +654,180 @@ def test_general_users_can_access_notification_center():
     assert 'href="{{ url_for(\'alerts\') }}"' in base_source
     assert 'if not has_role(\'general_user\')' in base_source
     assert 'user_has_role("general_user")' in notifications_source
+
+
+def test_multiple_reference_standards_schema_and_backfill_are_defined():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS calibration_reference_standards" in app_source
+    assert "INSERT OR IGNORE INTO calibration_reference_standards" in app_source
+    assert "idx_calibration_reference_standards_standard" in app_source
+    assert "idx_calibration_reference_standards_cal" in app_source
+    assert "idx_calibration_reference_standards_one_primary" in app_source
+    assert "CREATE TABLE IF NOT EXISTS work_order_reference_standards" in app_source
+    assert "idx_work_order_reference_standards_one_primary" in app_source
+
+
+def test_calibration_routes_validate_and_persist_multiple_reference_standards():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/calibrations.py").read_text(encoding="utf-8")
+    assert "def selected_reference_standards" in route_source
+    assert 'form.getlist("standard_id")' in route_source
+    assert "persist_calibration_reference_standards" in route_source
+    assert "selection_order" in route_source
+    assert "is_primary" in route_source
+    assert "At least one registered reference standard" in route_source
+
+
+def test_calibration_forms_use_multi_select_registered_standards():
+    for name in ("calibrate.html", "calibrate_pending.html"):
+        source = Path(__file__).resolve().parents[1].joinpath("templates", name).read_text(encoding="utf-8")
+        assert 'name="standard_id"' in source
+        assert 'multiple size="6"' in source
+        assert "selected_standard_ids" in source
+        assert "Select every reference standard used for this calibration" in source
+        assert "Other — not in the register" not in source
+
+
+def test_revision_snapshots_and_certificate_fingerprints_include_all_reference_standards():
+    app_source = Path(__file__).resolve().parents[1].joinpath("app.py").read_text(encoding="utf-8")
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/calibrations.py").read_text(encoding="utf-8")
+    assert '"reference_standards": [dict(s) for s in standards]' in app_source
+    assert '"reference_standards": [dict(s) for s in calibration_reference_standards(db, cal_id)]' in app_source
+    assert "standards = calibration_reference_standards(db, cal_id)" in route_source
+    assert "standards=standards" in route_source
+
+
+def test_reference_standard_usage_includes_secondary_standards():
+    route_source = Path(__file__).resolve().parents[1].joinpath("routes/standards.py").read_text(encoding="utf-8")
+    assert "calibration_reference_standards crs" in route_source
+    assert "SELECT COUNT(*) FROM calibration_reference_standards" in route_source
+
+
+def test_reference_standard_ui_uses_multi_role_admin_permissions():
+    for name in ("standard.html", "standards.html"):
+        source = Path(__file__).resolve().parents[1].joinpath("templates", name).read_text(encoding="utf-8")
+        assert "has_role('admin') or has_role('superadmin')" in source
+        assert "g.user.role == 'admin'" not in source
+        assert 'g.user.role == "admin"' not in source
+
+def _reference_standard_test_db():
+    db = sqlite3.connect(":memory:")
+    db.row_factory = sqlite3.Row
+    db.executescript("""
+        CREATE TABLE reference_standards (
+            standard_id INTEGER PRIMARY KEY, code TEXT, name TEXT, standard_type TEXT,
+            manufacturer TEXT, serial_number TEXT, uncertainty TEXT, traceability TEXT,
+            certificate_no TEXT, calibrated_on TEXT, valid_until TEXT, active INTEGER
+        );
+        CREATE TABLE calibration_work_orders (work_order_id INTEGER PRIMARY KEY, standard_id INTEGER);
+        CREATE TABLE work_order_reference_standards (
+            work_order_id INTEGER NOT NULL, standard_id INTEGER NOT NULL,
+            selection_order INTEGER NOT NULL DEFAULT 1,
+            is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+            usage_role TEXT NOT NULL DEFAULT 'REFERENCE',
+            PRIMARY KEY (work_order_id, standard_id)
+        );
+        CREATE UNIQUE INDEX idx_test_one_primary
+            ON work_order_reference_standards(work_order_id) WHERE is_primary=1;
+    """)
+    db.executemany("INSERT INTO reference_standards VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", [
+        (1,"RS-001","Primary","Temperature","DHM","S1","0.1","ISO","CERT-1","2026-01-01","2026-12-31",1),
+        (2,"RS-002","Secondary","Temperature","DHM","S2","0.1","ISO","CERT-2","2026-01-01","2026-12-31",1),
+        (3,"RS-003","Expired","Temperature","DHM","S3","0.1","ISO","CERT-3","2025-01-01","2025-12-31",1),
+    ])
+    return db
+
+
+def test_multiple_reference_standards_are_persisted_in_order_with_one_primary():
+    db = _reference_standard_test_db()
+    standards = selected_work_order_standards(db, {"standard_id":["1","2","1"]}, "2026-10-03")
+    assert [row["standard_id"] for row in standards] == [1,2]
+    db.execute("INSERT INTO calibration_work_orders(work_order_id, standard_id) VALUES (10,1)")
+    persist_work_order_reference_standards(db, 10, standards)
+    rows = db.execute(
+        "SELECT standard_id, selection_order, is_primary FROM work_order_reference_standards "
+        "WHERE work_order_id=? ORDER BY selection_order",(10,)
+    ).fetchall()
+    assert [(r["standard_id"],r["selection_order"],r["is_primary"]) for r in rows] == [(1,1,1),(2,2,0)]
+    assert db.execute("SELECT COUNT(*) FROM work_order_reference_standards WHERE work_order_id=? AND is_primary=1",(10,)).fetchone()[0] == 1
+
+
+def test_calibration_must_include_all_work_order_reference_standards():
+    db = _reference_standard_test_db()
+    with pytest.raises(ValueError, match="must include every reference standard"):
+        selected_reference_standards(db, {"standard_id":["1"]}, "2026-10-03", required_standard_ids=[1,2])
+    standards = selected_reference_standards(db, {"standard_id":["1","2"]}, "2026-10-03", required_standard_ids=[1,2])
+    assert [row["standard_id"] for row in standards] == [1,2]
+
+
+def test_reference_standard_selection_rejects_expired_work_order_standard():
+    db = _reference_standard_test_db()
+    with pytest.raises(ValueError, match="not valid on the work-order target date"):
+        selected_work_order_standards(db, {"standard_id":["3"]}, "2026-10-03")
+
+
+def test_multiple_reference_standard_ui_is_checkbox_enhanced():
+    root = Path(__file__).resolve().parents[1]
+    base = root.joinpath("templates","base.html").read_text(encoding="utf-8")
+    for name in ("calibrate.html","calibrate_pending.html","request_detail.html","requests.html","export.html"):
+        source = root.joinpath("templates",name).read_text(encoding="utf-8")
+        assert 'class="multi-select"' in source
+        assert 'multiple size="6"' in source
+    assert "multi-select-enhanced" in base
+    assert "multi-select-toolbar" in base
+    assert "Select all" in base
+    assert "Clear all" in base
+    assert "No reference standards selected" not in base
+
+
+def test_bulk_assignment_uses_a_valid_reference_standard_date_without_undefined_request():
+    source = Path(__file__).resolve().parents[1].joinpath("routes","work_orders.py").read_text(encoding="utf-8")
+    marker = 'selected_work_order_standards(db, request.form, target or date.today().isoformat())'
+    assert marker in source
+    call_pos = source.index(marker)
+    surrounding = source[max(0, call_pos - 300):call_pos + len(marker) + 100]
+    assert 'req["requested_due_date"]' not in surrounding
+
+
+def test_offline_qr_reader_page_and_pwa_assets_are_present():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    base = root.joinpath("templates", "base.html").read_text(encoding="utf-8")
+    assert 'DHM Offline QR Reader' in template
+    assert 'DHM-CAL-OFFLINE|' in template
+    assert 'BarcodeDetector' in template
+    assert 'getUserMedia' in template
+    assert 'serviceWorker.register("/qr-reader/sw.js"' in template
+    assert '@app.route("/qr-reader/")' in route
+    assert '@app.route("/qr-reader/manifest.webmanifest")' in route
+    assert '@app.route("/qr-reader/sw.js")' in route
+    assert 'qr_reader_manifest' in base
+
+
+def test_offline_qr_reader_does_not_depend_on_external_scripts():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    assert 'https://' not in template
+    assert 'http://' not in template
+    assert 'cdn.' not in template
+    assert 'fetch(' not in template
+
+
+def test_offline_qr_reader_payload_contract_matches_certificate_format():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "qr_reader.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    for field in (
+        '"certificate"', '"sensor_id"', '"reference_standards"',
+        '"measurements"', '"uncertainty"', '"fingerprint"',
+    ):
+        assert field in route or field in template
+    assert 'record.type !== "DHM-CAL-OFFLINE"' in template
+    assert 'record.v !== 1' in template
+
+
+def test_offline_qr_reader_service_worker_is_scoped_to_reader():
+    root = Path(__file__).resolve().parents[1]
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    assert 'Service-Worker-Allowed' in route
+    assert '"/qr-reader/"' in route

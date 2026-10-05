@@ -46,11 +46,12 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:center
 <div class="field"><span class="label">Instrument tolerance</span><span class="value">{{ r.tolerance if r.tolerance is not none else "—" }} {{ r.unit or "" }}</span></div><div class="field"><span class="label">Calibrated by</span><span class="value">{{ r.performed_by or "—" }}</span></div>
 </div></section>
 
-<section class="section"><h2>Reference Standard and Traceability</h2><div class="body fields">
-<div class="field"><span class="label">Reference standard</span><span class="value">{{ r.reference_standard or "—" }}</span></div><div class="field"><span class="label">Standard code / name</span><span class="value">{{ (standard.code ~ " — " ~ standard.name) if standard else "—" }}</span></div>
-<div class="field"><span class="label">Standard serial number</span><span class="value">{{ (det.serial if det and det.serial else (standard.serial_number if standard else "—")) }}</span></div><div class="field"><span class="label">Standard certificate</span><span class="value">{{ (det.certificate if det and det.certificate else (standard.certificate_no if standard else "—")) }}</span></div>
-<div class="field"><span class="label">Traceability</span><span class="value">{{ (det.traceability if det and det.traceability else (standard.traceability if standard else "—")) }}</span></div><div class="field"><span class="label">Standard valid until</span><span class="value">{{ (det.valid_until if det and det.valid_until else (standard.valid_until if standard else "—")) }}</span></div>
-<div class="field"><span class="label">Standard calibrated on</span><span class="value">{{ standard.calibrated_on if standard else "—" }}</span></div><div class="field"><span class="label">Standard uncertainty</span><span class="value">{{ (det.uncertainty if det and det.uncertainty else (standard.uncertainty if standard else "—")) }}</span></div>
+<section class="section"><h2>Reference Standards and Traceability</h2><div class="body">
+{% if standards %}
+<div class="scroll"><table><thead><tr><th>Code</th><th>Name</th><th>Serial</th><th>Certificate</th><th>Traceability</th><th>Calibrated on</th><th>Valid until</th><th>Uncertainty</th></tr></thead><tbody>
+{% for std in standards %}<tr><td>{{ std.code }}</td><td>{{ std.name }}</td><td>{{ std.serial_number or "—" }}</td><td>{{ std.certificate_no or "—" }}</td><td>{{ std.traceability or "—" }}</td><td>{{ std.calibrated_on or "—" }}</td><td>{{ std.valid_until or "—" }}</td><td>{{ std.uncertainty or "—" }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="field"><span class="label">Reference standard</span><span class="value">{{ r.reference_standard or "—" }}</span></div>{% endif %}
 </div></section>
 
 <section class="section"><h2>Calibration Procedure and Notes</h2><div class="body fields">

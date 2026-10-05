@@ -136,6 +136,15 @@ def calibration_request(request_id):
         "JOIN users u ON u.user_id=w.assigned_technician_id WHERE w.request_id=?",
         (request_id,)
     ).fetchone()
+    work_order_standards = db.execute(
+        """SELECT crs.*, rs.code, rs.name, rs.serial_number, rs.certificate_no,
+                  rs.traceability, rs.calibrated_on, rs.valid_until, rs.uncertainty
+           FROM work_order_reference_standards crs
+           JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+           WHERE crs.work_order_id=?
+           ORDER BY crs.selection_order""",
+        (work_order["work_order_id"],)
+    ).fetchall() if work_order else []
     status_history = db.execute(
         """SELECT h.*, u.full_name AS changed_by_name
            FROM calibration_request_status_history h
@@ -147,7 +156,7 @@ def calibration_request(request_id):
     return render_template("request_detail.html", r=row, calibrations=calibrations,
                            statuses=REQUEST_STATUSES, technicians=technicians,
                            standards=standards, procedures=procedures, work_order=work_order,
-                           status_history=status_history)
+                           work_order_standards=work_order_standards, status_history=status_history)
 
 
 @app.route("/requests/<int:request_id>/status", methods=["POST"])

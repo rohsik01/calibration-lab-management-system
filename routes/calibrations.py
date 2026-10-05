@@ -1,6 +1,208 @@
 """Route module: calibrations."""
 from app import *
 from app import _qr_data_uri
+import os
+
+
+
+def build_offline_certificate_payload(r, pts, standards):
+    """Build a self-contained, scanner-readable certificate record.
+
+    The QR deliberately contains the calibration record itself rather than a
+    web URL. A field technician can therefore scan it with no network access.
+    Keys are compact to keep the A5 QR practical while retaining the complete
+    technical record needed for field reference.
+    """
+    def v(value):
+        return value if value is not None else None
+
+    payload = {
+        "v": 1,
+        "type": "DHM-CAL-OFFLINE",
+        "certificate": v(r["certificate_no"]),
+        "sensor_id": v(r["sensor_id"]),
+        "sensor_type": v(r["sensor_type"]),
+        "manufacturer": v(r["manufacturer"]),
+        "serial": v(r["serial_number"]),
+        "station": v(r["station"]),
+        "unit": v(r["unit"]),
+        "calibration_date": v(r["cal_date"]),
+        "next_due": v(r["next_due"]),
+        "tolerance": v(r["tolerance"]),
+        "result": v(r["result"]),
+        "approved_by": v(r["approved_by"]),
+        "issued_by": v(r["certificate_issued_by_name"]),
+        "issued_at": v(r["certificate_issued_at"]),
+        "procedure": {
+            "code": v(r["procedure_code"]),
+            "title": v(r["procedure_title"]),
+            "revision": v(r["procedure_revision"]),
+        },
+        "adjustment": {
+            "status": v(r["adjustment_status"]),
+            "notes": v(r["adjustment_notes"]),
+        },
+        "remarks": v(r["technician_remarks"]),
+        "environment": {
+            "temperature_c": v(r["environment_temperature"]),
+            "humidity_pct": v(r["environment_humidity"]),
+        },
+        "uncertainty": {
+            "method": v(r["uncertainty_method"]),
+            "standard": v(r["standard_uncertainty"]),
+            "resolution": v(r["resolution"]),
+            "repeatability": v(r["repeatability"]),
+            "environmental": v(r["environmental_uncertainty"]),
+            "other": v(r["other_uncertainty"]),
+            "combined": v(r["combined_standard_uncertainty"]),
+            "k": v(r["coverage_factor"]),
+            "expanded": v(r["expanded_uncertainty"]),
+        },
+        "summary": {
+            "points": len(pts),
+            "mean_error": v(r["mean_error"]),
+            "max_error": v(r["max_error"]),
+        },
+        "reference_standards": [
+            {
+                "code": v(std["code"]),
+                "name": v(std["name"]),
+                "serial": v(std["serial_number"]),
+                "certificate": v(std["certificate_no"]),
+                "traceability": v(std["traceability"]),
+                "calibrated_on": v(std["calibrated_on"]),
+                "valid_until": v(std["valid_until"]),
+                "uncertainty": v(std["uncertainty"]),
+            }
+            for std in standards
+        ],
+        "measurements": [
+            [
+                v(p["point_no"]),
+                v(p["reference_value"]),
+                v(p["tolerance"]),
+                v(p["as_found_value"] if p["as_found_value"] is not None else p["measured_value"]),
+                v(p["as_found_error"] if p["as_found_error"] is not None else p["error"]),
+                v(p["as_left_value"]),
+                v(p["as_left_error"]),
+                v(p["result"]),
+            ]
+            for p in pts
+        ],
+        "fingerprint": v(r["certificate_fingerprint"]),
+    }
+    return "DHM-CAL-OFFLINE|" + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+
+
+@app.route("/qr-reader")
+@app.route("/qr-reader/")
+def qr_reader():
+    """Public offline-first DHM certificate QR reader."""
+    return render_template("qr_reader.html")
+
+
+@app.route("/qr-reader/manifest.webmanifest")
+def qr_reader_manifest():
+    """PWA manifest for the offline DHM QR reader."""
+    return Response(
+        json.dumps({
+            "name": "DHM Offline QR Reader",
+            "short_name": "DHM QR Reader",
+            "start_url": "/qr-reader/",
+            "scope": "/qr-reader/",
+            "display": "standalone",
+            "background_color": "#f4f6f8",
+            "theme_color": "#17365d",
+            "description": "Offline reader for DHM calibration certificate QR records.",
+            "icons": [],
+        }),
+        mimetype="application/manifest+json",
+    )
+
+
+@app.route("/qr-reader/sw.js")
+def qr_reader_service_worker():
+    """Serve the reader service worker with permission to control /qr-reader/."""
+    worker = """const CACHE = "dhm-qr-reader-v1";
+const APP = "/qr-reader/";
+self.addEventListener("install", event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll([APP, "/qr-reader/manifest.webmanifest"])).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    const copy = response.clone();
+    caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    return response;
+  }).catch(() => caches.match(APP))));
+});"""
+    response = Response(worker, mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/qr-reader/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+def selected_reference_standards(db, form, cal_date, required_standard_ids=None):
+    """Validate and snapshot one or more registered reference standards for a calibration."""
+    required_standard_ids = [int(x) for x in (required_standard_ids or [])]
+    if hasattr(form, "getlist"):
+        raw_ids = form.getlist("standard_id")
+    else:
+        raw_ids = form.get("standard_id", [])
+        if not isinstance(raw_ids, (list, tuple)):
+            raw_ids = [raw_ids]
+    ids = []
+    for raw in raw_ids:
+        raw = str(raw).strip()
+        if not raw:
+            continue
+        if not raw.isdigit():
+            raise ValueError("Select valid registered reference standards.")
+        sid = int(raw)
+        if sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise ValueError("At least one registered reference standard must be selected.")
+    if required_standard_ids:
+        if any(sid not in ids for sid in required_standard_ids):
+            raise ValueError("The calibration must include every reference standard designated on the work order.")
+        if ids[0] != required_standard_ids[0]:
+            raise ValueError("The work order primary reference standard must remain the primary calibration standard.")
+    standards = []
+    for sid in ids:
+        std = db.execute(
+            "SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (sid,)
+        ).fetchone()
+        if not std:
+            raise ValueError("One of the selected reference standards is unavailable or inactive.")
+        if std["calibrated_on"] > cal_date:
+            raise ValueError(f"Cannot use {std['code']}: it was calibrated on {std['calibrated_on']}, after this calibration date.")
+        if std["valid_until"] < cal_date:
+            raise ValueError(f"Cannot use {std['code']}: its validity ended on {std['valid_until']}.")
+        if not std["certificate_no"] or not std["traceability"]:
+            raise ValueError(f"Reference standard {std['code']} is missing certificate or traceability information.")
+        standards.append(std)
+    return standards
+
+
+def persist_calibration_reference_standards(db, cal_id, standards):
+    """Replace the controlled standard links for a calibration."""
+    db.execute("DELETE FROM calibration_reference_standards WHERE cal_id=?", (cal_id,))
+    db.executemany(
+        """INSERT INTO calibration_reference_standards
+           (cal_id, standard_id, selection_order, is_primary, usage_role)
+           VALUES (?,?,?,?,?)""",
+        [(cal_id, std["standard_id"], i, 1 if i == 1 else 0, "REFERENCE")
+         for i, std in enumerate(standards, 1)],
+    )
+
 
 def calibration_delete_blocked(row, revision_count, review_count):
     """Return whether a calibration record must be retained for traceability."""
@@ -153,6 +355,11 @@ def calibrate(sensor_id):
             "SELECT work_order_id, assigned_technician_id, status, procedure_id FROM calibration_work_orders WHERE request_id=?",
             (int(linked_request_id),)
         ).fetchone()
+        linked_order_standard_rows = db.execute(
+            "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+            (linked_order["work_order_id"],)
+        ).fetchall() if linked_order else []
+        linked_order_standard_ids = [r["standard_id"] for r in linked_order_standard_rows]
         if not linked_order or linked_order["assigned_technician_id"] != g.user["user_id"]:
             abort(403)
         procedure_id = linked_order["procedure_id"]
@@ -202,33 +409,22 @@ def calibrate(sensor_id):
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("calibrate", sensor_id=sensor_id))
-        std = None
-        std_id, std_details = None, None
-        sid = f.get("standard_id", "")
-        if sid.isdigit():
-            std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",
-                             (int(sid),)).fetchone()
-            problem = None
-            if not std:
-                problem = tr("Could not use that reference standard. Choose another one.")
-            elif std["valid_until"] < cal_date:
-                problem = tr("Cannot save: {code} expired on {d}. Use a standard that was valid "
-                             "on the calibration date.").format(code=std["code"], d=std["valid_until"])
-            elif std["calibrated_on"] > cal_date:
-                problem = tr("Cannot save: {code} was only calibrated on {d}, after this "
-                             "calibration date.").format(code=std["code"], d=std["calibrated_on"])
-            if problem:
-                flash(problem, "error")
-                return redirect(url_for("calibrate", sensor_id=sensor_id))
-            ref_text, std_id = f"{std['code']} – {std['name']}", std["standard_id"]
-            std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
-                                      "certificate": std["certificate_no"], "valid_until": std["valid_until"],
-                                      "uncertainty": std["uncertainty"]}, ensure_ascii=False)
-        else:
-            ref_text = f.get("reference_standard", "").strip()
-            if not ref_text:
-                flash("Could not save: choose a reference standard or type its name.")
-                return redirect(url_for("calibrate", sensor_id=sensor_id))
+        try:
+            standards_selected = selected_reference_standards(db, f, cal_date, linked_order_standard_ids)
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("calibrate", sensor_id=sensor_id))
+        std = standards_selected[0]
+        std_id = std["standard_id"]
+        ref_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+        std_details = json.dumps([
+            {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+             "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+             "serial": x["serial_number"], "traceability": x["traceability"],
+             "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+             "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+            for x in standards_selected
+        ], ensure_ascii=False)
         request_id = None
         if f.get("request_id", "").isdigit():
             request_id = int(f["request_id"])
@@ -304,6 +500,7 @@ def calibrate(sensor_id):
              uncertainty["combined_standard_uncertainty"], uncertainty["coverage_factor"],
              uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"], json.dumps(uncertainty["calculation"], ensure_ascii=False),
              uncertainty["environment_temperature"], uncertainty["environment_humidity"], procedure_id))
+        persist_calibration_reference_standards(db, cur.lastrowid, standards_selected)
         db.executemany(
             "INSERT INTO calibration_points(cal_id,point_no,reference_value,error,result,tolerance,"
             "as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)"
@@ -384,7 +581,8 @@ def calibrate(sensor_id):
         "WHERE status NOT IN ('COMPLETED','CANCELLED') ORDER BY request_id DESC"
     ).fetchall()
     return render_template("calibrate.html", s=s, today=date.today().isoformat(),
-                           standards=standards_, requests=requests_, procedure=procedure, procedure_points=procedure_points)
+                           standards=standards_, selected_standard_ids=linked_order_standard_ids,
+                           requests=requests_, procedure=procedure, procedure_points=procedure_points)
 
 
 @app.route("/calibrate-request/<int:request_id>", methods=["GET", "POST"])
@@ -394,6 +592,11 @@ def calibrate_pending_request(request_id):
     if not req or req["sensor_id"]: abort(404)
     wo=db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?",(request_id,)).fetchone()
     if not wo or wo["assigned_technician_id"]!=g.user["user_id"]: abort(403)
+    work_order_standard_rows = db.execute(
+        "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+        (wo["work_order_id"],)
+    ).fetchall()
+    work_order_standard_ids = [r["standard_id"] for r in work_order_standard_rows]
     procedure_id = wo["procedure_id"]
     procedure = db.execute("SELECT * FROM calibration_procedures WHERE procedure_id=?", (procedure_id,)).fetchone() if procedure_id else None
     procedure_points = db.execute(
@@ -477,25 +680,18 @@ def calibrate_pending_request(request_id):
             technician_remarks=request.form.get("technician_remarks","").strip()
             if adjustment_status=="PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
-            std_sel=request.form.get("standard_id","").strip(); std_text=request.form.get("reference_standard","").strip(); std_id=None; std_details=None
-            if std_sel:
-                std=db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1",(int(std_sel),)).fetchone()
-                if not std: raise ValueError("Select a valid reference standard.")
-                std_id=std["standard_id"]; std_text=f"{std['code']} – {std['name']}"
-                std_details=json.dumps({"serial":std["serial_number"],"traceability":std["traceability"],"certificate":std["certificate_no"],"valid_until":std["valid_until"],"uncertainty":std["uncertainty"]},ensure_ascii=False)
-            elif not std_text: raise ValueError("Choose a reference standard or type its name.")
-            if procedure_id and not std_id:
-                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
-            if std_id:
-                if std["valid_until"] < cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
-                if std["calibrated_on"] > cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
-                if not std["certificate_no"] or not std["traceability"]:
-                    raise ValueError("The selected reference standard is missing certificate or traceability information.")
-            uncertainty = validate_calibration_controls(
-                request.form, procedure, std if std_id else None, unit
-            )
+            standards_selected = selected_reference_standards(db, request.form, cal_date, work_order_standard_ids)
+            std = standards_selected[0]
+            std_id = std["standard_id"]
+            std_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+            std_details = json.dumps([
+                {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+                 "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+                 "serial": x["serial_number"], "traceability": x["traceability"],
+                 "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+                 "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+                for x in standards_selected
+            ], ensure_ascii=False)
             if db.execute("SELECT cal_id FROM calibrations WHERE request_id=?",(request_id,)).fetchone():
                 raise ValueError("A calibration record already exists for this request.")
             # Keep the sensor unregistered until administrator approval.
@@ -524,6 +720,7 @@ def calibrate_pending_request(request_id):
                  uncertainty["expanded_uncertainty"],uncertainty["uncertainty_method"],
                  json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"],
                  uncertainty["environment_humidity"],procedure_id))
+            persist_calibration_reference_standards(db, cur.lastrowid, standards_selected)
             db.executemany("""INSERT INTO calibration_points
                 (cal_id,point_no,reference_value,error,result,tolerance,
                  as_found_value,as_found_error,as_found_result,as_left_value,as_left_error,as_left_result)
@@ -587,7 +784,7 @@ def calibrate_pending_request(request_id):
             flash(str(e),"error")
     standards_=db.execute("SELECT * FROM reference_standards WHERE active=1 ORDER BY code").fetchall()
     stations_=db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
-    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,procedure=procedure,procedure_points=procedure_points)
+    return render_template("calibrate_pending.html",req=req,today=date.today().isoformat(),standards=standards_,stations=stations_,selected_standard_ids=work_order_standard_ids,procedure=procedure,procedure_points=procedure_points)
 
 
 @app.route("/calibrations/<int:cal_id>/edit", methods=["GET", "POST"])
@@ -598,6 +795,11 @@ def edit_calibration(cal_id):
     if not cal or not cal["request_id"]:
         abort(404)
     wo = db.execute("SELECT * FROM calibration_work_orders WHERE request_id=?", (cal["request_id"],)).fetchone()
+    work_order_standard_rows = db.execute(
+        "SELECT standard_id FROM work_order_reference_standards WHERE work_order_id=? ORDER BY selection_order",
+        (wo["work_order_id"],)
+    ).fetchall() if wo else []
+    work_order_standard_ids = [r["standard_id"] for r in work_order_standard_rows]
     if not wo or wo["assigned_technician_id"] != g.user["user_id"]:
         abort(403)
     if cal["lifecycle_status"] == "APPROVED":
@@ -667,29 +869,19 @@ def edit_calibration(cal_id):
             if adjustment_status == "PERFORMED" and not adjustment_notes:
                 raise ValueError("Enter adjustment notes when adjustment is marked as performed.")
 
-            std = None
-            std_id, std_details = None, None
-            sid = f.get("standard_id", "").strip()
-            if sid.isdigit():
-                std = db.execute("SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (int(sid),)).fetchone()
-                if not std:
-                    raise ValueError("Could not use that reference standard. Choose another one.")
-                if std["valid_until"] < cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} expired on {std['valid_until']}.")
-                if std["calibrated_on"] > cal_date:
-                    raise ValueError(f"Cannot save: {std['code']} was only calibrated on {std['calibrated_on']}.")
-                ref_text = f"{std['code']} – {std['name']}"
-                std_id = std["standard_id"]
-                std_details = json.dumps({"serial": std["serial_number"], "traceability": std["traceability"],
-                                          "certificate": std["certificate_no"], "valid_until": std["valid_until"],
-                                          "uncertainty": std["uncertainty"]}, ensure_ascii=False)
-            else:
-                ref_text = f.get("reference_standard", "").strip()
-                if not ref_text:
-                    raise ValueError("Choose a reference standard or type its name.")
+            standards_selected = selected_reference_standards(db, f, cal_date, work_order_standard_ids)
+            std = standards_selected[0]
+            std_id = std["standard_id"]
+            ref_text = "; ".join(f"{x['code']} – {x['name']}" for x in standards_selected)
+            std_details = json.dumps([
+                {"standard_id": x["standard_id"], "code": x["code"], "name": x["name"],
+                 "standard_type": x["standard_type"], "manufacturer": x["manufacturer"],
+                 "serial": x["serial_number"], "traceability": x["traceability"],
+                 "certificate": x["certificate_no"], "calibrated_on": x["calibrated_on"],
+                 "valid_until": x["valid_until"], "uncertainty": x["uncertainty"]}
+                for x in standards_selected
+            ], ensure_ascii=False)
 
-            if procedure_id and not std_id:
-                raise ValueError("A registered reference standard is required for a controlled calibration procedure.")
             final_errors = [p[6] if p[5] is not None else p[2] for p in points_new]
             worst_index = max(range(len(points_new)), key=lambda i: abs(final_errors[i]))
             worst = points_new[worst_index]
@@ -718,6 +910,7 @@ def edit_calibration(cal_id):
                      uncertainty["coverage_factor"], uncertainty["expanded_uncertainty"], uncertainty["uncertainty_method"],
                      json.dumps(uncertainty["calculation"], ensure_ascii=False), uncertainty["environment_temperature"], uncertainty["environment_humidity"],
                      next_revision, datetime.now().isoformat(timespec="seconds"), cal_id))
+                persist_calibration_reference_standards(db, cal_id, standards_selected)
                 db.execute("DELETE FROM calibration_points WHERE cal_id=?", (cal_id,))
                 db.executemany("""INSERT INTO calibration_points
                     (cal_id,point_no,reference_value,error,result,tolerance,
@@ -795,11 +988,11 @@ def edit_calibration(cal_id):
     stations_ = db.execute("SELECT station_id, name, location, type FROM stations ORDER BY name COLLATE NOCASE").fetchall()
     if sensor:
         return render_template("calibrate.html", s=sensor, today=cal["cal_date"], standards=standards_,
-                               requests=[], calibration=cal, points=points, edit_mode=True,
+                               requests=[], calibration=cal, selected_standard_ids=[r["standard_id"] for r in calibration_reference_standards(db, cal_id)], points=points, edit_mode=True,
                                work_order_id=wo["work_order_id"], procedure=procedure,
                                procedure_points=procedure_points)
     return render_template("calibrate_pending.html", req=req, today=cal["cal_date"], standards=standards_,
-                           stations=stations_, calibration=cal, points=points, edit_mode=True,
+                           stations=stations_, calibration=cal, selected_standard_ids=[r["standard_id"] for r in calibration_reference_standards(db, cal_id)], points=points, edit_mode=True,
                            work_order_id=wo["work_order_id"], procedure=procedure, procedure_points=procedure_points)
 
 @app.route("/calibrations/<int:cal_id>/certificate-preview")
@@ -836,7 +1029,10 @@ def calibration_certificate_preview(cal_id):
         (cal_id,)
     ).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    return render_template("certificate.html", r=r, pts=pts, det=details, preview=True)
+    standards = calibration_reference_standards(db, cal_id)
+    standard = standards[0] if standards else None
+    return render_template("certificate.html", r=r, pts=pts, det=details, standard=standard,
+                           standards=standards, preview=True)
 
 
 @app.route("/certificate/<cert>")
@@ -883,220 +1079,143 @@ def certificate(cert):
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    standard = None
-    if r["standard_id"]:
-        standard = db.execute(
-            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
-            (r["standard_id"],)
-        ).fetchone()
+    standards = calibration_reference_standards(db, r["cal_id"])
+    standard = standards[0] if standards else None
 
-    # Official QR contains only a signed verification URL. The complete report
-    # remains server-side so withdrawal/supersession is reflected immediately.
-    token = certificate_verification_token(cert)
-    verification_url = certificate_verification_url(cert, token)
-    qr_code = _qr_data_uri(verification_url)
+    # The printed certificate is designed to work in the field without internet.
+    # The QR carries the complete compact calibration record itself. The normal
+    # online verification endpoint remains available separately for live status
+    # and fingerprint validation.
+    offline_payload = build_offline_certificate_payload(r, pts, standards)
+    qr_code = _qr_data_uri(offline_payload)
     return render_template(
-        "certificate.html", r=r, pts=pts, det=details, standard=standard,
-        preview=False, qr_code=qr_code, verification_url=verification_url,
+        "certificate.html", r=r, pts=pts, det=details, standard=standard, standards=standards,
+        preview=False, qr_code=qr_code, offline_payload=offline_payload,
     )
 
 
 @app.route("/certificate/<cert>/pdf")
 def certificate_pdf(cert):
-    """Generate the compact A6 official certificate with the same visual hierarchy as the browser certificate."""
+    """Generate the A5 portrait certificate matching the browser print design."""
     db = get_db()
     r = db.execute(
         """SELECT c.*, COALESCE(s.sensor_type, rq.pending_sensor_type) AS sensor_type,
+                  COALESCE(s.manufacturer, rq.pending_manufacturer) AS manufacturer,
                   COALESCE(s.serial_number, rq.pending_serial_number) AS serial_number,
+                  COALESCE(s.tolerance, rq.pending_tolerance) AS tolerance,
                   COALESCE(s.unit, rq.pending_unit) AS unit,
                   COALESCE(st.name, rq.pending_station_name) AS station,
+                  cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
                   (SELECT u.full_name FROM calibration_review_history rh
                    JOIN users u ON u.user_id=rh.reviewed_by
                    WHERE rh.cal_id=c.cal_id AND rh.decision='APPROVED'
-                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by
+                   ORDER BY rh.reviewed_at DESC, rh.review_id DESC LIMIT 1) AS approved_by,
+                  (SELECT u.full_name FROM users u WHERE u.user_id=c.certificate_issued_by) AS certificate_issued_by_name
            FROM calibrations c
            LEFT JOIN sensors s ON s.sensor_id=c.sensor_id
            LEFT JOIN stations st ON st.station_id=s.station_id
            LEFT JOIN calibration_requests rq ON rq.request_id=c.request_id
+           LEFT JOIN calibration_procedures cp ON cp.procedure_id=c.procedure_id
            WHERE c.certificate_no=? AND c.lifecycle_status='APPROVED'
                  AND c.certificate_status='ACTIVE'""",
         (cert,),
     ).fetchone()
     if not r:
         abort(404)
-
     try:
-        from reportlab.lib.pagesizes import A6
+        from reportlab.lib.pagesizes import A5
         from reportlab.pdfgen import canvas
         from reportlab.lib.utils import ImageReader
         from reportlab.lib import colors
     except ImportError:
         abort(503, "PDF generation requires reportlab.")
 
-    verification_url = certificate_verification_url(cert)
-    qr = qrcode.make(verification_url)
+    pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no", (r["cal_id"],)).fetchall()
+    standards = calibration_reference_standards(db, r["cal_id"])
+    offline_payload = build_offline_certificate_payload(r, pts, standards)
+    qr = qrcode.make(offline_payload)
     qr_bytes = io.BytesIO()
     qr.save(qr_bytes, format="PNG")
     qr_bytes.seek(0)
 
     out = io.BytesIO()
-    pdf = canvas.Canvas(out, pagesize=A6)
-    width, height = A6
+    pdf = canvas.Canvas(out, pagesize=A5)
+    width, height = A5
     pdf.setTitle("DHM Calibration Certificate " + cert)
     pdf.setAuthor("DHM Calibration Laboratory")
+    navy, ink, muted = colors.HexColor("#174b7b"), colors.HexColor("#172b43"), colors.HexColor("#607187")
+    pale, line = colors.HexColor("#f5f9fc"), colors.HexColor("#d7e1ec")
+    margin, right, top = 25, width - 25, height - 25
 
-    navy = colors.HexColor("#174b7b")
-    ink = colors.HexColor("#172b43")
-    muted = colors.HexColor("#607187")
-    light = colors.HexColor("#eef4f8")
-    white = colors.white
-    margin = 18
-    right = width - margin
-    top = height - margin
-    qr_panel_w = 112
-    gap = 12
-    left_w = right - margin - qr_panel_w - gap
+    pdf.setStrokeColor(navy); pdf.setLineWidth(1); pdf.roundRect(margin,margin,width-2*margin,height-2*margin,6,stroke=1,fill=0)
 
-    # A6 card frame and header.
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(1.0)
-    pdf.roundRect(margin, margin, width - 2 * margin, height - 2 * margin, 6, stroke=1, fill=0)
+    # Official Nepal emblem: keep the watermark very light and never underneath the QR panel.
+    emblem_path = os.path.join(app.root_path, "static", "images", "nepal-emblem.png")
+    if os.path.exists(emblem_path):
+        pdf.saveState()
+        pdf.setFillAlpha(0.045)
+        pdf.drawImage(ImageReader(emblem_path), width*.22, height*.35, width=width*.56, height=height*.30,
+                      preserveAspectRatio=True, anchor="c", mask="auto")
+        pdf.restoreState()
 
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(0.7)
-    pdf.circle(margin + 22, top - 22, 15, stroke=1, fill=0)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawCentredString(margin + 22, top - 24, "DHM")
+    if os.path.exists(emblem_path):
+        pdf.drawImage(ImageReader(emblem_path), margin+6, top-43, width=42, height=36,
+                      preserveAspectRatio=True, anchor="c", mask="auto")
 
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 8.5)
-    pdf.drawString(margin + 44, top - 15, "DEPARTMENT OF HYDROLOGY")
-    pdf.drawString(margin + 44, top - 26, "AND METEOROLOGY")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6.5)
-    pdf.drawString(margin + 44, top - 36, "Calibration Laboratory")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",9.5); pdf.drawString(margin+54,top-14,"Government of Nepal")
+    pdf.setFont("Helvetica-Bold",8.5); pdf.drawString(margin+54,top-25,"Ministry of Energy, Water Resources and Irrigation")
+    pdf.setFont("Helvetica-Bold",9); pdf.drawString(margin+54,top-36,"Department of Hydrology and Meteorology")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica-Bold",7); pdf.drawString(margin+54,top-46,"Calibration Laboratory")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",11.5); pdf.drawRightString(right-8,top-16,"CALIBRATION CERTIFICATE")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.7); pdf.drawRightString(right-8,top-28,"No. "+cert)
+    pdf.setStrokeColor(navy); pdf.line(margin+8,top-46,right-8,top-46)
 
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawRightString(right - 8, top - 16, "CALIBRATION CERTIFICATE")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawRightString(right - 8, top - 28, "Certificate No. " + cert)
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(1.0)
-    pdf.line(margin + 8, top - 46, right - 8, top - 46)
+    left_x=margin+8; qr_panel_w=118; gap=13; panel_x=right-8-qr_panel_w; left_right=panel_x-gap
+    value_x=left_x+64; y=top-64
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x,y,"FIELD INSTALLATION IDENTITY"); y-=13
+    for label,value in (("Sensor ID",r["sensor_id"] or "—"),("Instrument",r["sensor_type"] or "—"),
+                        ("Serial number",r["serial_number"] or "—"),("Manufacturer",r["manufacturer"] or "—"),
+                        ("Station",r["station"] or "—"),("Unit",r["unit"] or "—")):
+        pdf.setFillColor(muted); pdf.setFont("Helvetica",6.2); pdf.drawString(left_x,y,label)
+        pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
-    # Left-side essential certificate information.
-    left_x = margin + 8
-    y = top - 62
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.setFillColor(navy)
-    pdf.drawString(left_x, y, "INSTRUMENT DETAILS")
-    y -= 12
+    y-=2; pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x,y,"CALIBRATION STATUS"); y-=13
+    ref_summary="; ".join(std["code"] for std in standards) if standards else (r["reference_standard"] or "—")
+    tol=((str(r["tolerance"])+" "+(r["unit"] or "")).strip() if r["tolerance"] is not None else "—")
+    for label,value in (("Cal. date",r["cal_date"] or "—"),("Next due",r["next_due"] or "—"),
+                        ("Tolerance",tol),("Reference",ref_summary),("Approved by",r["approved_by"] or "—")):
+        pdf.setFillColor(muted); pdf.setFont("Helvetica",6.2); pdf.drawString(left_x,y,label)
+        pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.2); pdf.drawString(value_x,y,str(value)[:30]); y-=13
 
-    fields = (
-        ("Instrument", r["sensor_type"] or "—"),
-        ("Serial number", r["serial_number"] or "—"),
-        ("Station", r["station"] or "—"),
-        ("Unit", r["unit"] or "—"),
-        ("Calibration date", r["cal_date"] or "—"),
-        ("Next due", r["next_due"] or "—"),
-    )
-    label_x = left_x
-    value_x = left_x + 62
-    for label, value in fields:
-        pdf.setFillColor(muted)
-        pdf.setFont("Helvetica", 6.2)
-        pdf.drawString(label_x, y, label)
-        pdf.setFillColor(ink)
-        pdf.setFont("Helvetica-Bold", 6.2)
-        pdf.drawString(value_x, y, str(value)[:32])
-        y -= 13
+    y-=3; card_h=55; pdf.setFillColor(pale); pdf.roundRect(left_x,y-card_h+5,left_right-left_x,card_h,5,stroke=0,fill=1)
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawString(left_x+7,y-12,"CALIBRATION RESULT")
+    pdf.setFillColor(colors.HexColor("#b42318") if r["result"]=="FAIL" else colors.HexColor("#087443"))
+    pdf.setFont("Helvetica-Bold",12); pdf.drawCentredString((left_x+left_right)/2,y-30,str(r["result"] or "—"))
+    max_error=r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.8); pdf.drawString(left_x+7,y-44,"Maximum error")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",6.5); pdf.drawString(left_x+55,y-44,(str(max_error)+" "+(r["unit"] or "")).strip())
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.8); pdf.drawRightString(left_right-7,y-44,"Points: "+str(len(pts)))
 
-    y -= 4
-    pdf.setFillColor(light)
-    pdf.roundRect(left_x, y - 42, left_w - 8, 42, 4, stroke=0, fill=1)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawString(left_x + 7, y - 11, "CALIBRATION RESULT")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(left_x + 7, y - 25, str(r["result"] or "—"))
-    pdf.setFont("Helvetica", 6)
-    pdf.setFillColor(muted)
-    pdf.drawString(left_x + 72, y - 24, "Maximum absolute error")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 7)
-    max_error = r["max_error"] if r["max_error"] is not None else (abs(r["error"]) if r["error"] is not None else "—")
-    pdf.drawString(left_x + 72, y - 34, str(max_error))
+    panel_y=margin+30; panel_h=height-2*margin-92
+    pdf.setStrokeColor(navy); pdf.setLineWidth(.8); pdf.roundRect(panel_x,panel_y,qr_panel_w,panel_h,5,stroke=1,fill=0)
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",7); pdf.drawCentredString(panel_x+qr_panel_w/2,top-64,"OFFLINE RECORD")
+    qr_size=91; qr_x=panel_x+(qr_panel_w-qr_size)/2; qr_y=top-78-qr_size
+    pdf.drawImage(ImageReader(qr_bytes),qr_x,qr_y,qr_size,qr_size,preserveAspectRatio=True,mask="auto")
+    pdf.setFillColor(navy); pdf.setFont("Helvetica-Bold",6.5); pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-12,"SCAN WITH ANY QR READER")
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.5); pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-23,"Complete calibration record")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,qr_y-31,"is embedded — no internet.")
+    pdf.setFillColor(ink); pdf.setFont("Helvetica-Bold",5.8)
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+36,"Measurements, uncertainty,")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+27,"traceability, procedure")
+    pdf.drawCentredString(panel_x+qr_panel_w/2,panel_y+18,"and approval data included.")
 
-    y -= 57
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawString(left_x, y, "REFERENCE & AUTHORIZATION")
-    y -= 13
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6)
-    pdf.drawString(left_x, y, "Reference standard")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawString(left_x + 62, y, "Controlled laboratory reference")
-    y -= 14
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 6)
-    pdf.drawString(left_x, y, "Approved by")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawString(left_x + 62, y, str(r["approved_by"] or "—")[:28])
-
-    # Right QR verification panel.
-    panel_x = margin + 8 + left_w + gap
-    panel_y = margin + 28
-    panel_h = height - 2 * margin - 86
-    pdf.setStrokeColor(navy)
-    pdf.setLineWidth(0.7)
-    pdf.roundRect(panel_x, panel_y, qr_panel_w, panel_h, 4, stroke=1, fill=0)
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 7)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, top - 62, "VERIFY ONLINE")
-
-    qr_size = 86
-    qr_x = panel_x + (qr_panel_w - qr_size) / 2
-    qr_y = top - 62 - qr_size - 10
-    pdf.drawImage(
-        ImageReader(qr_bytes), qr_x, qr_y, qr_size, qr_size,
-        preserveAspectRatio=True, mask="auto",
-    )
-    pdf.setFillColor(navy)
-    pdf.setFont("Helvetica-Bold", 6.5)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 12, "SCAN TO VERIFY")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.5)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 23, "Opens the complete")
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, qr_y - 31, "digital calibration report.")
-    pdf.setFillColor(ink)
-    pdf.setFont("Helvetica-Bold", 6)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 38, "STATUS: ACTIVE")
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.3)
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 28, "Official verification record")
-    pdf.drawCentredString(panel_x + qr_panel_w / 2, panel_y + 20, "retained by DHM.")
-
-    pdf.setStrokeColor(navy)
-    pdf.line(margin + 8, margin + 19, right - 8, margin + 19)
-    pdf.setFillColor(muted)
-    pdf.setFont("Helvetica", 5.3)
-    pdf.drawString(margin + 8, margin + 10, "Retain this certificate with the complete digital report.")
-    pdf.drawRightString(right - 8, margin + 10, "DHM Calibration Laboratory")
-
-    pdf.showPage()
-    pdf.save()
-    out.seek(0)
-    return Response(
-        out.getvalue(), mimetype="application/pdf",
-        headers={"Content-Disposition": 'inline; filename="' + cert + '.pdf"'},
-    )
+    pdf.setStrokeColor(line); pdf.line(margin+8,margin+20,right-8,margin+20)
+    pdf.setFillColor(muted); pdf.setFont("Helvetica",5.4)
+    pdf.drawString(margin+8,margin+11,"Retain this certificate with the installed sensor record.")
+    pdf.drawRightString(right-8,margin+11,"DHM Calibration Laboratory")
+    pdf.showPage(); pdf.save(); out.seek(0)
+    return Response(out.getvalue(),mimetype="application/pdf",
+                    headers={"Content-Disposition":'inline; filename="'+cert+'.pdf"'})
 
 @app.route("/certificates/<cert>/withdraw", methods=["POST"])
 @admin_required
@@ -1283,12 +1402,8 @@ def verify_certificate(cert, token):
     pts = db.execute("SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
                      (r["cal_id"],)).fetchall()
     details = json.loads(r["standard_details"]) if r["standard_details"] else None
-    standard = None
-    if r["standard_id"]:
-        standard = db.execute(
-            "SELECT standard_id, code, name, standard_type, manufacturer, serial_number, uncertainty, traceability, certificate_no, calibrated_on, valid_until FROM reference_standards WHERE standard_id=?",
-            (r["standard_id"],)
-        ).fetchone()
-    return render_template("certificate_full.html", r=r, pts=pts, det=details, standard=standard)
+    standards = calibration_reference_standards(db, r["cal_id"])
+    standard = standards[0] if standards else None
+    return render_template("certificate_full.html", r=r, pts=pts, det=details, standard=standard, standards=standards)
 
 

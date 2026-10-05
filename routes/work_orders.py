@@ -1,6 +1,54 @@
 """Route module: work_orders."""
 from app import *
 
+def selected_work_order_standards(db, form, target_date):
+    """Validate and return one or more controlled reference standards for a work order."""
+    if hasattr(form, "getlist"):
+        raw_ids = form.getlist("standard_id")
+    else:
+        raw_ids = form.get("standard_id", [])
+        if not isinstance(raw_ids, (list, tuple)):
+            raw_ids = [raw_ids]
+    ids = []
+    for raw in raw_ids:
+        raw = str(raw).strip()
+        if not raw:
+            continue
+        if not raw.isdigit():
+            raise ValueError("Select valid registered reference standards.")
+        sid = int(raw)
+        if sid not in ids:
+            ids.append(sid)
+    if not ids:
+        raise ValueError("At least one registered reference standard must be selected for the work order.")
+    standards = []
+    for sid in ids:
+        std = db.execute(
+            "SELECT * FROM reference_standards WHERE standard_id=? AND active=1", (sid,)
+        ).fetchone()
+        if not std:
+            raise ValueError("One of the selected reference standards is unavailable or inactive.")
+        if target_date and (std["calibrated_on"] > target_date or std["valid_until"] < target_date):
+            raise ValueError(
+                f"Cannot assign {std['code']}: it is not valid on the work-order target date."
+            )
+        if not std["certificate_no"] or not std["traceability"]:
+            raise ValueError(f"Reference standard {std['code']} is missing certificate or traceability information.")
+        standards.append(std)
+    return standards
+
+
+def persist_work_order_reference_standards(db, work_order_id, standards):
+    db.execute("DELETE FROM work_order_reference_standards WHERE work_order_id=?", (work_order_id,))
+    db.executemany(
+        """INSERT INTO work_order_reference_standards
+           (work_order_id, standard_id, selection_order, is_primary, usage_role)
+           VALUES (?,?,?,?,?)""",
+        [(work_order_id, std["standard_id"], i, 1 if i == 1 else 0, "REFERENCE")
+         for i, std in enumerate(standards, 1)],
+    )
+
+
 WORK_ORDER_STATUS_TRANSITIONS = {
     "ASSIGNED": {"IN PROGRESS", "CANCELLED"},
     "IN PROGRESS": {"AWAITING REVIEW", "CANCELLED"},
@@ -29,7 +77,14 @@ def work_orders():
     sql = """
         SELECT w.*, r.request_no, r.client_name, r.instrument_description,
                r.requested_service, r.priority, r.sensor_id,
-               u.full_name AS technician_name, a.full_name AS assigned_by_name, cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision
+               u.full_name AS technician_name, a.full_name AS assigned_by_name, cp.code AS procedure_code, cp.title AS procedure_title, cp.revision AS procedure_revision,
+               (SELECT GROUP_CONCAT(code, '; ') FROM (
+                    SELECT rs.code
+                    FROM work_order_reference_standards crs
+                    JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+                    WHERE crs.work_order_id=w.work_order_id
+                    ORDER BY crs.selection_order
+                )) AS standard_codes
         FROM calibration_work_orders w
         JOIN calibration_requests r ON r.request_id=w.request_id
         JOIN users u ON u.user_id=w.assigned_technician_id
@@ -101,6 +156,15 @@ def work_order_detail(work_order_id):
         "SELECT * FROM calibration_points WHERE cal_id=? ORDER BY point_no",
         (calibration["cal_id"],)
     ).fetchall() if calibration else []
+    work_order_standards = db.execute(
+        """SELECT crs.*, rs.code, rs.name, rs.serial_number, rs.certificate_no,
+                  rs.traceability, rs.calibrated_on, rs.valid_until, rs.uncertainty
+           FROM work_order_reference_standards crs
+           JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+           WHERE crs.work_order_id=?
+           ORDER BY crs.selection_order""",
+        (work_order_id,)
+    ).fetchall()
     reviews = db.execute(
         """SELECT h.*, u.full_name AS submitted_by_name, v.full_name AS reviewer_name
            FROM calibration_review_history h
@@ -110,7 +174,8 @@ def work_order_detail(work_order_id):
         (work_order_id,)
     ).fetchall()
     return render_template("work_order_detail.html", w=row, statuses=WORK_ORDER_STATUSES,
-                           calibration=calibration, points=points, reviews=reviews)
+                           calibration=calibration, points=points, reviews=reviews,
+                           work_order_standards=work_order_standards)
 
 
 @app.route("/requests/bulk-assign", methods=["POST"])
@@ -137,20 +202,12 @@ def bulk_assign_calibration_requests():
         procedure_id=procedure["procedure_id"]
     else:
         flash("Select a controlled calibration procedure.","error"); return redirect(url_for("calibration_requests"))
-    std_text=request.form.get("standard_id","").strip(); standard_id=None
-    if std_text:
-        if not std_text.isdigit(): flash("Select a valid reference standard.","error"); return redirect(url_for("calibration_requests"))
-        st=db.execute(
-            """SELECT standard_id, calibrated_on, valid_until
-               FROM reference_standards
-               WHERE standard_id=? AND active=1""", (int(std_text),)
-        ).fetchone()
-        if not st:
-            flash("Select an active reference standard.","error"); return redirect(url_for("calibration_requests"))
-        if st["calibrated_on"] > date.today().isoformat() or st["valid_until"] < date.today().isoformat():
-            flash("The selected reference standard is not currently within its calibration validity period.","error")
-            return redirect(url_for("calibration_requests"))
-        standard_id=st["standard_id"]
+    try:
+        standards_selected = selected_work_order_standards(db, request.form, target or date.today().isoformat())
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("calibration_requests"))
+    standard_id = standards_selected[0]["standard_id"]
     now=datetime.now().isoformat(timespec="seconds"); assigned=0; skipped=0
     with db:
         for rid in ids:
@@ -178,6 +235,10 @@ def bulk_assign_calibration_requests():
                     VALUES (?,?,?,?,?,?,?,?,?,?, 'ASSIGNED',?,?)""",
                     (wo,rid,tech["user_id"],g.user["user_id"],now,target_use,method,procedure_id,standard_id,
                      request.form.get("instructions","").strip(),now,now))
+            work_order_id = existing["work_order_id"] if existing else db.execute(
+                "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?", (rid,)
+            ).fetchone()["work_order_id"]
+            persist_work_order_reference_standards(db, work_order_id, standards_selected)
             if req["status"] == "REVIEWED":
                 transition_request_status(db, rid, "ASSIGNED", g.user["user_id"], "Technician assigned")
             assigned+=1
@@ -230,25 +291,14 @@ def assign_calibration_request(request_id):
     elif not existing:
         flash("Select a controlled calibration procedure.", "error")
         return redirect(url_for("calibration_request", request_id=request_id))
-    standard_text = request.form.get("standard_id", "").strip()
-    standard_id = None
-    if standard_text:
-        if not standard_text.isdigit():
-            flash("Select a valid reference standard.", "error")
-            return redirect(url_for("calibration_request", request_id=request_id))
-        standard = db.execute(
-            """SELECT standard_id, calibrated_on, valid_until
-               FROM reference_standards
-               WHERE standard_id=? AND active=1""",
-            (int(standard_text),)
-        ).fetchone()
-        if not standard:
-            flash("Select an active reference standard.", "error")
-            return redirect(url_for("calibration_request", request_id=request_id))
-        if standard["calibrated_on"] > date.today().isoformat() or standard["valid_until"] < date.today().isoformat():
-            flash("The selected reference standard is not currently within its calibration validity period.", "error")
-            return redirect(url_for("calibration_request", request_id=request_id))
-        standard_id = standard["standard_id"]
+    try:
+        standards_selected = selected_work_order_standards(
+            db, request.form, target or req["requested_due_date"] or date.today().isoformat()
+        )
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("calibration_request", request_id=request_id))
+    standard_id = standards_selected[0]["standard_id"]
     now = datetime.now().isoformat(timespec="seconds")
     with db:
         if existing:
@@ -272,6 +322,10 @@ def assign_calibration_request(request_id):
                 (work_order_no, request_id, technician["user_id"], g.user["user_id"], now,
                  target, method, procedure_id, standard_id, request.form.get("instructions", "").strip(), now, now)
             )
+        work_order_id = existing["work_order_id"] if existing else db.execute(
+            "SELECT work_order_id FROM calibration_work_orders WHERE request_id=?", (request_id,)
+        ).fetchone()["work_order_id"]
+        persist_work_order_reference_standards(db, work_order_id, standards_selected)
         if req["status"] == "REVIEWED":
             transition_request_status(db, request_id, "ASSIGNED", g.user["user_id"], "Technician assigned")
     flash(f"Work order {work_order_no} assigned to {technician['full_name']}.")
