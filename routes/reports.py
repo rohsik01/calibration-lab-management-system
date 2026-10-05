@@ -16,18 +16,37 @@ EXPORT_COLUMNS = [
 ]
 
 HISTORY_SQL = """
-SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.reference_value,
-       c.error, c.result, c.certificate_no, c.next_due, c.performed_by,
-       c.n_points
+SELECT s.*, st.name AS station, c.cal_date,
+       COALESCE(
+           (SELECT GROUP_CONCAT(code, '; ') FROM (
+                SELECT rs.code
+                FROM calibration_reference_standards crs
+                JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+                WHERE crs.cal_id=c.cal_id
+                ORDER BY crs.selection_order
+            )),
+           c.reference_standard
+       ) AS reference_standard,
+       c.reference_value, c.error, c.result, c.certificate_no, c.next_due,
+       c.performed_by, c.n_points
 FROM calibrations c JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
 """
 
 POINTS_SQL = """
-SELECT s.*, st.name AS station, c.cal_date, c.reference_standard, c.n_points, p.point_no,
-       p.reference_value, p.as_found_value, p.as_found_error, p.as_left_value, p.as_left_error,
-       p.error, p.result, p.tolerance AS point_tolerance,
-       c.result AS overall_result,
-       c.certificate_no, c.next_due, c.performed_by
+SELECT s.*, st.name AS station, c.cal_date,
+       COALESCE(
+           (SELECT GROUP_CONCAT(code, '; ') FROM (
+                SELECT rs.code
+                FROM calibration_reference_standards crs
+                JOIN reference_standards rs ON rs.standard_id=crs.standard_id
+                WHERE crs.cal_id=c.cal_id
+                ORDER BY crs.selection_order
+            )),
+           c.reference_standard
+       ) AS reference_standard,
+       c.n_points, p.point_no, p.reference_value, p.as_found_value, p.as_found_error,
+       p.as_left_value, p.as_left_error, p.error, p.result, p.tolerance AS point_tolerance,
+       c.result AS overall_result, c.certificate_no, c.next_due, c.performed_by
 FROM calibration_points p JOIN calibrations c USING(cal_id)
 JOIN sensors s USING(sensor_id) JOIN stations st USING(station_id)
 """

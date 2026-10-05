@@ -174,7 +174,13 @@ def edit_standard(sid):
         try:
             d = read_standard(request.form)
             used_count = db.execute(
-                "SELECT COUNT(*) FROM calibrations WHERE standard_id=?", (sid,)
+                """SELECT COUNT(*) FROM calibrations c
+                   WHERE c.standard_id=?
+                      OR EXISTS (
+                          SELECT 1 FROM calibration_reference_standards crs
+                          WHERE crs.cal_id=c.cal_id AND crs.standard_id=?
+                      )""",
+                (sid, sid),
             ).fetchone()[0]
             critical_fields = (
                 "code", "name", "standard_type", "manufacturer", "serial_number",
