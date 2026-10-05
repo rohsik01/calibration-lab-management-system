@@ -159,10 +159,6 @@ document.getElementById('gen').onclick = () => {
   body.innerHTML = '';
   for (let i = 0; i < n; i++) addRow(parseFloat((a + (b - a) * i / (n - 1)).toFixed(6)), t);
 };
-// reference standard: pick the first valid one from the register, or type a name
-const std = document.getElementById('std'), stdtext = document.getElementById('stdtext');
-function stdChange() { const other = std.value === ''; stdtext.style.display = other ? '' : 'none'; stdtext.required = other; }
-{% if not edit_mode %}const firstValid = [...std.options].find(o => o.value && !o.disabled); if (firstValid) std.value = firstValid.value;{% endif %}
-std.onchange = stdChange; stdChange();
+
 
 </script>{% endblock %}
