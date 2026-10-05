@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}DHM Offline QR Reader{% endblock %}
+{% block content %}
+<style>
+.qr-reader{max-width:920px;margin:0 auto;padding:16px}
+.qr-reader h1{margin:0 0 6px;font-size:1.55rem}
+.qr-reader .subtitle{color:#5f6b76;margin:0 0 18px}
+.reader-grid{display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,1fr);gap:16px}
+.reader-card{background:#fff;border:1px solid #d9dee3;border-radius:14px;padding:16px;box-shadow:0 3px 12px rgba(0,0,0,.05)}
+.reader-card h2{font-size:1rem;margin:0 0 12px}
+#qr-video{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#101820;border-radius:12px}
+.scan-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.reader-btn{border:1px solid #9aa5ae;background:#fff;border-radius:9px;padding:9px 13px;font-weight:600;cursor:pointer}
+.reader-btn.primary{background:#17365d;color:#fff;border-color:#17365d}
+.reader-btn:disabled{opacity:.55;cursor:not-allowed}
+#qr-file{display:none}
+.reader-status{margin-top:10px;padding:10px;border-radius:9px;background:#f1f4f7;color:#34404a}
+.reader-status.ok{background:#e8f5e9;color:#185c20}
+.reader-status.error{background:#fdecec;color:#8a1f1f}
+textarea#qr-input{width:100%;min-height:125px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.8rem;padding:10px;border:1px solid #c8d0d7;border-radius:9px}
+.hidden{display:none!important}
+.badge{display:inline-block;border-radius:999px;padding:5px 10px;font-weight:800;font-size:.78rem}
+.badge.pass{background:#dff3e3;color:#17652a}.badge.fail{background:#fde0e0;color:#8b1c1c}.badge.neutral{background:#e8edf2;color:#42515e}
+.result-head{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #e1e5e8;padding-bottom:12px;margin-bottom:12px}
+.data-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+.data-item{padding:8px 0;border-bottom:1px solid #edf0f2}
+.data-item .label{font-size:.72rem;color:#697681;text-transform:uppercase;letter-spacing:.04em}
+.data-item .value{font-weight:600;overflow-wrap:anywhere}
+.reader-table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:8px}
+.reader-table th,.reader-table td{border:1px solid #dfe4e8;padding:6px;text-align:left;vertical-align:top}
+.reader-table th{background:#f3f5f7}
+.reader-note{font-size:.78rem;color:#687580;margin-top:10px}
+.install-box{margin-top:12px;padding:10px;border:1px dashed #9ca8b2;border-radius:9px;background:#f8fafb}
+@media(max-width:720px){.reader-grid{grid-template-columns:1fr}.data-grid{grid-template-columns:1fr}.qr-reader{padding:10px}.reader-card{padding:13px}}
+</style>
+
+<div class="qr-reader">
+  <h1>DHM Offline QR Reader</h1>
+  <p class="subtitle">Scan a DHM calibration certificate and read its complete calibration record without Internet.</p>
+
+  <div class="reader-grid">
+    <section class="reader-card">
+      <h2>1. Scan certificate</h2>
+      <video id="qr-video" playsinline muted></video>
+      <div class="scan-actions">
+        <button class="reader-btn primary" id="start-camera" type="button">Start camera</button>
+        <button class="reader-btn" id="stop-camera" type="button" disabled>Stop</button>
+        <label class="reader-btn" for="qr-file">Scan QR image</label>
+        <input id="qr-file" type="file" accept="image/*">
+      </div>
+      <div id="camera-status" class="reader-status">Camera scanning is local to this device. No QR data is uploaded.</div>
+      <div class="install-box" id="install-box">
+        <strong>Install on phone:</strong> use your browser's “Install app” / “Add to Home screen” option after opening this reader over HTTPS. Once installed and cached, the reader shell works offline.
+        <button class="reader-btn hidden" id="install-app" type="button">Install DHM QR Reader</button>
+      </div>
+    </section>
+
+    <section class="reader-card">
+      <h2>2. Paste QR data</h2>
+      <textarea id="qr-input" spellcheck="false" placeholder="Paste the text decoded from a DHM certificate QR starting with DHM-CAL-OFFLINE|"></textarea>
+      <div class="scan-actions">
+        <button class="reader-btn primary" id="parse-input" type="button">Read record</button>
+        <button class="reader-btn" id="clear-input" type="button">Clear</button>
+      </div>
+      <p class="reader-note">Manual input is also fully offline and is useful when the phone/browser does not provide camera QR detection.</p>
+    </section>
+  </div>
+
+  <section class="reader-card hidden" id="result-card" style="margin-top:16px">
+    <div class="result-head">
+      <div>
+        <h2 style="margin-bottom:4px">Calibration record</h2>
+        <div id="record-cert"></div>
+      </div>
+      <div id="record-result"></div>
+    </div>
+
+    <div class="data-grid" id="identity-grid"></div>
+
+    <h2 style="margin-top:18px">Calibration</h2>
+    <div class="data-grid" id="calibration-grid"></div>
+
+    <h2 style="margin-top:18px">Reference standards</h2>
+    <div id="standards"></div>
+
+    <h2 style="margin-top:18px">Measurements</h2>
+    <div id="measurements"></div>
+
+    <h2 style="margin-top:18px">Uncertainty</h2>
+    <div class="data-grid" id="uncertainty"></div>
+
+    <h2 style="margin-top:18px">Procedure & adjustment</h2>
+    <div class="data-grid" id="procedure"></div>
+
+    <p class="reader-note" id="fingerprint-note"></p>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const PREFIX = "DHM-CAL-OFFLINE|";
+  const video = document.getElementById("qr-video");
+  const status = document.getElementById("camera-status");
+  const startBtn = document.getElementById("start-camera");
+  const stopBtn = document.getElementById("stop-camera");
+  const fileInput = document.getElementById("qr-file");
+  const input = document.getElementById("qr-input");
+  const resultCard = document.getElementById("result-card");
+  let stream = null;
+  let detector = null;
+  let scanning = false;
+  let installPrompt = null;
+
+  function setStatus(message, kind) {
+    status.textContent = message;
+    status.className = "reader-status" + (kind ? " " + kind : "");
+  }
+
+  function esc(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value).replace(/[&<>"']/g, function (c) {
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]);
+    });
+  }
+
+  function item(label, value) {
+    return '<div class="data-item"><div class="label">' + esc(label) + '</div><div class="value">' + esc(value) + '</div></div>';
+  }
+
+  function table(headers, rows) {
+    if (!rows || !rows.length) return '<p class="reader-note">No recorded entries.</p>';
+    return '<div style="overflow:auto"><table class="reader-table"><thead><tr>' +
+      headers.map(function(h){return '<th>'+esc(h)+'</th>';}).join('') +
+      '</tr></thead><tbody>' +
+      rows.map(function(row){return '<tr>'+row.map(function(v){return '<td>'+esc(v)+'</td>';}).join('')+'</tr>';}).join('') +
+      '</tbody></table></div>';
+  }
+
+  function render(record) {
+    const r = record || {};
+    const result = String(r.result || "").toUpperCase();
+    document.getElementById("record-cert").textContent = r.certificate ? "Certificate " + r.certificate : "DHM calibration record";
+    document.getElementById("record-result").innerHTML =
+      '<span class="badge ' + (result === "PASS" ? "pass" : result === "FAIL" ? "fail" : "neutral") + '">' + esc(result || "UNKNOWN") + '</span>';
+
+    document.getElementById("identity-grid").innerHTML =
+      item("Sensor ID", r.sensor_id) + item("Instrument", r.sensor_type) +
+      item("Serial number", r.serial) + item("Manufacturer", r.manufacturer) +
+      item("Station", r.station) + item("Unit", r.unit);
+
+    document.getElementById("calibration-grid").innerHTML =
+      item("Calibration date", r.calibration_date) + item("Next due", r.next_due) +
+      item("Tolerance", r.tolerance) + item("Approved by", r.approved_by) +
+      item("Issued by", r.issued_by) + item("Issued at", r.issued_at) +
+      item("Points", r.summary && r.summary.points) + item("Mean error", r.summary && r.summary.mean_error) +
+      item("Maximum error", r.summary && r.summary.max_error) + item("Technician remarks", r.remarks);
+
+    const standards = r.reference_standards || [];
+    document.getElementById("standards").innerHTML = table(
+      ["Code","Name","Serial","Certificate","Traceability","Calibrated","Valid until","Uncertainty"],
+      standards.map(function(s){return [s.code,s.name,s.serial,s.certificate,s.traceability,s.calibrated_on,s.valid_until,s.uncertainty];})
+    );
+
+    const measurements = r.measurements || [];
+    document.getElementById("measurements").innerHTML = table(
+      ["Point","Reference","Tolerance","As found","Found error","As left","Left error","Result"],
+      measurements.map(function(p){return [p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7]];})
+    );
+
+    const u = r.uncertainty || {};
+    document.getElementById("uncertainty").innerHTML =
+      item("Method", u.method) + item("Standard", u.standard) +
+      item("Resolution", u.resolution) + item("Repeatability", u.repeatability) +
+      item("Environmental", u.environmental) + item("Other", u.other) +
+      item("Combined standard", u.combined) + item("Coverage factor k", u.k) +
+      item("Expanded uncertainty", u.expanded) +
+      item("Temperature °C", r.environment && r.environment.temperature_c) +
+      item("Humidity %", r.environment && r.environment.humidity_pct);
+
+    const p = r.procedure || {}, a = r.adjustment || {};
+    document.getElementById("procedure").innerHTML =
+      item("Procedure code", p.code) + item("Procedure title", p.title) +
+      item("Revision", p.revision) + item("Adjustment status", a.status) +
+      item("Adjustment notes", a.notes);
+
+    document.getElementById("fingerprint-note").textContent =
+      r.fingerprint
+        ? "Certificate fingerprint recorded: " + r.fingerprint + ". The offline reader displays the fingerprint but does not claim cryptographic verification without the laboratory verification service."
+        : "No certificate fingerprint was embedded in this record.";
+
+    resultCard.classList.remove("hidden");
+    resultCard.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+
+  function parsePayload(raw) {
+    raw = String(raw || "").trim();
+    if (!raw.startsWith(PREFIX)) throw new Error("This is not a DHM offline calibration QR.");
+    let record;
+    try { record = JSON.parse(raw.slice(PREFIX.length)); }
+    catch (e) { throw new Error("The DHM QR payload is not valid JSON."); }
+    if (!record || record.type !== "DHM-CAL-OFFLINE" || record.v !== 1) {
+      throw new Error("Unsupported DHM offline certificate format.");
+    }
+    render(record);
+    setStatus("DHM calibration record loaded successfully. No Internet was used.", "ok");
+    input.value = raw;
+    return record;
+  }
+
+  function stopCamera() {
+    scanning = false;
+    if (stream) stream.getTracks().forEach(function(t){t.stop();});
+    stream = null;
+    video.srcObject = null;
+    stopBtn.disabled = true;
+    startBtn.disabled = false;
+  }
+
+  async function scanLoop() {
+    if (!scanning || !detector) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length && codes[0].rawValue) {
+        try { parsePayload(codes[0].rawValue); stopCamera(); return; }
+        catch (e) { setStatus(e.message, "error"); }
+      }
+    } catch (e) {}
+    if (scanning) setTimeout(scanLoop, 180);
+  }
+
+  async function startCamera() {
+    if (!window.isSecureContext) {
+      setStatus("Camera scanning requires HTTPS. Use the installed PWA/HTTPS address, or use Scan QR image/manual input.", "error");
+      return;
+    }
+    if (!("BarcodeDetector" in window)) {
+      setStatus("This browser does not provide native QR detection. Use Scan QR image or manual input.", "error");
+      return;
+    }
+    try {
+      const formats = await BarcodeDetector.getSupportedFormats();
+      if (!formats.includes("qr_code")) throw new Error("QR detection is not supported by this browser.");
+      detector = new BarcodeDetector({formats:["qr_code"]});
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+      video.srcObject = stream;
+      await video.play();
+      scanning = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      setStatus("Point the rear camera at the DHM certificate QR.", "");
+      scanLoop();
+    } catch (e) {
+      stopCamera();
+      setStatus("Could not start the camera: " + (e.message || e), "error");
+    }
+  }
+
+  async function decodeImage(file) {
+    if (!file) return;
+    if (!("BarcodeDetector" in window)) {
+      setStatus("Image scanning requires a browser with BarcodeDetector. Use manual input if unavailable.", "error");
+      return;
+    }
+    try {
+      const supported = await BarcodeDetector.getSupportedFormats();
+      if (!supported.includes("qr_code")) throw new Error("QR image detection is not supported.");
+      const detectorForImage = new BarcodeDetector({formats:["qr_code"]});
+      const bitmap = await createImageBitmap(file);
+      const codes = await detectorForImage.detect(bitmap);
+      bitmap.close();
+      if (!codes.length) throw new Error("No QR code was found in the selected image.");
+      parsePayload(codes[0].rawValue);
+    } catch (e) {
+      setStatus(e.message || "Could not read the QR image.", "error");
+    } finally {
+      fileInput.value = "";
+    }
+  }
+
+  startBtn.addEventListener("click", startCamera);
+  stopBtn.addEventListener("click", stopCamera);
+  fileInput.addEventListener("change", function(){decodeImage(fileInput.files[0]);});
+  document.getElementById("parse-input").addEventListener("click", function(){
+    try { parsePayload(input.value); } catch(e) { setStatus(e.message, "error"); }
+  });
+  document.getElementById("clear-input").addEventListener("click", function(){
+    input.value = ""; resultCard.classList.add("hidden"); setStatus("Ready to read another DHM certificate.", "");
+  });
+
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault(); installPrompt = e;
+    document.getElementById("install-app").classList.remove("hidden");
+  });
+  document.getElementById("install-app").addEventListener("click", async function(){
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    this.classList.add("hidden");
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/qr-reader/sw.js", {scope:"/qr-reader/"}).catch(function(){});
+  }
+})();
+</script>
+{% endblock %}
