@@ -236,7 +236,7 @@ def test_certificate_is_a5_portrait_and_shows_only_field_essential_information()
     template = root.joinpath("templates", "certificate.html").read_text(encoding="utf-8")
     route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
     assert "width:148mm;height:210mm" in template
-    assert "FIELD INSTALLATION IDENTITY" in template
+    assert "Field installation identity" in template
     assert 'r.sensor_id' in template
     assert 'r.serial_number' in template
     assert 'r.station' in template
@@ -261,7 +261,7 @@ def test_certificate_integrity_and_lifecycle_controls_are_present():
     assert "CERTIFICATE_WITHDRAWN" in route_source
     assert "CERTIFICATE_REISSUED" in route_source
     assert "certificate_pdf" in route_source
-    assert "SCAN TO VERIFY" in template_source
+    assert "OFFLINE CALIBRATION RECORD" in template_source
 
 
 def test_certificate_status_page_and_full_report_show_integrity_information():
