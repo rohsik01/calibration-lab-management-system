@@ -747,9 +747,20 @@ def test_reference_standard_selection_rejects_expired_work_order_standard():
 
 
 def test_multiple_reference_standard_ui_is_checkbox_enhanced():
-    base = Path(__file__).resolve().parents[1].joinpath("templates","base.html").read_text(encoding="utf-8")
-    for name in ("calibrate.html","calibrate_pending.html","request_detail.html"):
-        source = Path(__file__).resolve().parents[1].joinpath("templates",name).read_text(encoding="utf-8")
+    root = Path(__file__).resolve().parents[1]
+    base = root.joinpath("templates","base.html").read_text(encoding="utf-8")
+    for name in ("calibrate.html","calibrate_pending.html","request_detail.html","requests.html","export.html"):
+        source = root.joinpath("templates",name).read_text(encoding="utf-8")
         assert 'class="multi-select"' in source
+        assert 'multiple size="6"' in source
     assert "multi-select-enhanced" in base
-    assert "checkbox" in base
+    assert "multi-select-toolbar" in base
+    assert "Select all" in base
+    assert "Clear all" in base
+    assert "No reference standards selected" not in base
+
+
+def test_bulk_assignment_uses_a_valid_reference_standard_date_without_undefined_request():
+    source = Path(__file__).resolve().parents[1].joinpath("routes","work_orders.py").read_text(encoding="utf-8")
+    assert 'selected_work_order_standards(db, request.form, target or date.today().isoformat())' in source
+    assert 'target or req["requested_due_date"]' not in source
