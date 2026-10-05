@@ -173,9 +173,11 @@ def work_order_detail(work_order_id):
            WHERE h.work_order_id=? ORDER BY h.review_id DESC""",
         (work_order_id,)
     ).fetchall()
+    calibration_standards = calibration_reference_standards(db, calibration["cal_id"]) if calibration else []
     return render_template("work_order_detail.html", w=row, statuses=WORK_ORDER_STATUSES,
                            calibration=calibration, points=points, reviews=reviews,
-                           work_order_standards=work_order_standards)
+                           work_order_standards=work_order_standards,
+                           calibration_standards=calibration_standards)
 
 
 @app.route("/requests/bulk-assign", methods=["POST"])
