@@ -203,7 +203,7 @@ def bulk_assign_calibration_requests():
     else:
         flash("Select a controlled calibration procedure.","error"); return redirect(url_for("calibration_requests"))
     try:
-        standards_selected = selected_work_order_standards(db, request.form, target or req["requested_due_date"] or date.today().isoformat())
+        standards_selected = selected_work_order_standards(db, request.form, target or date.today().isoformat())
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("calibration_requests"))
