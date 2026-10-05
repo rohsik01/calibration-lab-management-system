@@ -95,9 +95,12 @@
   .multi-option.disabled { color:var(--mute); cursor:not-allowed; opacity:.75; }
   .multi-option .multi-option-text { min-width:0; }
   .multi-option .multi-option-meta { display:block; color:var(--mute); font-size:12px; }
-  .multi-select-toolbar { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .multi-select-toolbar { display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap; align-items:center; }
   .multi-select-toolbar .btn { padding:5px 10px; font-size:12px; }
+  .multi-select-search { flex:1 1 220px; min-width:180px; padding:6px 9px; font-size:12px; }
   .multi-select-summary { margin:6px 2px 0; color:var(--mute); font-size:12px; }
+  .multi-select-empty { padding:10px; color:var(--mute); font-size:12px; text-align:center; display:none; }
+  .multi-option.is-hidden { display:none; }
   .empty { text-align:center; color:var(--mute); padding:20px; }
   @media (max-width:900px) { .two { grid-template-columns:1fr; } }
   @media (max-width:800px) {
@@ -199,13 +202,15 @@
 document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
 // click any column heading of a table to sort it
 
-// Accessible checkbox enhancement for native multi-select fields.
+// Accessible, searchable checkbox enhancement for native multi-select fields.
 // The original select remains the form's source of truth and is used when JavaScript is unavailable.
 const MULTI_TEXT = {
   selectAll: {{ tr("Select all")|tojson }},
   clearAll: {{ tr("Clear all")|tojson }},
+  search: {{ tr("Search options")|tojson }},
   selected: {{ tr("selected")|tojson }},
   none: {{ tr("No items selected")|tojson }},
+  noMatches: {{ tr("No matching options")|tojson }},
   required: {{ tr("Select at least one item before continuing.")|tojson }}
 };
 document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
@@ -214,41 +219,69 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
   wrap.className = 'multi-select-enhanced';
   const toolbar = document.createElement('div');
   toolbar.className = 'multi-select-toolbar';
+
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'multi-select-search';
+  search.placeholder = MULTI_TEXT.search;
+  search.setAttribute('aria-label', MULTI_TEXT.search);
+
   const selectAll = document.createElement('button');
   selectAll.type = 'button';
   selectAll.className = 'btn alt';
   selectAll.textContent = MULTI_TEXT.selectAll;
+
   const clearAll = document.createElement('button');
   clearAll.type = 'button';
   clearAll.className = 'btn alt';
   clearAll.textContent = MULTI_TEXT.clearAll;
-  toolbar.appendChild(selectAll);
-  toolbar.appendChild(clearAll);
+  toolbar.append(search, selectAll, clearAll);
+
   const summary = document.createElement('div');
   summary.className = 'multi-select-summary';
+  summary.setAttribute('aria-live', 'polite');
+
+  const empty = document.createElement('div');
+  empty.className = 'multi-select-empty';
+  empty.textContent = MULTI_TEXT.noMatches;
+
+  const optionRows = [];
   const updateSummary = () => {
     const selected = [...select.options].filter(o => o.selected && !o.disabled);
-    summary.textContent = selected.length
-      ? selected.length + ' ' + MULTI_TEXT.selected + ': ' +
-        selected.map(o => o.textContent.trim().split('(')[0].trim()).join(', ')
-      : MULTI_TEXT.none;
+    if (!selected.length) {
+      summary.textContent = MULTI_TEXT.none;
+      return;
+    }
+    const names = selected.slice(0, 3).map(o => o.textContent.trim().split('(')[0].trim());
+    const extra = selected.length > 3 ? ' +' + (selected.length - 3) : '';
+    summary.textContent = selected.length + ' ' + MULTI_TEXT.selected + ': ' + names.join(', ') + extra;
   };
-  const syncOptions = () => {
-    [...select.options].forEach(option => {
-      const checkbox = wrap.querySelector('input[data-value="' + CSS.escape(option.value) + '"]');
-      if (checkbox) checkbox.checked = option.selected;
+
+  const applyFilter = () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    let visible = 0;
+    optionRows.forEach(({row, option}) => {
+      const match = !query || option.textContent.toLocaleLowerCase().includes(query);
+      row.classList.toggle('is-hidden', !match);
+      if (match) visible++;
     });
+    empty.style.display = visible ? 'none' : 'block';
+  };
+
+  const syncOptions = () => {
+    optionRows.forEach(({option, checkbox}) => { checkbox.checked = option.selected; });
     updateSummary();
   };
+
   [...select.options].forEach(option => {
     const label = document.createElement('label');
     label.className = 'multi-option' + (option.disabled ? ' disabled' : '');
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = option.value;
-    checkbox.dataset.value = option.value;
     checkbox.checked = option.selected;
     checkbox.disabled = option.disabled;
+    checkbox.setAttribute('aria-label', option.textContent.trim());
     checkbox.addEventListener('change', () => {
       option.selected = checkbox.checked;
       select.dispatchEvent(new Event('change', {bubbles:true}));
@@ -257,26 +290,32 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
     const text = document.createElement('span');
     text.className = 'multi-option-text';
     text.textContent = option.textContent.trim();
-    label.appendChild(checkbox);
-    label.appendChild(text);
+    label.append(checkbox, text);
     wrap.appendChild(label);
+    optionRows.push({row: label, option, checkbox});
   });
+
+  search.addEventListener('input', applyFilter);
   selectAll.addEventListener('click', () => {
-    [...select.options].forEach(option => { if (!option.disabled) option.selected = true; });
+    optionRows.forEach(({row, option}) => {
+      if (!option.disabled && !row.classList.contains('is-hidden')) option.selected = true;
+    });
     syncOptions();
     select.dispatchEvent(new Event('change', {bubbles:true}));
   });
   clearAll.addEventListener('click', () => {
-    [...select.options].forEach(option => { if (!option.disabled) option.selected = false; });
+    optionRows.forEach(({option}) => { if (!option.disabled) option.selected = false; });
     syncOptions();
     select.dispatchEvent(new Event('change', {bubbles:true}));
   });
+
   select.insertAdjacentElement('afterend', toolbar);
   toolbar.insertAdjacentElement('afterend', wrap);
   wrap.insertAdjacentElement('afterend', summary);
+  summary.insertAdjacentElement('afterend', empty);
   select.removeAttribute('required');
   select.style.display = 'none';
-  summary.setAttribute('aria-live', 'polite');
+
   if (select.form) {
     select.form.addEventListener('submit', event => {
       const selected = [...select.options].some(o => o.selected && !o.disabled);
@@ -289,6 +328,7 @@ document.querySelectorAll('select.multi-select[multiple]').forEach(select => {
     });
   }
   updateSummary();
+  applyFilter();
 });
 document.querySelectorAll('table.js-table').forEach(t => {
   const ths = [...t.rows[0].cells];
