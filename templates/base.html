@@ -11,10 +11,11 @@
   body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", "Nirmala UI", "Noto Sans Devanagari", Mangal, sans-serif; background:var(--bg); color:var(--ink); }
   a { color:var(--brand); }
   .app { display:flex; min-height:100vh; }
-  .side { width:250px; background:var(--side); color:#c8d3ea; display:flex; flex-direction:column;
+  .side { width:var(--sidebar-expanded); background:var(--side); color:#c8d3ea; display:flex; flex-direction:column;
           position:sticky; top:0; height:100vh; flex-shrink:0; z-index:20; }
+  .side.collapsed { width:72px; } .side.collapsed .brand-text,.side.collapsed .grp,.side.collapsed .item-label,.side.collapsed .pill,.side.collapsed .me-details,.side.collapsed .lang { display:none; } .side.collapsed .brand { justify-content:center; padding:18px 8px; } .side.collapsed nav { padding:8px 10px; } .side.collapsed .item,.side.collapsed .menu-group summary { justify-content:center; padding:10px 8px; } .side.collapsed .submenu { padding:0; margin-left:0; border-left:0; } .side.collapsed .menu-group summary { font-size:0; } .side.collapsed .menu-group summary .ic,.side.collapsed .submenu .ic { font-size:18px; } .side.collapsed .submenu .item { font-size:0; } .side.collapsed .me { padding:12px 8px; text-align:center; } .side.collapsed .me .row { display:none; }
   .brand { padding:18px 20px; color:#fff; font-weight:700; font-size:16px; border-bottom:1px solid #22304f; }
-  .brand small { display:block; font-weight:400; font-size:12px; color:#7f8fb0; }
+  .brand { display:flex; align-items:center; gap:10px; } .brand-mark { width:34px; height:34px; border-radius:9px; background:#fff; color:var(--side); display:grid; place-items:center; font-size:11px; font-weight:900; flex:0 0 auto; } .brand small { display:block; font-weight:400; font-size:12px; color:#7f8fb0; }
   .side nav { padding:8px 10px; flex:1; overflow-y:auto; }
   .grp { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#7f8fb0; margin:16px 12px 6px; }
   .item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#c8d3ea; text-decoration:none; }
@@ -38,11 +39,13 @@
   .langbar { text-align:right; margin-bottom:10px; font-size:13px; } .langbar a { color:var(--mute); margin-left:10px; text-decoration:none; }
   .langbar a.on { color:var(--brand); font-weight:700; text-decoration:underline; }
   .content { flex:1; min-width:0; }
+  .desktop-header { display:flex; align-items:center; gap:12px; padding:14px 24px 0; max-width:1200px; margin:0 auto; } .desktop-header .top-search { flex:1; max-width:520px; } .desktop-header .top-search form { display:flex; gap:8px; } .desktop-header .header-actions { display:flex; gap:8px; margin-left:auto; } .icon-btn { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:8px; min-width:38px; height:38px; cursor:pointer; text-decoration:none; display:grid; place-items:center; } .icon-btn:hover { border-color:var(--brand); color:var(--brand); }
   .topbar { display:none; background:var(--side); color:#fff; padding:10px 14px; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
   .topbar button { background:none; border:0; color:#fff; font-size:22px; cursor:pointer; }
   main { max-width:1200px; margin:0 auto; padding:24px 24px 60px; }
   .plain main { max-width:520px; margin-top:24px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  .home-identity { display:flex; align-items:center; gap:16px; padding:18px 20px; margin-bottom:20px; background:#fff; border:1px solid var(--line); border-radius:12px; } .home-identity .logo-mark { width:64px; height:64px; border-radius:14px; background:var(--side); color:#fff; display:grid; place-items:center; font-size:18px; font-weight:900; } .home-identity .institution { font-size:13px; color:var(--mute); } .home-identity .system-name { font-size:20px; font-weight:800; color:#14203a; } .home-identity .location { font-size:12px; color:var(--mute); }
   .banner { text-align:center; line-height:1.4; padding:4px 0 12px; border-bottom:3px double #b6202f; margin-bottom:14px; }
   .card .banner { border-bottom:0; margin:0; padding:2px 0; }
   .banner .b1 { font-size:15px; font-weight:700; color:#b6202f; } .banner .b2 { font-size:15px; font-weight:600; }
@@ -101,7 +104,7 @@
   .empty { text-align:center; color:var(--mute); padding:20px; }
   @media (max-width:900px) { .two { grid-template-columns:1fr; } }
   @media (max-width:800px) {
-    .side { position:fixed; left:-260px; transition:left .2s; } .side.open { left:0; box-shadow:0 0 30px rgba(0,0,0,.4); }
+    .desktop-header { display:none; } .side { position:fixed; left:-260px; transition:left .2s; } .side.open { left:0; box-shadow:0 0 30px rgba(0,0,0,.4); }
     .topbar { display:flex; } main { padding:16px 14px 50px; }
   }
   @media print { .side, .topbar, .noprint, .actions, .toolbar, .langbar { display:none !important; } .only-print { display:block; }
@@ -114,22 +117,22 @@
 {% if g.user %}
 <div class="app">
   <aside class="side" id="side">
-    <div class="brand">🧪 {{ tr("Calibration Lab") }}<small>{{ tr("Management System") }}</small></div>
+    <div class="brand"><span class="brand-mark">DHM</span><div class="brand-text">🧪 {{ tr("Calibration Lab") }}<small>{{ tr("Management System") }}</small></div></div><button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
     <nav>
       {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
-      <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span>{{ tr("Home") }}</a>
+      <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span><span class="item-label">{{ tr("Home") }}</span></a>
       {% endif %}
 
       <div class="grp">{{ tr("Operations") }}</div>
       <details class="menu-group" {% if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status','work_orders','work_order_detail','update_work_order_status','calibration_reviews','decide_calibration_review') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status','work_orders','work_order_detail','update_work_order_status','calibration_reviews','decide_calibration_review') }}">{{ tr("Calibration workflow") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span>{{ tr("Requests") }}{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep in ('calibration_requests','new_calibration_request','calibration_request','update_calibration_request_status') }}" href="{{ url_for('calibration_requests') }}"><span class="ic">📝</span><span class="item-label">{{ tr("Requests") }}</span>{% if new_calibration_requests %}<span class="pill">{{ new_calibration_requests }}</span>{% endif %}</a>
           {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
-          <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span>{{ tr("Work orders") }}{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep in ('work_orders','work_order_detail','update_work_order_status') }}" href="{{ url_for('work_orders') }}"><span class="ic">🧾</span><span class="item-label">{{ tr("Work orders") }}</span>{% if work_order_count %}<span class="pill">{{ work_order_count }}</span>{% endif %}</a>
           {% endif %}
           {% if has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
-          <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span>{{ tr("Calibration review") }}{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep in ('calibration_reviews','decide_calibration_review') }}" href="{{ url_for('calibration_reviews') }}"><span class="ic">🔎</span><span class="item-label">{{ tr("Calibration review") }}</span>{% if calibration_review_count %}<span class="pill">{{ calibration_review_count }}</span>{% endif %}</a>
           {% endif %}
         </div>
       </details>
@@ -137,9 +140,9 @@
       <details class="menu-group" {% if ep in ('alerts','due') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('alerts','due') }}">{{ tr("Attention") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span>{{ tr("Notifications") }}{% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep == 'alerts' }}" href="{{ url_for('alerts') }}"><span class="ic">🔔</span><span class="item-label">{{ tr("Notifications") }}</span>{% if unread_notifications %}<span class="pill">{{ unread_notifications }}</span>{% endif %}</a>
           {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
-          <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span>{{ tr("Due & overdue") }}{% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
+          <a class="item {{ 'active' if ep == 'due' }}" href="{{ url_for('due') }}"><span class="ic">⏰</span><span class="item-label">{{ tr("Due & overdue") }}</span>{% if due_overdue_count %}<span class="pill">{{ due_overdue_count }}</span>{% endif %}</a>
           {% endif %}
         </div>
       </details>
@@ -147,18 +150,18 @@
       <details class="menu-group" {% if ep in ('register','sensor','calibrate','certificate','new_sensor','stations','standards','standard','new_standard','edit_standard') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('register','sensor','calibrate','certificate','new_sensor','stations','standards','standard','new_standard','edit_standard') }}">{{ tr("Laboratory") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span>{{ tr("Sensor register") }}</a>
-          <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span>{{ tr("Reference standards") }}{% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
-          {% if has_role('admin') or has_role('superadmin') %}<a class="item {{ 'active' if ep in ('procedures','procedure_detail','new_procedure','edit_procedure','toggle_procedure') }}" href="{{ url_for('procedures') }}"><span class="ic">📐</span>{{ tr("Calibration procedures") }}</a>{% endif %}
-          <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span>{{ tr("Stations") }}</a>
+          <a class="item {{ 'active' if ep in ('register','sensor','calibrate','certificate') }}" href="{{ url_for('register') }}"><span class="ic">📋</span><span class="item-label">{{ tr("Sensor register") }}</span></a>
+          <a class="item {{ 'active' if ep in ('standards','standard','new_standard','edit_standard') }}" href="{{ url_for('standards') }}"><span class="ic">📏</span><span class="item-label">{{ tr("Reference standards") }}</span>{% if std_alerts %}<span class="pill">{{ std_alerts }}</span>{% endif %}</a>
+          {% if has_role('admin') or has_role('superadmin') %}<a class="item {{ 'active' if ep in ('procedures','procedure_detail','new_procedure','edit_procedure','toggle_procedure') }}" href="{{ url_for('procedures') }}"><span class="ic">📐</span><span class="item-label">{{ tr("Calibration procedures") }}</span></a>{% endif %}
+          <a class="item {{ 'active' if ep == 'stations' }}" href="{{ url_for('stations') }}"><span class="ic">🏭</span><span class="item-label">{{ tr("Stations") }}</span></a>
         </div>
       </details>
 
       <details class="menu-group" {% if ep in ('calendar_view','export_csv','export_download') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('calendar_view','export_csv','export_download') }}">{{ tr("Tools & reports") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep == 'calendar_view' }}" href="{{ url_for('calendar_view') }}"><span class="ic">📅</span>{{ tr("Nepali calendar") }}</a>
-          <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span>{{ tr("Export data") }}</a>
+          <a class="item {{ 'active' if ep == 'calendar_view' }}" href="{{ url_for('calendar_view') }}"><span class="ic">📅</span><span class="item-label">{{ tr("Nepali calendar") }}</span></a>
+          <a class="item {{ 'active' if ep in ('export_csv','export_download') }}" href="{{ url_for('export_csv') }}"><span class="ic">⬇️</span><span class="item-label">{{ tr("Export data") }}</span></a>
         </div>
       </details>
 
@@ -167,9 +170,9 @@
       <details class="menu-group" {% if ep in ('users','audit_log','database_maintenance') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('users','audit_log','database_maintenance') }}">{{ tr("System administration") }}</summary>
         <div class="submenu">
-          <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span>{{ tr("Users & roles") }}</a>
-          <a class="item {{ 'active' if ep == 'audit_log' }}" href="{{ url_for('audit_log') }}"><span class="ic">🛡️</span>{{ tr("Audit log") }}</a>
-          <a class="item {{ 'active' if ep == 'database_maintenance' }}" href="{{ url_for('database_maintenance') }}"><span class="ic">🗄️</span>{{ tr("Database maintenance") }}</a>
+          <a class="item {{ 'active' if ep == 'users' }}" href="{{ url_for('users') }}"><span class="ic">👥</span><span class="item-label">{{ tr("Users & roles") }}</span></a>
+          <a class="item {{ 'active' if ep == 'audit_log' }}" href="{{ url_for('audit_log') }}"><span class="ic">🛡️</span><span class="item-label">{{ tr("Audit log") }}</span></a>
+          <a class="item {{ 'active' if ep == 'database_maintenance' }}" href="{{ url_for('database_maintenance') }}"><span class="ic">🗄️</span><span class="item-label">{{ tr("Database maintenance") }}</span></a>
         </div>
       </details>
       {% endif %}
@@ -182,7 +185,7 @@
           <button class="btn alt" style="padding:4px 12px">{{ tr("Sign out") }}</button></form></div></div>
   </aside>
   <div class="content">
-    <div class="topbar"><button onclick="document.getElementById('side').classList.toggle('open')" aria-label="Menu">☰</button><b>{{ tr("Calibration Lab") }}</b></div>
+    <div class="desktop-header"><button class="icon-btn" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">☰</button><div class="top-search"><form action="{{ url_for('register') }}" method="get"><input name="q" placeholder="{{ tr('Search sensors, stations, certificates or work orders…') }}" aria-label="{{ tr('Global search') }}"><button class="btn" type="submit">{{ tr("Search") }}</button></form></div><div class="header-actions"><a class="icon-btn" href="{{ url_for('alerts') }}" title="{{ tr('Notifications') }}">🔔{% if unread_notifications %}<small>{{ unread_notifications }}</small>{% endif %}</a><a class="icon-btn" href="{{ url_for('account') }}" title="{{ g.user.full_name }}">👤</a></div></div><div class="topbar"><button onclick="document.getElementById('side').classList.toggle('open')" aria-label="Menu">☰</button><b>{{ tr("Calibration Lab") }}</b></div>
 {% else %}
 <div class="plain"><div class="content">
 {% endif %}
@@ -196,6 +199,8 @@
   </div>
 {% if g.user %}</div>{% else %}</div>{% endif %}
 <script>
+function toggleSidebar(){const s=document.getElementById('side');if(window.innerWidth<=800){s.classList.toggle('open');return;}s.classList.toggle('collapsed');localStorage.setItem('calibration-sidebar-collapsed',s.classList.contains('collapsed')?'1':'0');}
+(function(){const s=document.getElementById('side');if(s&&window.innerWidth>800&&localStorage.getItem('calibration-sidebar-collapsed')==='1')s.classList.add('collapsed');})();
 document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
 // click any column heading of a table to sort it
 
