@@ -35,7 +35,7 @@
 <div><label>{{ tr("Calibration date") }}</label><div>{{ date_pair(calibration.cal_date) }}</div></div>
 <div><label>{{ tr("Overall result") }}</label><div><span class="badge {{ 'green' if calibration.result == 'PASS' else 'red' }}">{{ calibration.result }}</span></div></div>
 <div><label>{{ tr("Performed by") }}</label><div>{{ calibration.performed_by or '—' }}</div></div>
-<div><label>{{ tr("Reference standards used") }}</label><div>{% if calibration.reference_standard %}{{ calibration.reference_standard }}{% else %}—{% endif %}</div></div>
+<div><label>{{ tr("Reference standards used") }}</label><div>{% if calibration_standards %}{% for st in calibration_standards %}<span class="chip">{{ st.code }} — {{ st.name }}{% if loop.first %} · {{ tr("Primary") }}{% endif %}</span>{% endfor %}{% else %}{{ calibration.reference_standard or '—' }}{% endif %}</div></div>
 <div><label>{{ tr("Next due date") }}</label><div>{{ date_pair(calibration.next_due) }}</div></div>
 </div>
 <div class="scroll" style="margin-top:12px"><table><thead><tr><th>#</th><th>{{ tr("Reference value") }}</th><th>{{ tr("As-Found") }}</th><th>{{ tr("As-Left") }}</th><th>{{ tr("Error AF") }}</th><th>{{ tr("Error AL") }}</th><th>{{ tr("Tolerance") }}</th><th>{{ tr("Result") }}</th></tr></thead><tbody>
