@@ -35,7 +35,7 @@
       <div><label>{{ tr("Target completion date") }}</label><input type="date" name="target_date"></div>
       <div><label>{{ tr("Calibration procedure") }}</label><select name="procedure_id" required><option value="">{{ tr("Select controlled procedure") }}</option>{% for p in procedures %}<option value="{{ p.procedure_id }}">{{ p.code }} — {{ p.title }} ({{ tr("Rev.") }} {{ p.revision }})</option>{% endfor %}</select></div>
 <div><label>{{ tr("Method / additional reference") }}</label><input name="calibration_method"></div>
-      <div><label>{{ tr("Reference standard") }}</label><select name="standard_id"><option value="">{{ tr("Select later / not specified") }}</option>{% for s in standards %}<option value="{{ s.standard_id }}">{{ s.code }} — {{ s.name }}</option>{% endfor %}</select></div>
+      <div><label>{{ tr("Reference standards") }}</label><select name="standard_id" class="multi-select" multiple size="6" required>{% for s in standards %}<option value="{{ s.standard_id }}">{{ s.code }} — {{ s.name }} ({{ tr("valid until") }} {{ s.valid_until }})</option>{% endfor %}</select><small class="hint">{{ tr("Select every reference standard designated for these work orders. The first selected standard is the primary standard.") }}</small></div>
     </div>
     <div style="margin-top:10px"><label>{{ tr("Technician instructions") }}</label><textarea name="instructions" rows="2"></textarea></div>
     <button class="btn" style="margin-top:10px" onclick="return confirm('{{ tr("Assign all selected requests?") }}')">{{ tr("Assign selected requests") }}</button>
