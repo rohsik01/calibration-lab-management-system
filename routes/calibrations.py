@@ -97,6 +97,58 @@ def build_offline_certificate_payload(r, pts, standards):
 
 
 
+
+@app.route("/qr-reader")
+@app.route("/qr-reader/")
+def qr_reader():
+    """Public offline-first DHM certificate QR reader."""
+    return render_template("qr_reader.html")
+
+
+@app.route("/qr-reader/manifest.webmanifest")
+def qr_reader_manifest():
+    """PWA manifest for the offline DHM QR reader."""
+    return Response(
+        json.dumps({
+            "name": "DHM Offline QR Reader",
+            "short_name": "DHM QR Reader",
+            "start_url": "/qr-reader/",
+            "scope": "/qr-reader/",
+            "display": "standalone",
+            "background_color": "#f4f6f8",
+            "theme_color": "#17365d",
+            "description": "Offline reader for DHM calibration certificate QR records.",
+            "icons": [],
+        }),
+        mimetype="application/manifest+json",
+    )
+
+
+@app.route("/qr-reader/sw.js")
+def qr_reader_service_worker():
+    """Serve the reader service worker with permission to control /qr-reader/."""
+    worker = """const CACHE = "dhm-qr-reader-v1";
+const APP = "/qr-reader/";
+self.addEventListener("install", event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll([APP, "/qr-reader/manifest.webmanifest"])).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    const copy = response.clone();
+    caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    return response;
+  }).catch(() => caches.match(APP))));
+});"""
+    response = Response(worker, mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/qr-reader/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 def selected_reference_standards(db, form, cal_date, required_standard_ids=None):
     """Validate and snapshot one or more registered reference standards for a calibration."""
     required_standard_ids = [int(x) for x in (required_standard_ids or [])]
