@@ -21,6 +21,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+configurations.all {
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-stdlib:1.8.22")
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22")
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22")
+}
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
