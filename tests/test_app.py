@@ -831,3 +831,19 @@ def test_offline_qr_reader_service_worker_is_scoped_to_reader():
     route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
     assert 'Service-Worker-Allowed' in route
     assert '"/qr-reader/"' in route
+
+def test_global_search_and_toolbox_routes_are_registered():
+    app_source = Path(__file__).resolve().parents[1] / "app.py"
+    base_source = Path(__file__).resolve().parents[1] / "templates" / "base.html"
+    search_source = Path(__file__).resolve().parents[1] / "routes" / "search.py"
+    toolbox_source = Path(__file__).resolve().parents[1] / "routes" / "toolbox.py"
+    toolbox_template = Path(__file__).resolve().parents[1] / "templates" / "toolbox.html"
+    trace_template = Path(__file__).resolve().parents[1] / "templates" / "certificate_traceability.html"
+    assert "routes import sensors, calibrations, notifications, standards, reports, database, procedures, search, toolbox" in app_source.read_text(encoding="utf-8")
+    assert 'form action="{{ url_for(\'global_search\') }}"' in base_source.read_text(encoding="utf-8")
+    assert '@app.route("/search")' in search_source.read_text(encoding="utf-8")
+    assert "Sensors" in search_source.read_text(encoding="utf-8")
+    assert '@app.route("/toolbox")' in toolbox_source.read_text(encoding="utf-8")
+    assert '@app.route("/traceability/certificate/<cert>")' in toolbox_source.read_text(encoding="utf-8")
+    assert "Percentage error" in toolbox_template.read_text(encoding="utf-8")
+    assert "Reference standards used" in trace_template.read_text(encoding="utf-8")
