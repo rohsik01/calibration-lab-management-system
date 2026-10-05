@@ -847,9 +847,15 @@ with sqlite3.connect(DB, timeout=30) as _c:
             lifecycle_status TEXT NOT NULL DEFAULT 'DRAFT', created_at TEXT, updated_at TEXT,
             approved_by INTEGER, approved_at TEXT, procedure_id INTEGER
         )""")
+        # Copy only columns that exist in both the legacy and rebuilt schemas.
+        # Columns introduced by the new schema (for example certificate_status and
+        # certificate_fingerprint) must be left to their declared defaults when
+        # upgrading an older database.
+        _cal_old_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations)")]
         _cal_new_cols = [r[1] for r in _c.execute("PRAGMA table_info(calibrations_new_afal)")]
-        _copy_cols = ", ".join(_cal_new_cols)
-        _c.execute(f"INSERT INTO calibrations_new_afal ({_copy_cols}) SELECT {_copy_cols} FROM calibrations")
+        _copy_cols = [col for col in _cal_new_cols if col in _cal_old_cols]
+        _copy_sql = ", ".join(_copy_cols)
+        _c.execute(f"INSERT INTO calibrations_new_afal ({_copy_sql}) SELECT {_copy_sql} FROM calibrations")
         _c.execute("DROP TABLE calibrations")
         _c.execute("ALTER TABLE calibrations_new_afal RENAME TO calibrations")
 
