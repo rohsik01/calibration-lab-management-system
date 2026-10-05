@@ -217,13 +217,32 @@ def test_certificate_verification_token_is_stable_and_nontrivial():
     assert len(first) == 40
 
 
-def test_certificate_verification_uses_compact_signed_url_not_embedded_measurement_payload():
-    route_path = Path(__file__).resolve().parents[1] / "routes" / "calibrations.py"
-    source = route_path.read_text(encoding="utf-8")
-    assert "certificate_verification_url" in source
-    assert "qr_code = _qr_data_uri(verification_url)" in source
-    assert "NO WEB / LOCALHOST LINK" not in source
-    assert '@app.route("/verify/<cert>/<token>")' in source
+def test_certificate_qr_contains_a_complete_offline_record():
+    root = Path(__file__).resolve().parents[1]
+    route_source = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    template_source = root.joinpath("templates", "certificate.html").read_text(encoding="utf-8")
+    assert "def build_offline_certificate_payload" in route_source
+    assert '"type": "DHM-CAL-OFFLINE"' in route_source
+    assert '"measurements"' in route_source
+    assert '"reference_standards"' in route_source
+    assert '"uncertainty"' in route_source
+    assert "qr_code = _qr_data_uri(offline_payload)" in route_source
+    assert "does not require internet" in template_source
+    assert '@app.route("/verify/<cert>/<token>")' in route_source
+
+
+def test_certificate_is_a5_portrait_and_shows_only_field_essential_information():
+    root = Path(__file__).resolve().parents[1]
+    template = root.joinpath("templates", "certificate.html").read_text(encoding="utf-8")
+    route = root.joinpath("routes", "calibrations.py").read_text(encoding="utf-8")
+    assert "width:148mm;height:210mm" in template
+    assert "FIELD INSTALLATION IDENTITY" in template
+    assert 'r.sensor_id' in template
+    assert 'r.serial_number' in template
+    assert 'r.station' in template
+    assert 'r.next_due' in template
+    assert "pagesize=A5" in route
+    assert "offline_payload" in route
 
 
 def test_certificate_integrity_and_lifecycle_controls_are_present():
