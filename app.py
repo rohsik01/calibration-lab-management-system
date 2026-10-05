@@ -1777,7 +1777,7 @@ if __name__ == "__main__":
 
 # Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
-from routes import sensors, calibrations, notifications, standards, reports, database, procedures
+from routes import sensors, calibrations, notifications, standards, reports, database, procedures, search, toolbox
 
 # Navigation counters use these notification helpers after all route modules load.
 from routes.notifications import build_operational_alerts, sync_notifications
