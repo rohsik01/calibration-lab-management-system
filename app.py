@@ -1704,6 +1704,7 @@ def gate():
         allowed = {"index", "calibration_requests", "new_calibration_request",
                    "calibration_request", "certificate", "certificate_pdf", "verify_certificate", "account", "logout",
                    "alerts", "mark_notification_read", "mark_all_notifications_read",
+                   "global_search", "toolbox", "certificate_traceability",
                    "set_lang", "static"}
         if request.endpoint not in allowed:
             abort(403)
