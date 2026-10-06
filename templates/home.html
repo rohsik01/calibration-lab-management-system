@@ -1,6 +1,10 @@
 {% extends "base.html" %}{% block title %}{{ tr("Home") }} · {{ tr("Calibration Lab") }}{% endblock %}
 {% block banner %}
 <div class="office-branding" role="banner" aria-label="Government of Nepal office">
+  <div class="office-branding-actions">
+    <a class="icon-btn" href="{{ url_for('alerts') }}" title="{{ tr('Notifications') }}">🔔{% if unread_notifications %}<small>{{ unread_notifications }}</small>{% endif %}</a>
+    <a class="icon-btn" href="{{ url_for('account') }}" title="{{ g.user.full_name }}">👤</a>
+  </div>
   <img class="office-branding-logo"
        src="https://upload.wikimedia.org/wikipedia/commons/2/23/Emblem_of_Nepal.svg"
        alt="Government of Nepal emblem"
@@ -25,10 +29,6 @@
       <input name="q" placeholder="{{ tr('Search sensors, stations, certificates or work orders…') }}" aria-label="{{ tr('Global search') }}">
       <button class="btn" type="submit">{{ tr("Search") }}</button>
     </form>
-  </div>
-  <div class="home-header-actions">
-    <a class="icon-btn" href="{{ url_for('alerts') }}" title="{{ tr('Notifications') }}">🔔{% if unread_notifications %}<small>{{ unread_notifications }}</small>{% endif %}</a>
-    <a class="icon-btn" href="{{ url_for('account') }}" title="{{ g.user.full_name }}">👤</a>
   </div>
 </div>{% endblock %}
 
