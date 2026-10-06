@@ -69,6 +69,9 @@
   .home-header-actions { display:none; }
   .home-search-panel { display:flex; justify-content:flex-end; flex:0 1 620px; min-width:280px; }
   .home-search-panel form { display:flex; gap:8px; width:min(620px,100%); }
+  .home-hero-search { flex:1 1 520px; min-width:320px; }
+  .home-hero-search form { width:100%; }
+  @media (max-width:700px) { .home-hero-search { flex-basis:100%; min-width:0; } }
   .home-search-panel input { flex:1; min-width:0; }
   .home-sensor-panel { display:flex; align-items:center; gap:10px; margin:-8px 0 16px; }
   .home-sensor-label { font-size:14px; font-weight:700; color:var(--mute); }
