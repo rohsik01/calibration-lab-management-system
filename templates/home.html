@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}{{ tr("Home") }} · {{ tr("Calibration Lab") }}{% endblock %}
-{% block banner %}<div class="home-identity"><div class="logo-mark" aria-label="DHM">DHM</div><div><div class="institution">{{ tr("Government of Nepal · Department of Hydrology and Meteorology") }}</div><div class="system-name">{{ tr("Calibration Laboratory Management System") }}</div><div class="location">{{ tr("Office of Hydrology and Meteorology · Dharan") }}</div></div></div>{% endblock %}
+{% block banner %}{% endblock %}
 {% block content %}
 <div class="card hero"><div class="hero-copy">
   <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
