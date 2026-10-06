@@ -19,9 +19,11 @@
        loading="eager">
 </div>
 {% endblock %}
-<div class="home-sensor-panel">
-  <span class="home-sensor-label">Sensor</span>
-  <a class="btn alt" href="{{ url_for('register') }}">View sensors</a>
+<div class="home-search-panel">
+  <form action="{{ url_for('register') }}" method="get">
+    <input name="q" placeholder="{{ tr('Search sensors, stations, certificates or work orders…') }}" aria-label="{{ tr('Global search') }}">
+    <button class="btn" type="submit">{{ tr("Search") }}</button>
+  </form>
 </div>
 {% block content %}
 <div class="card hero"><div class="hero-copy">
