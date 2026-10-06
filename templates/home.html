@@ -3,8 +3,6 @@
 {% block content %}
 <div class="card hero"><div class="hero-copy">
   <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
-  <form class="search" action="{{ url_for('register') }}" method="get">
-    <input name="q" placeholder="{{ tr('Find a sensor by ID, type, station or serial…') }}" aria-label="{{ tr('Search sensors') }}"><button class="btn">{{ tr("Search") }}</button></form>
 </div>
 
 {% if counts.total == 0 %}
