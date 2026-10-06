@@ -46,6 +46,22 @@
   .home-identity { display:flex; align-items:center; gap:16px; padding:18px 20px; margin-bottom:20px; background:#fff; border:1px solid var(--line); border-radius:12px; } .home-identity .logo-mark { width:64px; height:64px; border-radius:14px; background:var(--side); color:#fff; display:grid; place-items:center; font-size:18px; font-weight:900; } .home-identity .institution { font-size:13px; color:var(--mute); } .home-identity .system-name { font-size:20px; font-weight:800; color:#14203a; } .home-identity .location { font-size:12px; color:var(--mute); }
   .banner { text-align:center; line-height:1.4; padding:4px 0 12px; border-bottom:3px double #b6202f; margin-bottom:14px; }
   .card .banner { border-bottom:0; margin:0; padding:2px 0; }
+  .office-branding { display:grid; grid-template-columns:96px 1fr 96px; align-items:center; gap:18px; padding:14px 18px; margin:0 0 20px; background:#fff; border:1px solid var(--line); border-radius:12px; min-height:104px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .office-branding-logo { width:82px; height:82px; object-fit:contain; justify-self:center; }
+  .office-branding-text { text-align:center; line-height:1.35; color:#14203a; }
+  .office-branding-text > div:first-child { font-size:16px; font-weight:800; color:#b6202f; }
+  .office-branding-text > div:nth-child(2) { font-size:15px; font-weight:700; }
+  .office-branding-department { font-size:20px; font-weight:900; }
+  .office-branding-location { font-size:13px; color:var(--mute); font-weight:600; margin-top:2px; }
+  .office-branding-flag { width:78px; height:78px; object-fit:contain; justify-self:center; }
+  @media (max-width:700px) {
+    .office-branding { grid-template-columns:58px 1fr 58px; gap:8px; padding:10px; min-height:78px; }
+    .office-branding-logo, .office-branding-flag { width:54px; height:54px; }
+    .office-branding-text > div:first-child { font-size:13px; }
+    .office-branding-text > div:nth-child(2) { font-size:11px; }
+    .office-branding-department { font-size:15px; }
+    .office-branding-location { font-size:10px; }
+  }
   .banner .b1 { font-size:15px; font-weight:700; color:#b6202f; } .banner .b2 { font-size:15px; font-weight:600; }
   .banner .b3 { font-size:20px; font-weight:800; color:#14203a; } .banner .b4 { font-size:13px; color:var(--mute); }
   .only-print { display:none; }
