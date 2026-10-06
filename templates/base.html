@@ -37,16 +37,16 @@
   .langbar { text-align:right; margin-bottom:10px; font-size:13px; } .langbar a { color:var(--mute); margin-left:10px; text-decoration:none; }
   .langbar a.on { color:var(--brand); font-weight:700; text-decoration:underline; }
   .content { flex:1; min-width:0; }
-  .desktop-header { display:flex; align-items:center; gap:12px; padding:4px 24px 0; max-width:1200px; margin:0 auto; min-height:38px; } .gov-header-mark { width:46px; height:46px; object-fit:contain; flex:0 0 auto; } .gov-header-title { font-size:12px; line-height:1.2; color:var(--mute); white-space:nowrap; } .gov-header-title strong { display:block; color:#7c1816; font-size:13px; } .desktop-header .top-search { flex:1; max-width:520px; } .desktop-header .top-search form { display:flex; gap:8px; } .desktop-header .header-actions { display:flex; gap:8px; margin-left:auto; } .icon-btn { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:8px; min-width:38px; height:38px; cursor:pointer; text-decoration:none; display:grid; place-items:center; } .icon-btn:hover { border-color:var(--brand); color:var(--brand); }
+  .desktop-header { display:none; } .gov-header-mark { width:46px; height:46px; object-fit:contain; flex:0 0 auto; } .gov-header-title { font-size:12px; line-height:1.2; color:var(--mute); white-space:nowrap; } .gov-header-title strong { display:block; color:#7c1816; font-size:13px; } .desktop-header .top-search { flex:1; max-width:520px; } .desktop-header .top-search form { display:flex; gap:8px; } .desktop-header .header-actions { display:flex; gap:8px; margin-left:auto; } .icon-btn { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:8px; min-width:38px; height:38px; cursor:pointer; text-decoration:none; display:grid; place-items:center; } .icon-btn:hover { border-color:var(--brand); color:var(--brand); }
   .topbar { display:none; background:var(--side); color:#fff; padding:10px 14px; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
   .topbar button { background:none; border:0; color:#fff; font-size:22px; cursor:pointer; }
-  main { max-width:1200px; margin:0 auto; padding:8px 24px 60px; }
+  main { max-width:1200px; margin:0 auto; padding:0 24px 60px; }
   .plain main { max-width:520px; margin-top:24px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
   .home-identity { display:flex; align-items:center; gap:16px; padding:18px 20px; margin-bottom:20px; background:#fff; border:1px solid var(--line); border-radius:12px; } .home-identity .logo-mark { width:64px; height:64px; border-radius:14px; background:var(--side); color:#fff; display:grid; place-items:center; font-size:18px; font-weight:900; } .home-identity .institution { font-size:13px; color:var(--mute); } .home-identity .system-name { font-size:20px; font-weight:800; color:#14203a; } .home-identity .location { font-size:12px; color:var(--mute); }
   .banner { text-align:center; line-height:1.4; padding:4px 0 12px; border-bottom:3px double #b6202f; margin-bottom:14px; }
   .card .banner { border-bottom:0; margin:0; padding:2px 0; }
-  .office-branding { position:relative; display:grid; grid-template-columns:96px 1fr 96px; align-items:center; gap:18px; padding:10px 18px; margin:0 0 10px; background:#fff; border:1px solid var(--line); border-radius:12px; min-height:96px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .office-branding { position:relative; display:grid; grid-template-columns:96px 1fr 130px; align-items:center; gap:18px; padding:10px 18px; margin:0 0 10px; background:#fff; border:1px solid var(--line); border-radius:12px; min-height:96px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
   .office-branding-actions { position:absolute; top:10px; right:12px; display:flex; gap:8px; z-index:2; }
   .office-branding-actions .icon-btn { position:relative; }
   .office-branding-actions .icon-btn small { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:var(--red); color:#fff; font-size:10px; line-height:16px; text-align:center; }
@@ -56,10 +56,10 @@
   .office-branding-text > div:nth-child(2) { font-size:15px; font-weight:700; }
   .office-branding-department { font-size:20px; font-weight:900; }
   .office-branding-location { font-size:13px; color:var(--mute); font-weight:600; margin-top:2px; }
-  .office-branding-flag { width:78px; height:78px; object-fit:contain; justify-self:center; }
+  .office-branding-flag { width:70px; height:70px; object-fit:contain; justify-self:start; margin-top:18px; }
   @media (max-width:700px) {
-    .office-branding { grid-template-columns:58px 1fr 58px; gap:8px; padding:10px; min-height:78px; }
-    .office-branding-logo, .office-branding-flag { width:54px; height:54px; }
+    .office-branding { grid-template-columns:58px 1fr 58px; gap:8px; padding:10px; min-height:86px; }
+    .office-branding-logo { width:54px; height:54px; } .office-branding-flag { width:42px; height:42px; margin-top:24px; justify-self:start; }
     .office-branding-text > div:first-child { font-size:13px; }
     .office-branding-text > div:nth-child(2) { font-size:11px; }
     .office-branding-department { font-size:15px; }
