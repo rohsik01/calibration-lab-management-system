@@ -19,6 +19,7 @@ from routes.calibrations import calibration_delete_blocked, selected_reference_s
 from routes.sensors import sensor_delete_blocked
 from routes.users import is_last_active_superadmin
 from routes.work_orders import WORK_ORDER_STATUS_TRANSITIONS, selected_work_order_standards, persist_work_order_reference_standards
+from routes.quality import QUALITY_TRANSITIONS
 from app import validate_calibration_record_for_submission
 
 
