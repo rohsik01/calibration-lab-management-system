@@ -13,6 +13,6 @@
 </div>
 <div class="two">
 <div class="card"><h2>🚨 Critical / major open events</h2>{% if critical %}<table><tr><th>NC</th><th>Severity</th><th>Title</th><th>Status</th></tr>{% for x in critical %}<tr><td><a href="{{ url_for('quality_nonconformity',nc_id=x.nc_id) }}">{{ x.nc_no }}</a></td><td><span class="badge {{ 'red' if x.severity=='CRITICAL' else 'amber' }}">{{ x.severity }}</span></td><td>{{ x.title }}</td><td>{{ x.status }}</td></tr>{% endfor %}</table>{% else %}<div class="empty">No critical or major open quality events.</div>{% endif %}</div>
-<div class="card"><h2>🕘 Recent quality events</h2>{% if recent %}<table><tr><th>NC</th><th>Title</th><th>Status</th></tr>{% for x in recent %}<tr><td><a href="{{ url_for('quality_nonconformity',nc_id=x.nc_id) }}">{{ x.nc_no }}</a></td><td>{{ x.title }}</td><td>{{ x.status }}</td></tr>{% endfor %}</table>{% else %}<div class="empty">No quality events recorded.</div>{% endif %}</table>{% endif %}</div>
+<div class="card"><h2>🕘 Recent quality events</h2>{% if recent %}<table><tr><th>NC</th><th>Title</th><th>Status</th></tr>{% for x in recent %}<tr><td><a href="{{ url_for('quality_nonconformity',nc_id=x.nc_id) }}">{{ x.nc_no }}</a></td><td>{{ x.title }}</td><td>{{ x.status }}</td></tr>{% endfor %}</table>{% else %}<div class="empty">No quality events recorded.</div>{% endif %}</div>
 </div>
 {% endblock %}
