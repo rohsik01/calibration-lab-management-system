@@ -117,7 +117,7 @@
 {% if g.user %}
 <div class="app">
   <aside class="side" id="side">
-    <div class="brand"><img class="brand-mark" src="https://upload.wikimedia.org/wikipedia/commons/2/23/Emblem_of_Nepal.svg" alt="नेपाल सरकार / Government of Nepal" title="नेपाल सरकार / Government of Nepal" referrerpolicy="no-referrer"><div class="brand-text"><span class="office-ne">नेपाल सरकार</span><span class="office-en">Government of Nepal</span><small>Office of Hydrology and Meteorology, Dharan<br>Koshi &amp; Madhesh Provinces</small></div></div><button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
+    <div class="brand"><div class="brand-text"><strong>DHM</strong><small>{{ tr("Calibration Lab") }}<br>{{ tr("Management System") }}</small></div></div><button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
     <nav>
       {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span><span class="item-label">{{ tr("Home") }}</span></a>
