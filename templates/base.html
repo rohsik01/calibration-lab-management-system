@@ -46,7 +46,10 @@
   .home-identity { display:flex; align-items:center; gap:16px; padding:18px 20px; margin-bottom:20px; background:#fff; border:1px solid var(--line); border-radius:12px; } .home-identity .logo-mark { width:64px; height:64px; border-radius:14px; background:var(--side); color:#fff; display:grid; place-items:center; font-size:18px; font-weight:900; } .home-identity .institution { font-size:13px; color:var(--mute); } .home-identity .system-name { font-size:20px; font-weight:800; color:#14203a; } .home-identity .location { font-size:12px; color:var(--mute); }
   .banner { text-align:center; line-height:1.4; padding:4px 0 12px; border-bottom:3px double #b6202f; margin-bottom:14px; }
   .card .banner { border-bottom:0; margin:0; padding:2px 0; }
-  .office-branding { display:grid; grid-template-columns:96px 1fr 96px; align-items:center; gap:18px; padding:10px 18px; margin:0 0 10px; background:#fff; border:1px solid var(--line); border-radius:12px; min-height:96px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .office-branding { position:relative; display:grid; grid-template-columns:96px 1fr 96px; align-items:center; gap:18px; padding:10px 18px; margin:0 0 10px; background:#fff; border:1px solid var(--line); border-radius:12px; min-height:96px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .office-branding-actions { position:absolute; top:10px; right:12px; display:flex; gap:8px; z-index:2; }
+  .office-branding-actions .icon-btn { position:relative; }
+  .office-branding-actions .icon-btn small { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:var(--red); color:#fff; font-size:10px; line-height:16px; text-align:center; }
   .office-branding-logo { width:82px; height:82px; object-fit:contain; justify-self:center; }
   .office-branding-text { text-align:center; line-height:1.35; color:#14203a; }
   .office-branding-text > div:first-child { font-size:16px; font-weight:800; color:#b6202f; }
@@ -63,9 +66,7 @@
     .office-branding-location { font-size:10px; }
   }
   .home-search-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:-8px 0 16px; flex-wrap:wrap; }
-  .home-header-actions { display:flex; justify-content:flex-start; align-items:center; gap:8px; }
-  .home-header-actions .icon-btn { position:relative; }
-  .home-header-actions .icon-btn small { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:var(--red); color:#fff; font-size:10px; line-height:16px; text-align:center; }
+  .home-header-actions { display:none; }
   .home-search-panel { display:flex; justify-content:flex-start; flex:0 1 620px; min-width:280px; }
   .home-search-panel form { display:flex; gap:8px; width:min(620px,100%); }
   .home-search-panel input { flex:1; min-width:0; }
