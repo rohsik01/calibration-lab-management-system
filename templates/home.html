@@ -19,6 +19,10 @@
        loading="eager">
 </div>
 {% endblock %}
+<div class="home-sensor-panel">
+  <span class="home-sensor-label">Sensor</span>
+  <a class="btn alt" href="{{ url_for('register') }}">View sensors</a>
+</div>
 {% block content %}
 <div class="card hero"><div class="hero-copy">
   <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
