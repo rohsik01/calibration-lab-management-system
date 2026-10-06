@@ -322,6 +322,97 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+
+CREATE TABLE IF NOT EXISTS quality_nonconformities (
+    nc_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nc_no TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN'
+        CHECK (status IN ('OPEN','CONTAINED','INVESTIGATING','CAPA','VERIFICATION','CLOSED','CANCELLED')),
+    severity TEXT NOT NULL DEFAULT 'MEDIUM'
+        CHECK (severity IN ('LOW','MEDIUM','MAJOR','CRITICAL')),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    detected_at TEXT NOT NULL,
+    detected_by INTEGER REFERENCES users(user_id),
+    source_type TEXT,
+    source_id TEXT,
+    cal_id INTEGER REFERENCES calibrations(cal_id),
+    certificate_no TEXT,
+    standard_id INTEGER REFERENCES reference_standards(standard_id),
+    sensor_id TEXT REFERENCES sensors(sensor_id),
+    immediate_action TEXT,
+    impact_assessment TEXT,
+    root_cause_category TEXT,
+    root_cause TEXT,
+    customer_notification TEXT,
+    containment_status TEXT,
+    due_date TEXT,
+    closed_at TEXT,
+    closed_by INTEGER REFERENCES users(user_id),
+    verification_notes TEXT,
+    effectiveness TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_quality_nc_status ON quality_nonconformities(status,severity,nc_id DESC);
+CREATE INDEX IF NOT EXISTS idx_quality_nc_cal ON quality_nonconformities(cal_id);
+CREATE INDEX IF NOT EXISTS idx_quality_nc_standard ON quality_nonconformities(standard_id);
+CREATE INDEX IF NOT EXISTS idx_quality_nc_certificate ON quality_nonconformities(certificate_no);
+
+CREATE TABLE IF NOT EXISTS quality_impacts (
+    impact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nc_id INTEGER NOT NULL REFERENCES quality_nonconformities(nc_id) ON DELETE CASCADE,
+    cal_id INTEGER NOT NULL REFERENCES calibrations(cal_id),
+    impact_type TEXT NOT NULL DEFAULT 'MANUAL',
+    impact_status TEXT NOT NULL DEFAULT 'UNASSESSED',
+    disposition TEXT DEFAULT 'UNASSESSED',
+    notes TEXT,
+    reviewed_by INTEGER REFERENCES users(user_id),
+    reviewed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(nc_id,cal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_quality_impacts_nc ON quality_impacts(nc_id);
+CREATE INDEX IF NOT EXISTS idx_quality_impacts_cal ON quality_impacts(cal_id);
+
+CREATE TABLE IF NOT EXISTS quality_actions (
+    action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nc_id INTEGER NOT NULL REFERENCES quality_nonconformities(nc_id) ON DELETE CASCADE,
+    action_type TEXT NOT NULL CHECK (action_type IN ('CONTAINMENT','CORRECTION','CORRECTIVE','PREVENTIVE')),
+    description TEXT NOT NULL,
+    owner_id INTEGER REFERENCES users(user_id),
+    due_date TEXT,
+    completed_at TEXT,
+    completed_by INTEGER REFERENCES users(user_id),
+    verification_status TEXT DEFAULT 'PENDING'
+        CHECK (verification_status IN ('PENDING','EFFECTIVE','INEFFECTIVE','NOT_REQUIRED')),
+    verification_notes TEXT,
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_quality_actions_nc ON quality_actions(nc_id);
+CREATE INDEX IF NOT EXISTS idx_quality_actions_due ON quality_actions(due_date,completed_at);
+
+CREATE TABLE IF NOT EXISTS quality_history (
+    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nc_id INTEGER NOT NULL REFERENCES quality_nonconformities(nc_id) ON DELETE CASCADE,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    changed_by INTEGER REFERENCES users(user_id),
+    comments TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_quality_history_nc ON quality_history(nc_id,history_id DESC);
+
+CREATE TABLE IF NOT EXISTS quality_action_verifications (
+    verification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_id INTEGER NOT NULL REFERENCES quality_actions(action_id) ON DELETE CASCADE,
+    verified_by INTEGER REFERENCES users(user_id),
+    verified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL CHECK (status IN ('EFFECTIVE','INEFFECTIVE','NOT_REQUIRED')),
+    notes TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_quality_verification_action ON quality_action_verifications(action_id,verification_id DESC);
 """
 
 LATEST = """
@@ -1705,6 +1796,9 @@ def gate():
                    "calibration_request", "certificate", "certificate_pdf", "verify_certificate", "account", "logout",
                    "alerts", "mark_notification_read", "mark_all_notifications_read",
                    "global_search", "toolbox", "certificate_traceability",
+                   "quality_dashboard", "quality_nonconformities", "new_nonconformity",
+                   "quality_nonconformity", "quality_status", "quality_action",
+                   "quality_action_complete", "quality_impact", "quality_update",
                    "set_lang", "static"}
         if request.endpoint not in allowed:
             abort(403)
@@ -1778,7 +1872,7 @@ if __name__ == "__main__":
 
 # Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
-from routes import sensors, calibrations, notifications, standards, reports, database, procedures, search, toolbox
+from routes import sensors, calibrations, notifications, standards, reports, database, procedures, search, toolbox, quality
 
 # Navigation counters use these notification helpers after all route modules load.
 from routes.notifications import build_operational_alerts, sync_notifications

@@ -157,6 +157,16 @@
         </div>
       </details>
 
+      {% if has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
+      <details class="menu-group" {% if ep in ('quality_dashboard','quality_nonconformities','new_nonconformity','quality_nonconformity','quality_status','quality_action','quality_action_complete','quality_action_verify','quality_impact','quality_update') %}open{% endif %}>
+        <summary class="{{ 'active' if ep in ('quality_dashboard','quality_nonconformities','new_nonconformity','quality_nonconformity','quality_status','quality_action','quality_action_complete','quality_action_verify','quality_impact','quality_update') }}">{{ tr("Quality management") }}</summary>
+        <div class="submenu">
+          <a class="item {{ 'active' if ep == 'quality_dashboard' }}" href="{{ url_for('quality_dashboard') }}"><span class="ic">🛡️</span><span class="item-label">{{ tr("Quality dashboard") }}</span></a>
+          <a class="item {{ 'active' if ep in ('quality_nonconformities','new_nonconformity','quality_nonconformity','quality_status','quality_action','quality_action_complete','quality_action_verify','quality_impact','quality_update') }}" href="{{ url_for('quality_nonconformities') }}"><span class="ic">⚠️</span><span class="item-label">{{ tr("Nonconforming work") }}</span></a>
+        </div>
+      </details>
+      {% endif %}
+
       <details class="menu-group" {% if ep in ('calendar_view','export_csv','export_download') %}open{% endif %}>
         <summary class="{{ 'active' if ep in ('calendar_view','export_csv','export_download') }}">{{ tr("Tools & reports") }}</summary>
         <div class="submenu">

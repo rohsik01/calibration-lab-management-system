@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Quality management") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>🛡️ {{ tr("Quality management") }}</h1><p class="sub">Nonconforming work, impact assessment, corrective action and closure.</p></div><div class="actions"><a class="btn" href="{{ url_for('new_nonconformity') }}">+ {{ tr("Report nonconformity") }}</a><a class="btn alt" href="{{ url_for('quality_nonconformities') }}">{{ tr("All quality events") }}</a></div></div>
+<div class="stats">
+<a class="stat red" href="{{ url_for('quality_nonconformities',status='OPEN') }}"><span class="n">{{ counts.OPEN }}</span><span class="sub">Open</span></a>
+<a class="stat amber" href="{{ url_for('quality_nonconformities',status='CONTAINED') }}"><span class="n">{{ counts.CONTAINED }}</span><span class="sub">Contained</span></a>
+<a class="stat amber" href="{{ url_for('quality_nonconformities',status='INVESTIGATING') }}"><span class="n">{{ counts.INVESTIGATING }}</span><span class="sub">Investigating</span></a>
+<a class="stat brand" href="{{ url_for('quality_nonconformities',status='CAPA') }}"><span class="n">{{ counts.CAPA }}</span><span class="sub">CAPA</span></a>
+<a class="stat green" href="{{ url_for('quality_nonconformities',status='VERIFICATION') }}"><span class="n">{{ counts.VERIFICATION }}</span><span class="sub">Verification</span></a>
+<div class="stat grey"><span class="n">{{ counts.CLOSED }}</span><span class="sub">Closed</span></div>
+<div class="stat red"><span class="n">{{ overdue }}</span><span class="sub">Overdue actions</span></div>
+</div>
+<div class="two">
+<div class="card"><h2>🚨 Critical / major open events</h2>{% if critical %}<table><tr><th>NC</th><th>Severity</th><th>Title</th><th>Status</th></tr>{% for x in critical %}<tr><td><a href="{{ url_for('quality_nonconformity',nc_id=x.nc_id) }}">{{ x.nc_no }}</a></td><td><span class="badge {{ 'red' if x.severity=='CRITICAL' else 'amber' }}">{{ x.severity }}</span></td><td>{{ x.title }}</td><td>{{ x.status }}</td></tr>{% endfor %}</table>{% else %}<div class="empty">No critical or major open quality events.</div>{% endif %}</div>
+<div class="card"><h2>🕘 Recent quality events</h2>{% if recent %}<table><tr><th>NC</th><th>Title</th><th>Status</th></tr>{% for x in recent %}<tr><td><a href="{{ url_for('quality_nonconformity',nc_id=x.nc_id) }}">{{ x.nc_no }}</a></td><td>{{ x.title }}</td><td>{{ x.status }}</td></tr>{% endfor %}</table>{% else %}<div class="empty">No quality events recorded.</div>{% endif %}</div>
+</div>
+{% endblock %}

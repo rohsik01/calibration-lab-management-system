@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Report nonconformity") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>⚠️ {{ tr("Report nonconformity") }}</h1><p class="sub">Register the event first; containment, impact assessment and CAPA continue on the controlled record.</p></div></div>
+<form method="post"><div class="card"><h2>Event</h2><div class="grid">
+<div><label>Title *</label><input name="title" required></div><div><label>Severity *</label><select name="severity"><option>LOW</option><option selected>MEDIUM</option><option>MAJOR</option><option>CRITICAL</option></select></div>
+<div><label>Detected date</label><input type="date" name="detected_at" value="{{ today }}"></div><div><label>Source</label><select name="source_type"><option>CALIBRATION</option><option>REFERENCE_STANDARD</option><option>CERTIFICATE</option><option>PROCEDURE</option><option>EQUIPMENT</option><option>ENVIRONMENT</option><option>COMPLAINT</option><option>AUDIT</option><option>OTHER</option></select></div>
+<div><label>Related calibration</label><select name="cal_id"><option value="">— None —</option>{% for c in calibrations %}<option value="{{ c.cal_id }}">{{ c.cal_id }} · {{ c.certificate_no or 'No certificate' }} · {{ c.sensor_id or c.serial_number or '—' }} · {{ c.cal_date }}</option>{% endfor %}</select></div>
+<div><label>Reference standard</label><select name="standard_id"><option value="">— None —</option>{% for s in standards %}<option value="{{ s.standard_id }}">{{ s.code }} · {{ s.name }}{% if not s.active %} · INACTIVE{% endif %}</option>{% endfor %}</select></div>
+<div><label>Sensor ID</label><input name="sensor_id"></div><div><label>Certificate number</label><input name="certificate_no"></div>
+<div><label>Source/reference number</label><input name="source_id"></div><div><label>Target closure date</label><input type="date" name="due_date"></div>
+</div><label>Description *</label><textarea name="description" rows="5" required></textarea></div>
+<div class="card"><h2>Immediate containment & impact</h2><div class="grid"><div><label>Immediate action</label><textarea name="immediate_action" rows="4"></textarea></div><div><label>Containment status</label><textarea name="containment_status" rows="4"></textarea></div><div><label>Initial impact assessment</label><textarea name="impact_assessment" rows="4"></textarea></div><div><label>Customer notification / communication</label><textarea name="customer_notification" rows="4"></textarea></div></div></div>
+<div class="card"><h2>Initial investigation</h2><div class="grid"><div><label>Root-cause category</label><select name="root_cause_category"><option value="">— Select later —</option><option>Personnel</option><option>Equipment</option><option>Reference standard</option><option>Procedure/method</option><option>Environment</option><option>Data/software</option><option>Supplier</option><option>Other</option></select></div><div><label>Initial root-cause notes</label><textarea name="root_cause" rows="4"></textarea></div></div></div>
+<div class="actions">{{ csrf_input() }}<button class="btn" type="submit">Create controlled quality record</button><a class="btn alt" href="{{ url_for('quality_nonconformities') }}">Cancel</a></div></form>
+{% endblock %}
