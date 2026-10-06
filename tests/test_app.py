@@ -847,3 +847,65 @@ def test_global_search_and_toolbox_routes_are_registered():
     assert '@app.route("/traceability/certificate/<cert>")' in toolbox_source.read_text(encoding="utf-8")
     assert "Percentage error" in toolbox_template.read_text(encoding="utf-8")
     assert "Reference standards used" in trace_template.read_text(encoding="utf-8")
+
+
+def test_quality_management_schema_and_routes_are_registered():
+    root = Path(__file__).resolve().parents[1]
+    app_source = root.joinpath("app.py").read_text(encoding="utf-8")
+    quality_source = root.joinpath("routes", "quality.py").read_text(encoding="utf-8")
+    base_source = root.joinpath("templates", "base.html").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS quality_nonconformities" in app_source
+    assert "CREATE TABLE IF NOT EXISTS quality_impacts" in app_source
+    assert "CREATE TABLE IF NOT EXISTS quality_actions" in app_source
+    assert "CREATE TABLE IF NOT EXISTS quality_history" in app_source
+    assert "CREATE TABLE IF NOT EXISTS quality_action_verifications" in app_source
+    assert '@app.route("/quality")' in quality_source
+    assert '@app.route("/quality/nonconformities/new", methods=["GET","POST"])' in quality_source
+    assert '@app.route("/quality/nonconformities/<int:nc_id>/status",methods=["POST"])' in quality_source
+    assert '@app.route("/quality/actions/<int:action_id>/verify",methods=["POST"])' in quality_source
+    assert "Quality management" in base_source
+    assert "Nonconforming work" in base_source
+
+
+def test_quality_workflow_is_controlled_and_closure_requires_verification():
+    assert QUALITY_TRANSITIONS["OPEN"] == {"CONTAINED", "CANCELLED"}
+    assert QUALITY_TRANSITIONS["CONTAINED"] == {"INVESTIGATING", "CANCELLED"}
+    assert QUALITY_TRANSITIONS["INVESTIGATING"] == {"CAPA", "CANCELLED"}
+    assert QUALITY_TRANSITIONS["CAPA"] == {"VERIFICATION"}
+    assert QUALITY_TRANSITIONS["VERIFICATION"] == {"CLOSED", "CAPA"}
+    assert QUALITY_TRANSITIONS["CLOSED"] == set()
+
+
+def test_quality_module_contains_impact_discovery_and_certificate_control():
+    source = Path(__file__).resolve().parents[1].joinpath("routes", "quality.py").read_text(encoding="utf-8")
+    assert "calibration_reference_standards" in source
+    assert "_discover_impacts" in source
+    assert "WITHDRAW_CERTIFICATE" in source
+    assert "CERTIFICATE_WITHDRAWN_FOR_NC" in source
+    assert "QUALITY_NC_CREATED" in source
+    assert "QUALITY_ACTION_VERIFIED" in source
+
+
+def test_quality_records_keep_a_controlled_history_and_capa_verification():
+    source = Path(__file__).resolve().parents[1].joinpath("routes", "quality.py").read_text(encoding="utf-8")
+    template = Path(__file__).resolve().parents[1].joinpath("templates", "quality_detail.html").read_text(encoding="utf-8")
+    assert "quality_history" in source
+    assert "_history(db,nc_id" in source
+    assert "quality_action_verifications" in source
+    assert "EFFECTIVE" in template
+    assert "INEFFECTIVE" in template
+    assert "quality_action_verify" in template
+
+
+def test_quality_ui_covers_root_cause_impact_containment_and_capa():
+    root = Path(__file__).resolve().parents[1]
+    form = root.joinpath("templates", "quality_form.html").read_text(encoding="utf-8")
+    detail = root.joinpath("templates", "quality_detail.html").read_text(encoding="utf-8")
+    dashboard = root.joinpath("templates", "quality_dashboard.html").read_text(encoding="utf-8")
+    for field in ("Immediate action", "Containment status", "Initial impact assessment",
+                  "Customer notification", "Root-cause category", "Initial root-cause notes"):
+        assert field in form
+    for field in ("Impacted calibration records", "CAPA / corrective actions",
+                  "Controlled workflow", "Audit trail"):
+        assert field in detail
+    assert "Overdue actions" in dashboard
