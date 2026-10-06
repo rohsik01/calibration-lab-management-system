@@ -1,5 +1,24 @@
 {% extends "base.html" %}{% block title %}{{ tr("Home") }} · {{ tr("Calibration Lab") }}{% endblock %}
-{% block banner %}{% endblock %}
+{% block banner %}
+<div class="office-branding" role="banner" aria-label="Government of Nepal office">
+  <img class="office-branding-logo"
+       src="https://upload.wikimedia.org/wikipedia/commons/2/23/Emblem_of_Nepal.svg"
+       alt="Government of Nepal emblem"
+       title="Government of Nepal"
+       referrerpolicy="no-referrer">
+  <div class="office-branding-text">
+    <div>Government of Nepal</div>
+    <div>Ministry of Energy, Water Resource and Irrigation</div>
+    <div class="office-branding-department">Nepal Meteorological Department</div>
+    <div class="office-branding-location">Babarmahal, Kathmandu</div>
+  </div>
+  <img class="office-branding-flag"
+       src="https://commons.wikimedia.org/wiki/Special:Redirect/file/Animated-Flag-Nepal.gif"
+       alt="Animated Nepal national flag"
+       title="Nepal national flag"
+       loading="eager">
+</div>
+{% endblock %}
 {% block content %}
 <div class="card hero"><div class="hero-copy">
   <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
