@@ -6,6 +6,17 @@
 {% elif w.sensor_id %}<a class="btn" href="{{ url_for('calibrate', sensor_id=w.sensor_id, request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>
 {% else %}<a class="btn" href="{{ url_for('calibrate_pending_request', request_id=w.request_id) }}">{{ tr("Add calibration data") }}</a>{% endif %}
 {% endif %}</div></div>
+<div class="workflow-steps" aria-label="{{ tr("Calibration workflow") }}">
+  {% set stages = [("RECEIVED", "1"), ("REVIEWED", "2"), ("ASSIGNED", "3"), ("IN PROGRESS", "4"), ("AWAITING REVIEW", "5"), ("COMPLETED", "6")] %}
+  {% set status_order = {"RECEIVED":1,"REVIEWED":2,"ASSIGNED":3,"IN PROGRESS":4,"AWAITING REVIEW":5,"COMPLETED":6,"CANCELLED":0} %}
+  {% set current_stage = status_order.get(w.status, 1) %}
+  {% for name, num in stages %}
+  {% set n = num|int %}
+  <div class="workflow-step {{ 'done' if current_stage > n else 'current' if current_stage == n else '' }}">
+    <span class="dot">{{ '✓' if current_stage > n else num }}</span>{{ tr(name) }}
+  </div>
+  {% endfor %}
+</div>
 <div class="card"><h2>{{ tr("Work order details") }}</h2>
 <div class="grid">
 <div><label>{{ tr("Status") }}</label><span class="badge {{ 'green' if w.status == 'COMPLETED' else 'amber' if w.status in ('IN PROGRESS','AWAITING REVIEW') else 'grey' }}">{{ w.status }}</span></div>
