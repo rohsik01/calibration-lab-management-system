@@ -22,20 +22,19 @@
        title="Nepal national flag"
        loading="eager">
 </div>
+{% endblock %}
 
-<div class="home-search-row">
-  <div class="home-search-panel">
+{% block content %}
+<div class="card hero">
+  <div class="hero-copy">
+    <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
+  </div>
+  <div class="home-search-panel home-hero-search">
     <form action="{{ url_for('register') }}" method="get">
       <input name="q" placeholder="{{ tr('Search sensors, stations, certificates or work orders…') }}" aria-label="{{ tr('Global search') }}">
       <button class="btn" type="submit">{{ tr("Search") }}</button>
     </form>
   </div>
-</div>{% endblock %}
-
-{% block content %}
-<div class="card hero"><div class="hero-copy">
-  <div><h1>{{ greeting }}, {{ g.user.full_name.split(' ')[0] }}</h1><div class="sub">{{ tr("Today (AD)") }}: {{ today }} · {{ tr("Today (BS)") }}: {{ bs_today }}</div></div>
-</div>
 
 {% if counts.total == 0 %}
 <div class="card"><h2>👋 {{ tr("Welcome — let's get started") }}</h2>
