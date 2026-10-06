@@ -12,10 +12,10 @@
   a { color:var(--brand); }
   .app { display:flex; min-height:100vh; }
   .side { width:var(--sidebar-expanded); background:var(--side); color:#c8d3ea; display:flex; flex-direction:column;
-          position:sticky; top:0; height:100vh; flex-shrink:0; z-index:20; }
+          position:sticky; top:0; height:100vh; flex-shrink:0; z-index:20; transition:width .2s ease; overflow:hidden; }
   .sidebar-toggle { border:0; background:transparent; color:#7f8fb0; cursor:pointer; position:absolute; right:8px; top:16px; width:30px; height:30px; border-radius:7px; font-size:22px; z-index:2; } .sidebar-toggle:hover { background:#1c2b4b; color:#fff; } .side.collapsed .sidebar-toggle { right:21px; transform:rotate(180deg); }\n  .side.collapsed { width:72px; } .side.collapsed .brand-text,.side.collapsed .grp,.side.collapsed .item-label,.side.collapsed .pill,.side.collapsed .me-details,.side.collapsed .lang { display:none; } .side.collapsed .brand { justify-content:center; padding:18px 8px; } .side.collapsed nav { padding:8px 10px; } .side.collapsed .item,.side.collapsed .menu-group summary { justify-content:center; padding:10px 8px; } .side.collapsed .submenu { padding:0; margin-left:0; border-left:0; } .side.collapsed .menu-group summary { font-size:0; } .side.collapsed .menu-group summary .ic,.side.collapsed .submenu .ic { font-size:18px; } .side.collapsed .submenu .item { font-size:0; } .side.collapsed .me { padding:12px 8px; text-align:center; } .side.collapsed .me .row { display:none; }
-  .brand { padding:18px 20px; color:#fff; font-weight:700; font-size:16px; border-bottom:1px solid #22304f; }
-  .brand { display:flex; align-items:center; gap:10px; } .brand-mark { width:34px; height:34px; border-radius:9px; background:#fff; color:var(--side); display:grid; place-items:center; font-size:11px; font-weight:900; flex:0 0 auto; } .brand small { display:block; font-weight:400; font-size:12px; color:#7f8fb0; }
+  .brand { padding:14px 16px; color:#fff; font-weight:700; font-size:14px; border-bottom:1px solid #22304f; }
+  .brand { display:flex; align-items:center; gap:10px; min-height:82px; } .brand-mark { width:50px; height:50px; border-radius:50%; background:#fff; object-fit:contain; padding:4px; flex:0 0 auto; } .brand-text { min-width:0; line-height:1.25; } .brand-text .office-ne { display:block; font-weight:800; font-size:13px; color:#fff; } .brand-text .office-en { display:block; font-weight:600; font-size:11px; color:#d7e0f1; margin-top:2px; } .brand-text small { display:block; font-weight:400; font-size:11px; color:#8fa1c1; margin-top:3px; }
   .side nav { padding:8px 10px; flex:1; overflow-y:auto; }
   .grp { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#7f8fb0; margin:16px 12px 6px; }
   .item { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; color:#c8d3ea; text-decoration:none; }
@@ -117,7 +117,7 @@
 {% if g.user %}
 <div class="app">
   <aside class="side" id="side">
-    <div class="brand"><span class="brand-mark">DHM</span><div class="brand-text">🧪 {{ tr("Calibration Lab") }}<small>{{ tr("Management System") }}</small></div></div><button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
+    <div class="brand"><img class="brand-mark" src="https://upload.wikimedia.org/wikipedia/commons/2/23/Emblem_of_Nepal.svg" alt="नेपाल सरकार / Government of Nepal" title="नेपाल सरकार / Government of Nepal" referrerpolicy="no-referrer"><div class="brand-text"><span class="office-ne">नेपाल सरकार</span><span class="office-en">Government of Nepal</span><small>Office of Hydrology and Meteorology, Dharan<br>Koshi &amp; Madhesh Provinces</small></div></div><button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
     <nav>
       {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span><span class="item-label">{{ tr("Home") }}</span></a>
@@ -199,9 +199,10 @@
   </div>
 {% if g.user %}</div>{% else %}</div>{% endif %}
 <script>
-function toggleSidebar(){const s=document.getElementById('side');if(window.innerWidth<=800){s.classList.toggle('open');return;}s.classList.toggle('collapsed');localStorage.setItem('calibration-sidebar-collapsed',s.classList.contains('collapsed')?'1':'0');}
+function toggleSidebar(){const s=document.getElementById('side');if(!s)return;if(window.innerWidth<=800){s.classList.toggle('open');return;}s.classList.toggle('collapsed');localStorage.setItem('calibration-sidebar-collapsed',s.classList.contains('collapsed')?'1':'0');}
 (function(){const s=document.getElementById('side');if(s&&window.innerWidth>800&&localStorage.getItem('calibration-sidebar-collapsed')==='1')s.classList.add('collapsed');})();
-document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));\ndocument.querySelectorAll(".side .item").forEach(a=>{const label=a.querySelector(".item-label");if(label)a.title=label.textContent.trim();});
+document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
+document.querySelectorAll(".side .item").forEach(a=>{const label=a.querySelector(".item-label");if(label)a.title=label.textContent.trim();});
 // click any column heading of a table to sort it
 
 // Accessible checkbox enhancement for native multi-select fields.
