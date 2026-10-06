@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Global search") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>{{ tr("Global search") }}</h1><p class="sub">{{ tr("Search sensors, stations, work orders, calibrations, certificates and reference standards.") }}</p></div></div>
+<div class="card"><form method="get" action="{{ url_for('global_search') }}" class="toolbar">
+<input name="q" value="{{ q }}" autofocus placeholder="{{ tr('Search the entire laboratory system…') }}" style="min-width:320px;flex:1">
+<button class="btn">{{ tr("Search") }}</button></form>
+{% if q %}<p class="sub">{{ total }} {{ tr("matching records") }} {{ tr("for") }} “{{ q }}”.</p>{% endif %}</div>
+{% if q %}{% for group, rows in results.items() %}<div class="card"><h2>{{ tr(group) }} <span class="badge grey">{{ rows|length }}</span></h2>
+{% if rows %}<div class="scroll"><table><tbody>{% for x in rows %}<tr>
+{% if group == "Sensors" %}<td><a href="{{ url_for('sensor', sensor_id=x.id) }}"><b>{{ x.id }}</b></a></td><td>{{ x.sensor_type }}</td><td>{{ x.serial_number }}</td><td>{{ x.station }}</td>
+{% elif group == "Stations" %}<td><a href="{{ url_for('stations') }}"><b>{{ x.name }}</b></a></td><td>{{ x.location or '—' }}</td><td>{{ x.type }}</td>
+{% elif group == "Work orders" %}<td><a href="{{ url_for('work_order_detail', work_order_id=x.id) }}"><b>{{ x.work_order_no }}</b></a></td><td>{{ x.request_no }}</td><td>{{ x.client_name }}</td><td>{{ x.status }}</td>
+{% elif group == "Calibrations" %}<td>{% if x.certificate_no %}<a href="{{ url_for('certificate', cert=x.certificate_no) }}"><b>{{ x.certificate_no }}</b></a>{% else %}<b>CAL-{{ x.id }}</b>{% endif %}</td><td>{{ x.sensor_id }}</td><td>{{ x.cal_date }}</td><td>{{ x.result }}</td>
+{% elif group == "Certificates" %}<td><a href="{{ url_for('certificate', cert=x.certificate_no) }}"><b>{{ x.certificate_no }}</b></a></td><td>{{ x.sensor_id }}</td><td>{{ x.cal_date }}</td><td>{{ x.result }}</td>
+{% else %}<td><a href="{{ url_for('standard', standard_id=x.id) }}"><b>{{ x.code }}</b></a></td><td>{{ x.name }}</td><td>{{ x.serial_number or '—' }}</td><td>{{ x.valid_until }}</td>{% endif %}
+</tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">{{ tr("No matches in this category.") }}</div>{% endif %}</div>{% endfor %}
+{% else %}<div class="card empty">{{ tr("Enter a search term to search the entire laboratory.") }}</div>{% endif %}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ tr("Calibration Toolbox") }} · {{ tr("Calibration Lab") }}{% endblock %}
+{% block content %}
+<div class="hero"><div><h1>🧰 {{ tr("Calibration Toolbox") }}</h1><p class="sub">{{ tr("Quick calculations for technicians and reviewers. No data is saved.") }}</p></div></div>
+<div class="toolbox-grid">
+<section class="card"><h2>📐 {{ tr("Error & correction") }}</h2><div class="grid"><div><label>{{ tr("Reference value") }}</label><input id="tb-ref" type="number" step="any"></div><div><label>{{ tr("Measured value") }}</label><input id="tb-meas" type="number" step="any"></div></div><div class="preview" id="tb-error">{{ tr("Enter both values.") }}</div></section>
+<section class="card"><h2>🎯 {{ tr("Tolerance / Pass-Fail") }}</h2><div class="grid"><div><label>{{ tr("Error") }}</label><input id="tb-tol-error" type="number" step="any"></div><div><label>{{ tr("Tolerance ±") }}</label><input id="tb-tol" type="number" step="any" min="0"></div></div><div class="preview" id="tb-pass">{{ tr("Enter error and tolerance.") }}</div></section>
+<section class="card"><h2>📊 {{ tr("Percentage error") }}</h2><div class="grid"><div><label>{{ tr("Reference value") }}</label><input id="tb-pct-ref" type="number" step="any"></div><div><label>{{ tr("Measured value") }}</label><input id="tb-pct-meas" type="number" step="any"></div></div><div class="preview" id="tb-pct">{{ tr("Enter both values.") }}</div></section>
+<section class="card"><h2>📅 {{ tr("Calibration interval") }}</h2><div class="grid"><div><label>{{ tr("Calibration date") }}</label><input id="tb-date" type="date"></div><div><label>{{ tr("Interval (days)") }}</label><input id="tb-days" type="number" min="1" value="365"></div></div><div class="preview" id="tb-due">{{ tr("Enter date and interval.") }}</div></section>
+<section class="card"><h2>🔎 {{ tr("Reference standard validity") }}</h2><div class="grid"><div><label>{{ tr("Valid until") }}</label><input id="tb-valid" type="date"></div><div><label>{{ tr("Calibration date") }}</label><input id="tb-caldate" type="date"></div></div><div class="preview" id="tb-validity">{{ tr("Enter both dates.") }}</div></section>
+<section class="card"><h2>📏 {{ tr("Unit conversion") }}</h2><div class="grid"><div><label>{{ tr("Value") }}</label><input id="tb-unit-value" type="number" step="any"></div><div><label>{{ tr("Conversion") }}</label><select id="tb-unit"><option value="c_f">°C → °F</option><option value="f_c">°F → °C</option><option value="mm_in">mm → inch</option><option value="in_mm">inch → mm</option><option value="hpa_mmhg">hPa → mmHg</option><option value="mmhg_hpa">mmHg → hPa</option></select></div></div><div class="preview" id="tb-unit-out">{{ tr("Enter a value.") }}</div></section>
+</div>
+<script>
+(() => {
+const n=id=>parseFloat(document.getElementById(id).value), el=id=>document.getElementById(id);
+function update(){
+ const ref=n('tb-ref'), meas=n('tb-meas'); el('tb-error').textContent=Number.isFinite(ref)&&Number.isFinite(meas)?'Error = '+(meas-ref).toFixed(6):'Enter both values.';
+ const e=n('tb-tol-error'), t=n('tb-tol'); el('tb-pass').textContent=Number.isFinite(e)&&Number.isFinite(t)?(Math.abs(e)<=t?'PASS — within tolerance':'FAIL — outside tolerance'):'Enter error and tolerance.';
+ const pr=n('tb-pct-ref'), pm=n('tb-pct-meas'); el('tb-pct').textContent=Number.isFinite(pr)&&pr!==0&&Number.isFinite(pm)?'Percentage error = '+(((pm-pr)/pr)*100).toFixed(4)+' %':'Reference must be non-zero.';
+ const d=el('tb-date').value, days=n('tb-days'); if(d&&Number.isFinite(days)){const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+days);el('tb-due').textContent='Next due = '+x.toISOString().slice(0,10)}else el('tb-due').textContent='Enter date and interval.';
+ const vd=el('tb-valid').value, cd=el('tb-caldate').value; if(vd&&cd)el('tb-validity').textContent=cd<=vd?'VALID — standard covers the calibration date':'INVALID — standard was not valid on calibration date';else el('tb-validity').textContent='Enter both dates.';
+ const v=n('tb-unit-value'), u=el('tb-unit').value; const f={c_f:x=>x*9/5+32,f_c:x=>(x-32)*5/9,mm_in:x=>x/25.4,in_mm:x=>x*25.4,hpa_mmhg:x=>x*0.750061683,mmhg_hpa:x=>x/0.750061683}; el('tb-unit-out').textContent=Number.isFinite(v)?'Result = '+f[u](v).toFixed(6):'Enter a value.';
+}
+document.querySelectorAll('.toolbox-grid input,.toolbox-grid select').forEach(x=>x.addEventListener('input',update)); update();
+})();
+</script>
+{% endblock %}

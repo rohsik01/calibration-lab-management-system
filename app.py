@@ -1704,6 +1704,7 @@ def gate():
         allowed = {"index", "calibration_requests", "new_calibration_request",
                    "calibration_request", "certificate", "certificate_pdf", "verify_certificate", "account", "logout",
                    "alerts", "mark_notification_read", "mark_all_notifications_read",
+                   "global_search", "toolbox", "certificate_traceability",
                    "set_lang", "static"}
         if request.endpoint not in allowed:
             abort(403)
@@ -1777,7 +1778,7 @@ if __name__ == "__main__":
 
 # Route modules are loaded after the shared application setup and helpers.
 from routes import auth, users, dashboard, work_orders, audit, reviews, requests, stations
-from routes import sensors, calibrations, notifications, standards, reports, database, procedures
+from routes import sensors, calibrations, notifications, standards, reports, database, procedures, search, toolbox
 
 # Navigation counters use these notification helpers after all route modules load.
 from routes.notifications import build_operational_alerts, sync_notifications

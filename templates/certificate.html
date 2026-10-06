@@ -55,7 +55,7 @@
   {% if not preview %}
   <div class="cert-actions noprint">
     <button class="btn" type="button" onclick="window.print()">🖨 {{ tr("Print / Save as PDF") }}</button>
-    {% if r.certificate_status == 'ACTIVE' %}<a class="btn" href="{{ url_for('certificate_pdf', cert=r.certificate_no) }}" target="_blank">PDF</a>{% endif %}
+    {% if r.certificate_status == 'ACTIVE' %}<a class="btn" href="{{ url_for('certificate_pdf', cert=r.certificate_no) }}" target="_blank">PDF</a>\n    <a class="btn alt" href="{{ url_for('certificate_traceability', cert=r.certificate_no) }}">🔗 {{ tr("Traceability") }}</a>{% endif %}
   </div>
   {% endif %}
 
