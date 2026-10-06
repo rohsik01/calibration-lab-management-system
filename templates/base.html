@@ -115,7 +115,6 @@
 {% if g.user %}
 <div class="app">
   <aside class="side" id="side">
-    <button class="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-label="{{ tr('Toggle navigation') }}" title="{{ tr('Toggle navigation') }}">‹</button>
     <nav>
       {% if not has_role('general_user') or has_role('technician') or has_role('reviewer') or has_role('admin') or has_role('superadmin') %}
       <a class="item {{ 'active' if ep == 'index' }}" href="{{ url_for('index') }}"><span class="ic">🏠</span><span class="item-label">{{ tr("Home") }}</span></a>
@@ -197,8 +196,6 @@
   </div>
 {% if g.user %}</div>{% else %}</div>{% endif %}
 <script>
-function toggleSidebar(){const s=document.getElementById('side');if(!s)return;if(window.innerWidth<=800){s.classList.toggle('open');return;}s.classList.toggle('collapsed');localStorage.setItem('calibration-sidebar-collapsed',s.classList.contains('collapsed')?'1':'0');}
-(function(){const s=document.getElementById('side');if(s&&window.innerWidth>800&&localStorage.getItem('calibration-sidebar-collapsed')==='1')s.classList.add('collapsed');})();
 document.querySelectorAll('.side a').forEach(a => a.addEventListener('click', () => document.getElementById('side').classList.remove('open')));
 document.querySelectorAll(".side .item").forEach(a=>{const label=a.querySelector(".item-label");if(label)a.title=label.textContent.trim();});
 // click any column heading of a table to sort it
