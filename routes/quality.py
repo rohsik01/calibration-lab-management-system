@@ -313,7 +313,7 @@ def quality_impact(nc_id):
                     reason=f"Withdrawn under nonconformity {nc['nc_id']}."
                     db.execute("UPDATE calibrations SET certificate_status='WITHDRAWN',updated_at=? WHERE cal_id=?",(datetime.now().isoformat(timespec="seconds"),int(cal_id)))
                     db.execute("""INSERT INTO certificate_history(cal_id,certificate_no,event_type,fingerprint,reason,changed_by,changed_at)
-                                  VALUES (?,?,'WITHDRAWN',?,?,?,?,?)""",(int(cal_id),c["certificate_no"],row["certificate_fingerprint"],reason,g.user["user_id"],datetime.now().isoformat(timespec="seconds")))
+                                  VALUES (?,?,'WITHDRAWN',?,?,?,?)""",(int(cal_id),c["certificate_no"],row["certificate_fingerprint"],reason,g.user["user_id"],datetime.now().isoformat(timespec="seconds")))
                     audit_event("CERTIFICATE_WITHDRAWN_FOR_NC","certificate",c["certificate_no"],details={"nc_id":nc_id,"cal_id":int(cal_id),"reason":reason})
     return redirect(url_for("quality_nonconformity",nc_id=nc_id))
 
