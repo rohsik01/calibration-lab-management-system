@@ -205,6 +205,11 @@ def quality_status(nc_id):
     if not nc: abort(404)
     target=request.form.get("status","").strip().upper(); current=nc["status"]
     if target not in QUALITY_TRANSITIONS.get(current,set()): flash(f"Invalid quality workflow transition: {current} → {target}.","error"); return redirect(url_for("quality_nonconformity",nc_id=nc_id))
+    if target in ("CAPA","VERIFICATION") and not (user_has_role("reviewer") or user_has_role("admin") or user_has_role("superadmin")):
+        abort(403)
+    if target=="CAPA" and not nc["root_cause"]:
+        flash("Document the root cause before moving the event to CAPA.","error")
+        return redirect(url_for("quality_nonconformity",nc_id=nc_id))
     if target=="CLOSED" and not (user_has_role("admin") or user_has_role("superadmin")):
         abort(403)
     if target=="VERIFICATION":
@@ -252,6 +257,8 @@ def quality_action_complete(action_id):
     db=get_db(); action=db.execute("SELECT * FROM quality_actions WHERE action_id=?",(action_id,)).fetchone()
     if not action: abort(404)
     if action["completed_at"]: return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
+    if action["owner_id"] and action["owner_id"] != g.user["user_id"] and not (user_has_role("admin") or user_has_role("superadmin")):
+        abort(403)
     notes=request.form.get("verification_notes","").strip()
     now=datetime.now().isoformat(timespec="seconds")
     with db:
@@ -269,6 +276,9 @@ def quality_action_verify(action_id):
     if not action["completed_at"]:
         flash("Complete the action before verifying its effectiveness.","error")
         return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
+    if action["completed_by"] == g.user["user_id"]:
+        flash("The person who completed an action cannot independently verify its effectiveness.","error")
+        return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
     status=request.form.get("status","").strip().upper()
     if status not in ("EFFECTIVE","INEFFECTIVE","NOT_REQUIRED"):
         abort(400)
@@ -285,7 +295,7 @@ def quality_action_verify(action_id):
     return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
 
 @app.route("/quality/nonconformities/<int:nc_id>/impact",methods=["POST"])
-@quality_required
+@reviewer_required
 def quality_impact(nc_id):
     db=get_db(); nc=db.execute("SELECT nc_id,status FROM quality_nonconformities WHERE nc_id=?",(nc_id,)).fetchone()
     if not nc: abort(404)
@@ -303,6 +313,8 @@ def quality_impact(nc_id):
                    (nc_id,int(cal_id),"ASSESSED",disposition,notes,g.user["user_id"],datetime.now().isoformat(timespec="seconds"),datetime.now().isoformat(timespec="seconds")))
         audit_event("QUALITY_IMPACT_ASSESSED","quality_impact",f"{nc_id}:{cal_id}",new_value={"disposition":disposition,"notes":notes})
         db.commit()
+    if disposition=="WITHDRAW_CERTIFICATE" and not (user_has_role("admin") or user_has_role("superadmin")):
+        abort(403)
     if disposition=="WITHDRAW_CERTIFICATE":
         c=db.execute("SELECT certificate_no FROM calibrations WHERE cal_id=?",(int(cal_id),)).fetchone()
         if c and c["certificate_no"]:
