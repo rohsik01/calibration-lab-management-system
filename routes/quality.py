@@ -208,8 +208,18 @@ def quality_status(nc_id):
     if target=="CLOSED" and not (user_has_role("admin") or user_has_role("superadmin")):
         abort(403)
     if target=="VERIFICATION":
-        open_actions=db.execute("SELECT COUNT(*) FROM quality_actions WHERE nc_id=? AND completed_at IS NULL AND action_type IN ('CORRECTION','CORRECTIVE')",(nc_id,)).fetchone()[0]
-        if open_actions: flash("Complete all correction/corrective actions before verification.","error"); return redirect(url_for("quality_nonconformity",nc_id=nc_id))
+        open_actions=db.execute("SELECT COUNT(*) FROM quality_actions WHERE nc_id=? AND completed_at IS NULL AND action_type IN ('CORRECTION','CORRECTIVE','PREVENTIVE')",(nc_id,)).fetchone()[0]
+        unverified=db.execute("SELECT COUNT(*) FROM quality_actions WHERE nc_id=? AND action_type IN ('CORRECTION','CORRECTIVE','PREVENTIVE') AND (completed_at IS NULL OR verification_status='PENDING')",(nc_id,)).fetchone()[0]
+        unassessed=db.execute("SELECT COUNT(*) FROM quality_impacts WHERE nc_id=? AND impact_status!='ASSESSED'",(nc_id,)).fetchone()[0]
+        if open_actions or unverified or unassessed:
+            flash("Complete and verify corrective/preventive actions and assess every impacted calibration before verification.","error")
+            return redirect(url_for("quality_nonconformity",nc_id=nc_id))
+    if target=="CLOSED":
+        pending=db.execute("SELECT COUNT(*) FROM quality_actions WHERE nc_id=? AND (completed_at IS NULL OR verification_status='PENDING')",(nc_id,)).fetchone()[0]
+        unassessed=db.execute("SELECT COUNT(*) FROM quality_impacts WHERE nc_id=? AND impact_status!='ASSESSED'",(nc_id,)).fetchone()[0]
+        if pending or unassessed:
+            flash("A quality event cannot be closed until actions are verified and every impact is assessed.","error")
+            return redirect(url_for("quality_nonconformity",nc_id=nc_id))
     comments=request.form.get("comments","").strip()
     now=datetime.now().isoformat(timespec="seconds")
     with db:
@@ -248,6 +258,30 @@ def quality_action_complete(action_id):
         db.execute("""UPDATE quality_actions SET completed_at=?,completed_by=?,verification_status='PENDING',verification_notes=?
                       WHERE action_id=? AND completed_at IS NULL""",(now,g.user["user_id"],notes,action_id))
         audit_event("QUALITY_ACTION_COMPLETED","quality_action",action_id,details={"nc_id":action["nc_id"]})
+    return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
+
+@app.route("/quality/actions/<int:action_id>/verify",methods=["POST"])
+@reviewer_required
+def quality_action_verify(action_id):
+    db=get_db()
+    action=db.execute("SELECT * FROM quality_actions WHERE action_id=?",(action_id,)).fetchone()
+    if not action: abort(404)
+    if not action["completed_at"]:
+        flash("Complete the action before verifying its effectiveness.","error")
+        return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
+    status=request.form.get("status","").strip().upper()
+    if status not in ("EFFECTIVE","INEFFECTIVE","NOT_REQUIRED"):
+        abort(400)
+    notes=request.form.get("notes","").strip()
+    now=datetime.now().isoformat(timespec="seconds")
+    with db:
+        db.execute("UPDATE quality_actions SET verification_status=?,verification_notes=? WHERE action_id=?",
+                   (status,notes,action_id))
+        db.execute("""INSERT INTO quality_action_verifications(action_id,verified_by,verified_at,status,notes)
+                      VALUES (?,?,?,?,?)""",(action_id,g.user["user_id"],now,status,notes))
+        audit_event("QUALITY_ACTION_VERIFIED","quality_action",action_id,
+                    new_value={"verification_status":status},details={"notes":notes,"nc_id":action["nc_id"]})
+    flash("Action verification recorded.")
     return redirect(url_for("quality_nonconformity",nc_id=action["nc_id"]))
 
 @app.route("/quality/nonconformities/<int:nc_id>/impact",methods=["POST"])
